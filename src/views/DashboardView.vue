@@ -163,6 +163,16 @@ const cancelEditUserMessage = () => {
   editDraft.value = ''
 }
 
+let activeAbortController = null
+
+const stopGeneration = () => {
+  if (activeAbortController) {
+    activeAbortController.abort()
+    activeAbortController = null
+  }
+  loading.value = false
+}
+
 const submitEditUserMessage = async (index) => {
   const newText = editDraft.value.trim()
   if (!newText || loading.value) return
@@ -186,6 +196,12 @@ const submitEditUserMessage = async (index) => {
       content: String(item.content).slice(0, 10000),
     }))
 
+  if (activeAbortController) {
+    activeAbortController.abort()
+  }
+  activeAbortController = new AbortController()
+  const signal = activeAbortController.signal
+
   loading.value = true
   errorMessage.value = ''
   scrollToBottom()
@@ -194,10 +210,13 @@ const submitEditUserMessage = async (index) => {
     const fullPrompt = formatPromptWithFiles(newText, messageFiles)
     let response
     try {
-      response = await api.chat(fullPrompt, history)
+      response = await api.chat(fullPrompt, history, { signal })
     } catch (apiErr) {
+      if (apiErr.name === 'AbortError' || signal.aborted) {
+        return
+      }
       if (history.length > 0) {
-        response = await api.chat(fullPrompt, [])
+        response = await api.chat(fullPrompt, [], { signal })
       } else {
         throw apiErr
       }
@@ -205,8 +224,12 @@ const submitEditUserMessage = async (index) => {
     const assistantReply = response?.data?.message || 'I could not generate a response.'
     chatStore.addMessage({ role: 'assistant', content: assistantReply })
   } catch (error) {
+    if (error.name === 'AbortError' || signal.aborted) {
+      return
+    }
     errorMessage.value = error instanceof ApiError ? error.message : 'Failed to generate a reply.'
   } finally {
+    activeAbortController = null
     loading.value = false
     scrollToBottom()
   }
@@ -227,6 +250,12 @@ const retryUserMessage = async (index) => {
       content: String(item.content).slice(0, 10000),
     }))
 
+  if (activeAbortController) {
+    activeAbortController.abort()
+  }
+  activeAbortController = new AbortController()
+  const signal = activeAbortController.signal
+
   loading.value = true
   errorMessage.value = ''
   scrollToBottom()
@@ -235,10 +264,13 @@ const retryUserMessage = async (index) => {
     const fullPrompt = formatPromptWithFiles(message.content, message.files || [])
     let response
     try {
-      response = await api.chat(fullPrompt, history)
+      response = await api.chat(fullPrompt, history, { signal })
     } catch (apiErr) {
+      if (apiErr.name === 'AbortError' || signal.aborted) {
+        return
+      }
       if (history.length > 0) {
-        response = await api.chat(fullPrompt, [])
+        response = await api.chat(fullPrompt, [], { signal })
       } else {
         throw apiErr
       }
@@ -246,8 +278,12 @@ const retryUserMessage = async (index) => {
     const assistantReply = response?.data?.message || 'I could not generate a response.'
     chatStore.addMessage({ role: 'assistant', content: assistantReply })
   } catch (error) {
+    if (error.name === 'AbortError' || signal.aborted) {
+      return
+    }
     errorMessage.value = error instanceof ApiError ? error.message : 'Failed to generate a reply.'
   } finally {
+    activeAbortController = null
     loading.value = false
     scrollToBottom()
   }
@@ -335,15 +371,24 @@ const send = async () => {
   loading.value = true
   scrollToBottom()
 
+  if (activeAbortController) {
+    activeAbortController.abort()
+  }
+  activeAbortController = new AbortController()
+  const signal = activeAbortController.signal
+
   try {
     const promptToSend = fullPrompt || (images.length ? 'I have attached an image. Please review it.' : '')
     let response
     try {
-      response = await api.chat(promptToSend, history)
+      response = await api.chat(promptToSend, history, { signal })
     } catch (apiErr) {
+      if (apiErr.name === 'AbortError' || signal.aborted) {
+        return
+      }
       // If history caused a validation issue, fallback to sending without history
       if (history.length > 0) {
-        response = await api.chat(promptToSend, [])
+        response = await api.chat(promptToSend, [], { signal })
       } else {
         throw apiErr
       }
@@ -351,8 +396,12 @@ const send = async () => {
     const assistantReply = response?.data?.message || 'I could not generate a response.'
     chatStore.addMessage({ role: 'assistant', content: assistantReply })
   } catch (error) {
+    if (error.name === 'AbortError' || signal.aborted) {
+      return
+    }
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to generate a response.'
   } finally {
+    activeAbortController = null
     loading.value = false
     scrollToBottom()
   }
@@ -613,24 +662,37 @@ onUnmounted(() => {
                 <AppIcon name="bulb" :size="13" />
                 <span>Workflow</span>
               </button>
+              <!-- Stop Button when generating vs Start/Send Button when idle -->
               <button
+                v-if="loading"
+                class="stop-button"
+                type="button"
+                title="Stop generating"
+                aria-label="Stop generating"
+                @click="stopGeneration"
+              >
+                <AppIcon name="stop" :size="14" />
+              </button>
+              <button
+                v-else
                 class="send-button"
                 type="button"
-                :disabled="(!input.trim() && !attachedImages.length && !attachedFiles.length) || loading"
+                :disabled="!input.trim() && !attachedImages.length && !attachedFiles.length"
+                title="Send message"
                 aria-label="Send message"
                 @click="send"
               >
-                <AppIcon :name="loading ? 'clock' : 'send'" :size="14" />
+                <AppIcon name="arrow-up" :size="16" />
               </button>
             </div>
           </div>
         </div>
 
         <div class="chat-footer-bar">
-          <span class="footer-disclaimer">KAIRO is AI and can make mistakes. Please double-check responses.</span>
+          <span class="footer-disclaimer">SMAgen is AI and can make mistakes. Please double-check responses.</span>
           <div class="footer-model-badge">
             <span class="status-dot"></span>
-            <span>KAIRO 4o</span>
+            <span>SMAgen Pro</span>
           </div>
         </div>
       </div>

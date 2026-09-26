@@ -25,6 +25,9 @@ const request = async (path, options = {}) => {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
   } catch (error) {
+    if (error.name === 'AbortError') {
+      throw error
+    }
     throw new ApiError('Unable to connect to the SMAgen server.', 0, 'NETWORK_ERROR')
   }
 
@@ -60,7 +63,7 @@ export const api = {
   adminLogout: () => request('/admin/auth/logout', { method: 'DELETE' }),
   createAdminApiKey: () => request('/admin/auth/api-keys', json('POST', {})),
 
-  chat: (message, history = []) => request('/chat', json('POST', { message, history })),
+  chat: (message, history = [], options = {}) => request('/chat', { ...json('POST', { message, history }), ...options }),
 
   createWorkflow: (body) => request('/workflows/create', json('POST', body)),
   listWorkflows: () => request('/workflows/listWorkflows'),
