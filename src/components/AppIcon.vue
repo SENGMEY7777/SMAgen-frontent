@@ -44,7 +44,9 @@ defineProps({ name: { type: String, default: 'spark' }, size: { type: [Number, S
     <template v-else-if="name === 'trash' || name === 'delete'"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></template>
     <template v-else-if="name === 'chevron-right'"><polyline points="9 18 15 12 9 6" /></template>
     <template v-else-if="name === 'logout'"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" /></template>
-    <template v-else-if="name === 'file' || name === 'document'"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></template>
+    <template v-else-if="name === 'stop'"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none" /></template>
+    <template v-else-if="name === 'arrow-up'"><path d="M12 19V5M5 12l7-7 7 7" stroke-width="2.2" /></template>
+    <template v-else-if="name === 'starburst' || name === 'claude' || name === 'asterisk'"><path d="M12 2.5v19M2.5 12h19M5.28 5.28l13.44 13.44M5.28 18.72 18.72 5.28M3.68 8.08l16.64 7.84M3.68 15.92l16.64-7.84M8.08 3.68l7.84 16.64M15.92 3.68 8.08 20.32" stroke-width="2.2" stroke-linecap="round" /></template>
     <template v-else><circle cx="12" cy="12" r="8" /></template>
   </svg>
 </template>
