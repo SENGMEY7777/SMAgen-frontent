@@ -575,23 +575,46 @@
 .send-button {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   border-radius: 50%;
   color: #ffffff;
-  background: #111827;
+  background: #000000;
   cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .send-button:disabled {
   cursor: not-allowed;
-  opacity: 0.35;
+  background: #e5e7eb;
+  color: #9ca3af;
+  opacity: 0.7;
 }
 
 .send-button:not(:disabled):hover {
-  background: #374151;
+  background: #27272a;
+  transform: scale(1.03);
+}
+
+.stop-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  color: #000000;
+  background: #ececec;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stop-button:hover {
+  background: #e0e0e0;
+  border-color: #d1d5db;
+  transform: scale(1.03);
 }
 
 .chat-footer-bar {
@@ -675,6 +698,13 @@
   justify-content: flex-end;
 }
 
+.message-row.assistant {
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
+  direction: ltr;
+}
+
 .message-content-box {
   display: flex;
   flex-direction: column;
@@ -683,6 +713,12 @@
 
 .message-row.user .message-content-box {
   align-items: flex-end;
+}
+
+.message-row.assistant .message-content-box {
+  align-items: flex-start;
+  text-align: left;
+  direction: ltr;
 }
 
 .user-bubble {
@@ -708,42 +744,62 @@
   width: 100%;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  direction: ltr;
 }
 
 .assistant-markdown {
+  width: 100%;
+  text-align: left;
+  direction: ltr;
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   padding: 0;
-  color: #141413;
-  font-size: 15.5px;
-  line-height: 1.72;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.65;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-wrap: break-word;
 }
 
-
-/* Claude Markdown Elements */
+/* Modern Clean Markdown Elements */
 .assistant-markdown .md-p {
-  margin: 0 0 12px;
-  color: #1f2937;
-  line-height: 1.68;
+  margin: 0 0 14px;
+  color: #0f172a;
+  line-height: 1.65;
 }
 
 .assistant-markdown .md-p:last-child {
   margin-bottom: 0;
 }
 
+.assistant-markdown strong,
+.assistant-markdown b {
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.assistant-markdown em,
+.assistant-markdown i {
+  font-style: italic;
+  color: #475569;
+}
+
 .assistant-markdown .md-h1,
 .assistant-markdown .md-h2,
 .assistant-markdown .md-h3,
 .assistant-markdown .md-h4 {
-  color: #111827;
-  font-weight: 700;
+  color: #0f172a;
+  font-weight: 650;
   line-height: 1.35;
-  margin: 18px 0 10px;
-  letter-spacing: -0.02em;
+  margin: 20px 0 10px;
+  letter-spacing: -0.01em;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .assistant-markdown .md-h1 { font-size: 20px; }
@@ -752,14 +808,14 @@
 .assistant-markdown .md-h4 { font-size: 14px; }
 
 .assistant-markdown .md-list {
-  margin: 8px 0 14px 20px;
+  margin: 8px 0 16px 20px;
   padding: 0;
   line-height: 1.65;
-  color: #1f2937;
+  color: #0f172a;
 }
 
 .assistant-markdown .md-list li {
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
 .assistant-markdown .inline-code {
@@ -772,52 +828,129 @@
   border: 1px solid #ffe4e6;
 }
 
+.assistant-markdown .math-block {
+  margin: 12px 0;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-family: "KaTeX_Main", "Times New Roman", ui-monospace, monospace;
+  font-size: 15px;
+  color: #0f172a;
+  text-align: center;
+  overflow-x: auto;
+  letter-spacing: 0.02em;
+}
+
+.assistant-markdown .math-inline {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: "KaTeX_Main", "Times New Roman", ui-monospace, monospace;
+  font-size: 14px;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+}
+
 .assistant-markdown .code-block {
-  margin: 14px 0;
-  border-radius: 8px;
-  background: #181825;
+  margin: 16px 0;
+  border-radius: 12px;
+  background: #111216;
   color: #f8fafc;
   overflow: hidden;
-  border: 1px solid #28283d;
+  border: 1px solid #232530;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 .assistant-markdown .code-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
-  background: #11111b;
-  border-bottom: 1px solid #28283d;
-  color: #94a3b8;
-  font-size: 11.5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  text-transform: lowercase;
+  padding: 8px 16px;
+  background: #181920;
+  border-bottom: 1px solid #232530;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.assistant-markdown .copy-code-btn {
-  background: #252538;
-  color: #cbd5e1;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid #3b3b54;
+.assistant-markdown .code-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.assistant-markdown .code-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.assistant-markdown .copy-code-btn:hover {
-  background: #363650;
+.assistant-markdown .code-action-btn:hover {
+  background: #252836;
   color: #ffffff;
+  border-color: #3b4256;
 }
 
 .assistant-markdown pre {
   margin: 0;
-  padding: 12px 14px;
+  padding: 14px 18px;
   overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.55;
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: #e2e8f0;
+}
+
+/* Syntax Highlighting Tokens */
+.assistant-markdown .hl-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.assistant-markdown .hl-string {
+  color: #4ade80;
+}
+
+.assistant-markdown .hl-keyword {
+  color: #818cf8;
+  font-weight: 600;
+}
+
+.assistant-markdown .hl-number {
+  color: #f472b6;
+  font-weight: 500;
+}
+
+.assistant-markdown .hl-option {
+  color: #f87171;
+}
+
+.assistant-markdown .hl-flag {
+  color: #fb7185;
+}
+
+.assistant-markdown .hl-fn {
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.assistant-markdown .hl-var {
+  color: #fbbf24;
+}
+
+.assistant-markdown .hl-annotation {
+  color: #fb923c;
 }
 
 .assistant-markdown .md-hr {
@@ -827,14 +960,14 @@
 }
 
 .assistant-markdown blockquote {
-  margin: 12px 0;
-  padding: 8px 14px;
-  border-left: 3px solid #4f46e5;
-  background: #eef2ff;
-  border-radius: 0 6px 6px 0;
-  color: #374151;
-  font-size: 13.5px;
-  line-height: 1.55;
+  margin: 14px 0;
+  padding: 4px 0 4px 16px;
+  border-left: 3px solid #d1d5db;
+  background: transparent;
+  border-radius: 0;
+  color: #1e293b;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 .assistant-markdown .table-wrapper {
