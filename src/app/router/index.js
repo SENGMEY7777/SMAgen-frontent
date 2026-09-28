@@ -4,6 +4,7 @@ const isAuthenticated = () => Boolean(localStorage.getItem('omni_token'))
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  
   routes: [
     { path: '/', name: 'chat', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { requiresAuth: true } },
     { path: '/overview', name: 'overview', component: () => import('@/views/dashboard/DashboardOverviewView.vue'), meta: { requiresAuth: true } },
