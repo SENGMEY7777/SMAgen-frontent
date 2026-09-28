@@ -1,13 +1,13 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
-import { api, ApiError } from '../services/api'
-import { useAuthStore } from '../stores/auth'
-import { useChatStore } from '../stores/chat'
-import { renderMarkdown } from '../utils/markdown'
-import { formatRelativeTime } from '../utils/formatters'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import { api, ApiError } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
+import { renderMarkdown } from '@/utils/markdown'
+import { formatRelativeTime } from '@/utils/formatters'
 
 const router = useRouter()
 const auth = useAuthStore()

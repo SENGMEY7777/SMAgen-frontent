@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { STORAGE_KEYS } from '../constants'
+import { STORAGE_KEYS } from '@/config/constants'
 
 const CHATS_STORAGE_KEY = STORAGE_KEYS.CHATS || 'kairo_chats'
 

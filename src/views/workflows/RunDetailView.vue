@@ -1,13 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
-import StatusPill from '../components/common/StatusPill.vue'
-import { api, ApiError } from '../services/api'
-import { createSocketClient } from '../services/socket'
-import { formatDate, formatCost, formatTokens } from '../utils/formatters'
-import { ACTIVE_RUN_STATUSES } from '../constants'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { createSocketClient } from '@/services/socket'
+import { formatDate, formatCost, formatTokens } from '@/utils/formatters'
+import { ACTIVE_RUN_STATUSES } from '@/config/constants'
 
 const route = useRoute()
 const router = useRouter()

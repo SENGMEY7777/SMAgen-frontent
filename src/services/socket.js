@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client'
-import { apiBaseUrl } from './api'
-import { STORAGE_KEYS } from '../constants'
+import { apiBaseUrl } from '@/services/api'
+import { STORAGE_KEYS } from '@/config/constants'
 
 /**
  * Creates and configures a Socket.IO client instance connected to the backend.

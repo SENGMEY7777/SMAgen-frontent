@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
-import { api, ApiError } from '../services/api'
-import { formatCost, formatDate, formatTokens } from '../utils/formatters'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import { api, ApiError } from '@/services/api'
+import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
 
 const runs = ref([])
 const loading = ref(true)

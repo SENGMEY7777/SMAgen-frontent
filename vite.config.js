@@ -4,6 +4,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+const API_TARGET = 'https://kairo-sengmey-dev.duckdns.org'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -17,9 +19,20 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: API_TARGET,
+        changeOrigin: true,
+        secure: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyRequest) => {
+            proxyRequest.removeHeader('origin')
+          })
+        },
+      },
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: API_TARGET,
+        changeOrigin: true,
+        secure: true,
         ws: true,
       },
     },

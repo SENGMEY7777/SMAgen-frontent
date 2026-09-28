@@ -1,6 +1,31 @@
-# SMAgen
+# SMAgen Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 + Vite frontend for the KAIRO workspace.
+
+## Project Structure
+
+```text
+src/
+├── app/                    # Application bootstrap and router
+│   ├── App.vue
+│   ├── main.js
+│   └── router/
+├── assets/                 # Global styles and static source assets
+├── components/
+│   ├── branding/           # Brand-specific UI
+│   ├── common/             # Reusable UI components
+│   └── layout/             # Page and navigation layouts
+├── config/                 # Application constants and configuration
+├── services/               # API and realtime integrations
+├── stores/                 # Pinia state stores
+├── utils/                  # Shared formatting and utility functions
+└── views/
+    ├── auth/               # Login and registration screens
+    ├── dashboard/          # Main workspace screens
+    └── workflows/          # Workflow and run detail screens
+```
+
+The `@/` alias points to `src/`, so imports remain stable when files move between feature folders.
 
 ## Recommended IDE Setup
 

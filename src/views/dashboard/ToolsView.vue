@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 
 const tools = ref([
   {

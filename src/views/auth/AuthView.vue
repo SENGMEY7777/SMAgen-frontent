@@ -1,9 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import BrandMark from '../components/BrandMark.vue'
-import { api, ApiError } from '../services/api'
-import { useAuthStore } from '../stores/auth'
+import BrandMark from '@/components/branding/BrandMark.vue'
+import { api, ApiError } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
   mode: { type: String, default: 'login' },

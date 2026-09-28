@@ -1,11 +1,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
-import StatusPill from '../components/common/StatusPill.vue'
-import { api, apiBaseUrl, ApiError } from '../services/api'
-import { useAuthStore } from '../stores/auth'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, apiBaseUrl, ApiError } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()

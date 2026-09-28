@@ -1,12 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import AppIcon from './AppIcon.vue'
-import BrandMark from './BrandMark.vue'
-import { useAuthStore } from '../stores/auth'
-import { useChatStore } from '../stores/chat'
+import AppIcon from '@/components/common/AppIcon.vue'
+import BrandMark from '@/components/branding/BrandMark.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 
-import { api } from '../services/api'
+import { api } from '@/services/api'
 
 const props = defineProps({
   recentItems: { type: Array, default: () => [] },

@@ -1,10 +1,10 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
-import StatusPill from '../components/common/StatusPill.vue'
-import { api, ApiError } from '../services/api'
-import { formatDate } from '../utils/formatters'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { formatDate } from '@/utils/formatters'
 
 const approvals = ref([])
 const selected = ref(null)

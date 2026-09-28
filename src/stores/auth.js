@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { api, ApiError } from '../services/api'
+import { api, ApiError } from '@/services/api'
 
 const TOKEN_KEY = 'omni_token'
 const USER_KEY = 'omni_user'

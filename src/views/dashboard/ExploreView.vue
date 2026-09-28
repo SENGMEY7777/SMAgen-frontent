@@ -1,7 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
-import DashboardLayout from '../components/DashboardLayout.vue'
-import AppIcon from '../components/AppIcon.vue'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 </script>
 
 <template>
