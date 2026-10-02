@@ -726,9 +726,9 @@
   color: #18181b;
   border-radius: 18px;
   padding: 10px 18px;
-  font-size: 14.5px;
+  font-size: 16px;
   font-weight: 450;
-  line-height: 1.45;
+  line-height: 1.6;
   letter-spacing: -0.01em;
   box-shadow: none;
   border: none;
@@ -749,6 +749,22 @@
   direction: ltr;
 }
 
+.streaming-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-top: 4px;
+  vertical-align: text-bottom;
+  border-radius: 999px;
+  background: #4f46e5;
+  animation: streaming-caret-blink 0.9s steps(1, end) infinite;
+}
+
+@keyframes streaming-caret-blink {
+  0%, 45% { opacity: 1; }
+  46%, 100% { opacity: 0.2; }
+}
+
 .assistant-markdown {
   width: 100%;
   text-align: left;
@@ -759,8 +775,8 @@
   box-shadow: none;
   padding: 0;
   color: #0f172a;
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 16px;
+  line-height: 1.6;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -771,7 +787,7 @@
 .assistant-markdown .md-p {
   margin: 0 0 14px;
   color: #0f172a;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 .assistant-markdown .md-p:last-child {
@@ -795,34 +811,34 @@
 .assistant-markdown .md-h3,
 .assistant-markdown .md-h4 {
   color: #0f172a;
-  font-weight: 650;
-  line-height: 1.35;
+  font-weight: 700;
+  line-height: 1.3;
   margin: 20px 0 10px;
   letter-spacing: -0.01em;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-.assistant-markdown .md-h1 { font-size: 20px; }
-.assistant-markdown .md-h2 { font-size: 17.5px; }
-.assistant-markdown .md-h3 { font-size: 15.5px; }
-.assistant-markdown .md-h4 { font-size: 14px; }
+.assistant-markdown .md-h1 { font-size: 24px; }
+.assistant-markdown .md-h2 { font-size: 20px; }
+.assistant-markdown .md-h3 { font-size: 18px; }
+.assistant-markdown .md-h4 { font-size: 16px; }
 
 .assistant-markdown .md-list {
   margin: 8px 0 16px 20px;
   padding: 0;
-  line-height: 1.65;
+  line-height: 1.6;
   color: #0f172a;
 }
 
 .assistant-markdown .md-list li {
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 
 .assistant-markdown .inline-code {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.9em;
   color: #e11d48;
   background: #fff1f2;
   border: 1px solid #ffe4e6;
@@ -907,7 +923,7 @@
   padding: 14px 18px;
   overflow-x: auto;
   font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.6;
   color: #e2e8f0;
 }
