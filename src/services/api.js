@@ -1,4 +1,4 @@
-import { KAIRO_SYSTEM_PROMPT } from '@/config/kairoPrompt'
+
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
@@ -53,11 +53,7 @@ const request = async (path, options = {}) => {
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) })
 
-const chatBody = (message, history) => ({
-  message,
-  history,
-  systemPrompt: KAIRO_SYSTEM_PROMPT,
-})
+const chatBody = (message, history) => ({ message, history })
 
 const extractStreamText = (value) => {
   if (value == null) return ''
