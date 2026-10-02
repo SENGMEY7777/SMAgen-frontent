@@ -25,6 +25,7 @@ const copiedIndex = ref(null)
 const attachedImages = ref([])
 const attachedFiles = ref([])
 const previewImageUrl = ref(null)
+const streamingContent = ref('')
 
 const currentMessages = computed(() => chatStore.messages)
 
@@ -168,9 +169,46 @@ let activeAbortController = null
 const stopGeneration = () => {
   if (activeAbortController) {
     activeAbortController.abort()
-    activeAbortController = null
   }
-  loading.value = false
+}
+
+const commitStreamingResponse = () => {
+  const content = streamingContent.value
+  if (content) {
+    chatStore.addMessage({ role: 'assistant', content })
+  }
+  streamingContent.value = ''
+}
+
+const requestChatReply = async (prompt, history, signal) => {
+  streamingContent.value = ''
+  let receivedChunk = false
+
+  try {
+    await api.chatStream(prompt, history, {
+      signal,
+      onChunk: (chunk) => {
+        if (!chunk) return
+        receivedChunk = true
+        streamingContent.value += chunk
+        scrollToBottom()
+      },
+    })
+  } catch (streamError) {
+    if (streamError.name === 'AbortError' || signal.aborted) throw streamError
+
+    // Preserve the existing history-validation fallback for older API deployments.
+    if (history.length > 0 && !receivedChunk) {
+      const response = await api.chat(prompt, [], { signal })
+      streamingContent.value = response?.data?.message || 'I could not generate a response.'
+      return
+    }
+    throw streamError
+  }
+
+  if (!streamingContent.value) {
+    streamingContent.value = 'I could not generate a response.'
+  }
 }
 
 const submitEditUserMessage = async (index) => {
@@ -208,27 +246,14 @@ const submitEditUserMessage = async (index) => {
 
   try {
     const fullPrompt = formatPromptWithFiles(newText, messageFiles)
-    let response
-    try {
-      response = await api.chat(fullPrompt, history, { signal })
-    } catch (apiErr) {
-      if (apiErr.name === 'AbortError' || signal.aborted) {
-        return
-      }
-      if (history.length > 0) {
-        response = await api.chat(fullPrompt, [], { signal })
-      } else {
-        throw apiErr
-      }
-    }
-    const assistantReply = response?.data?.message || 'I could not generate a response.'
-    chatStore.addMessage({ role: 'assistant', content: assistantReply })
+    await requestChatReply(fullPrompt, history, signal)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
     }
     errorMessage.value = error instanceof ApiError ? error.message : 'Failed to generate a reply.'
   } finally {
+    commitStreamingResponse()
     activeAbortController = null
     loading.value = false
     scrollToBottom()
@@ -262,27 +287,14 @@ const retryUserMessage = async (index) => {
 
   try {
     const fullPrompt = formatPromptWithFiles(message.content, message.files || [])
-    let response
-    try {
-      response = await api.chat(fullPrompt, history, { signal })
-    } catch (apiErr) {
-      if (apiErr.name === 'AbortError' || signal.aborted) {
-        return
-      }
-      if (history.length > 0) {
-        response = await api.chat(fullPrompt, [], { signal })
-      } else {
-        throw apiErr
-      }
-    }
-    const assistantReply = response?.data?.message || 'I could not generate a response.'
-    chatStore.addMessage({ role: 'assistant', content: assistantReply })
+    await requestChatReply(fullPrompt, history, signal)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
     }
     errorMessage.value = error instanceof ApiError ? error.message : 'Failed to generate a reply.'
   } finally {
+    commitStreamingResponse()
     activeAbortController = null
     loading.value = false
     scrollToBottom()
@@ -379,28 +391,14 @@ const send = async () => {
 
   try {
     const promptToSend = fullPrompt || (images.length ? 'I have attached an image. Please review it.' : '')
-    let response
-    try {
-      response = await api.chat(promptToSend, history, { signal })
-    } catch (apiErr) {
-      if (apiErr.name === 'AbortError' || signal.aborted) {
-        return
-      }
-      // If history caused a validation issue, fallback to sending without history
-      if (history.length > 0) {
-        response = await api.chat(promptToSend, [], { signal })
-      } else {
-        throw apiErr
-      }
-    }
-    const assistantReply = response?.data?.message || 'I could not generate a response.'
-    chatStore.addMessage({ role: 'assistant', content: assistantReply })
+    await requestChatReply(promptToSend, history, signal)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
     }
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to generate a response.'
   } finally {
+    commitStreamingResponse()
     activeAbortController = null
     loading.value = false
     scrollToBottom()
@@ -566,7 +564,9 @@ onUnmounted(() => {
           <div v-if="loading && activeMode === 'chat'" class="message-row assistant">
             <div class="message-content-box">
               <div class="assistant-response-wrap">
-                <div class="typing-dots"><i></i><i></i><i></i></div>
+                <div v-if="streamingContent" class="assistant-markdown" v-html="renderMarkdown(streamingContent)"></div>
+                <div v-if="streamingContent" class="streaming-caret" aria-label="Generating response"></div>
+                <div v-else class="typing-dots"><i></i><i></i><i></i></div>
               </div>
             </div>
           </div>
