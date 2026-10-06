@@ -195,13 +195,26 @@ const openReview = async (targetTask = null) => {
 
   try {
     const runId = String(route.params.runId)
-    const res = await api.listApprovals(runId).catch(() => ({ data: [] }))
-    let list = Array.isArray(res?.data) ? res.data : []
+    if (runId.toLowerCase() === 'demo') {
+      selectedApproval.value = {
+        id: 'virtual-demo-approval',
+        targetTaskId: awaitingTask?.id || null,
+        run_id: runId,
+        action_summary: awaitingTask?.instruction || 'Privileged security verification and infrastructure compliance check.',
+        task_title: awaitingTask?.title || 'Security Approval Checkpoint',
+        assigned_tool: awaitingTask?.assigned_tool || 'executeCommand',
+        tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
+      }
+      approvalModalOpen.value = true
+      return
+    }
 
-    // If filtering by runId returned empty, check all pending approvals
-    if (list.length === 0) {
-      const allRes = await api.listApprovals('').catch(() => ({ data: [] }))
-      if (Array.isArray(allRes?.data)) list = allRes.data
+    let list = []
+    try {
+      const res = await api.listApprovals(runId)
+      list = Array.isArray(res?.data) ? res.data : []
+    } catch (err) {
+      console.warn('Approvals list fetch warning:', err?.message)
     }
 
     // Match by taskId or runId
@@ -411,30 +424,42 @@ onMounted(async () => {
     if (isActive.value) load(true)
   }, 4500)
 
-  socket = createSocketClient()
-  socket.on('connect', () => {
-    socket.emit('join_run', String(route.params.runId))
-  })
+  const runId = String(route.params.runId)
+  if (runId.toLowerCase() !== 'demo') {
+    socket = createSocketClient()
+    if (socket) {
+      socket.on('connect', () => {
+        socket.emit('join_run', runId)
+      })
 
-  const refreshEvents = [
-    'telemetry',
-    'task_started',
-    'task_completed',
-    'task_failed',
-    'approval_required',
-    'workflow_completed',
-    'workflow_failed',
-  ]
-  refreshEvents.forEach((evt) => {
-    socket.on(evt, () => load(true))
-  })
+      const refreshEvents = [
+        'telemetry',
+        'task_started',
+        'task_completed',
+        'task_failed',
+        'approval_required',
+        'workflow_completed',
+        'workflow_failed',
+      ]
+      refreshEvents.forEach((evt) => {
+        socket.on(evt, () => load(true))
+      })
+
+      socket.on('connect_error', () => {
+        // Quietly ignore connection errors to prevent console flooding
+      })
+    }
+  }
 })
 
 onBeforeUnmount(() => {
   if (timer) window.clearInterval(timer)
   if (socket) {
-    socket.emit('leave_run', String(route.params.runId))
-    socket.disconnect()
+    try {
+      socket.emit('leave_run', String(route.params.runId))
+      socket.disconnect()
+    } catch {}
+    socket = null
   }
 })
 </script>
