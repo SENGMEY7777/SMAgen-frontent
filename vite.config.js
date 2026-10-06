@@ -22,7 +22,7 @@ export default defineConfig({
       '/api': {
         target: API_TARGET,
         changeOrigin: true,
-        secure: true,
+        secure: false,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyRequest) => {
             proxyRequest.removeHeader('origin')
@@ -32,7 +32,7 @@ export default defineConfig({
       '/socket.io': {
         target: API_TARGET,
         changeOrigin: true,
-        secure: true,
+        secure: false,
         ws: true,
       },
     },
