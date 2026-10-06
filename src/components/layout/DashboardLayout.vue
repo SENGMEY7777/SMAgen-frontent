@@ -1,7 +1,28 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import AppIcon from '@/components/common/AppIcon.vue'
+import {
+  IconSearch,
+  IconHome,
+  IconMessageCircle2,
+  IconGitFork,
+  IconFolder,
+  IconShieldCheck,
+  IconChartBar,
+  IconTool,
+  IconBook,
+  IconDotsVertical,
+  IconPin,
+  IconPencil,
+  IconStack2,
+  IconChevronRight,
+  IconTrash,
+  IconSettings,
+  IconMenu2,
+  IconSparkles,
+  IconChevronDown,
+  IconPlus,
+} from '@tabler/icons-vue'
 import BrandMark from '@/components/branding/BrandMark.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
@@ -164,7 +185,7 @@ const combinedRecentItems = computed(() => {
         </div>
 
         <label class="search-box">
-          <AppIcon name="search" :size="15" />
+          <IconSearch :size="15" />
           <input placeholder="Search" aria-label="Search" />
           <span class="keyboard-key">⌘K</span>
         </label>
@@ -174,19 +195,19 @@ const combinedRecentItems = computed(() => {
       <div class="sidebar-scrollable">
         <nav class="side-nav" aria-label="Main navigation">
           <RouterLink class="nav-item" to="/overview" active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="home" :size="16" />
+            <IconHome :size="16" />
             <span>Dashboard</span>
           </RouterLink>
           <RouterLink class="nav-item" to="/" exact-active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="chat" :size="16" />
+            <IconMessageCircle2 :size="16" />
             <span>AI Chat & Agent</span>
           </RouterLink>
           <RouterLink class="nav-item" to="/workflows" active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="diagram" :size="16" />
+            <IconGitFork :size="16" />
             <span>Workflows (DAG)</span>
           </RouterLink>
           <RouterLink class="nav-item" to="/artifacts" active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="folder" :size="16" />
+            <IconFolder :size="16" />
             <span>Artifacts</span>
           </RouterLink>
           <RouterLink
@@ -196,20 +217,20 @@ const combinedRecentItems = computed(() => {
             active-class="router-link-exact-active"
             @click="closeMenu"
           >
-            <AppIcon name="shield" :size="16" />
+            <IconShieldCheck :size="16" />
             <span>Security Approvals</span>
             <span v-if="pendingApprovalsCount > 0" class="nav-badge-pill">{{ pendingApprovalsCount }}</span>
           </RouterLink>
           <RouterLink class="nav-item" to="/telemetry" active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="graph" :size="16" />
+            <IconChartBar :size="16" />
             <span>Telemetry & Costs</span>
           </RouterLink>
           <RouterLink class="nav-item" to="/tools" active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="tools" :size="16" />
+            <IconTool :size="16" />
             <span>Tool Integrations</span>
           </RouterLink>
           <RouterLink class="nav-item" to="/library" active-class="router-link-exact-active" @click="closeMenu">
-            <AppIcon name="library" :size="16" />
+            <IconBook :size="16" />
             <span>Template Library</span>
           </RouterLink>
         </nav>
@@ -270,34 +291,34 @@ const combinedRecentItems = computed(() => {
                   title="More options"
                   @click.stop="toggleMenu(item.id, $event)"
                 >
-                  <AppIcon name="dots-vertical" :size="13" />
+                  <IconDotsVertical :size="13" />
                 </button>
 
                 <!-- Floating Dropdown Menu Card -->
                 <div v-if="activeMenuId === item.id" class="item-dropdown-menu" @click.stop>
                   <button class="dropdown-item" type="button" @click.stop="handlePin(item)">
-                    <AppIcon name="pin" :size="15" />
+                    <IconPin :size="15" />
                     <span class="dropdown-label">{{ item.pinned ? 'Unpin' : 'Pin' }}</span>
                     <span class="dropdown-shortcut">P</span>
                   </button>
                   <button class="dropdown-item" type="button" @click.stop="startRename(item)">
-                    <AppIcon name="pencil" :size="15" />
+                    <IconPencil :size="15" />
                     <span class="dropdown-label">Rename</span>
                     <span class="dropdown-shortcut">R</span>
                   </button>
                   <button class="dropdown-item" type="button" @click.stop="handleAddToProject(item)">
-                    <AppIcon name="stack" :size="15" />
+                    <IconStack2 :size="15" />
                     <span class="dropdown-label">Add to project</span>
-                    <AppIcon name="chevron-right" :size="13" class="dropdown-arrow" />
+                    <IconChevronRight :size="13" class="dropdown-arrow" />
                   </button>
                   <button class="dropdown-item" type="button" @click.stop="handleMoveToGroup(item)">
-                    <AppIcon name="folder" :size="15" />
+                    <IconFolder :size="15" />
                     <span class="dropdown-label">Move to group</span>
-                    <AppIcon name="chevron-right" :size="13" class="dropdown-arrow" />
+                    <IconChevronRight :size="13" class="dropdown-arrow" />
                   </button>
                   <div class="dropdown-divider"></div>
                   <button class="dropdown-item danger" type="button" @click.stop="handleDelete(item)">
-                    <AppIcon name="trash" :size="15" />
+                    <IconTrash :size="15" />
                     <span class="dropdown-label">Delete</span>
                     <span class="dropdown-shortcut">D</span>
                   </button>
@@ -323,7 +344,7 @@ const combinedRecentItems = computed(() => {
             <span class="account-name">{{ auth.displayName }}</span>
             <span class="account-email">{{ auth.user?.email }}</span>
           </span>
-          <AppIcon name="settings" :size="15" class="account-settings-icon" />
+          <IconSettings :size="15" class="account-settings-icon" />
         </button>
       </div>
     </aside>
@@ -334,17 +355,17 @@ const combinedRecentItems = computed(() => {
       <header class="topbar">
         <div class="topbar-left">
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
-            <AppIcon name="menu" :size="18" />
+            <IconMenu2 :size="18" />
           </button>
           <div class="model-picker">
-            <span class="model-dot"><AppIcon name="spark" :size="12" /></span>
+            <span class="model-dot"><IconSparkles :size="12" /></span>
             <span>KAIRO 4o</span>
-            <AppIcon name="chevron-down" :size="13" />
+            <IconChevronDown :size="13" />
           </div>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
-            <AppIcon name="plus" :size="14" />
+            <IconPlus :size="14" />
             <span>New Chat</span>
           </button>
           <button

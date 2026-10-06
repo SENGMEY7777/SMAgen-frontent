@@ -1,7 +1,18 @@
 <script setup>
-import AppIcon from './AppIcon.vue'
+import { computed } from 'vue'
+import { IconClock, IconSparkles, IconCheck, IconPlus, IconTrash, IconArrowRight, IconPlayerPlay } from '@tabler/icons-vue'
 
-defineProps({
+const iconMap = {
+  clock: IconClock,
+  spark: IconSparkles,
+  check: IconCheck,
+  plus: IconPlus,
+  trash: IconTrash,
+  arrow: IconArrowRight,
+  play: IconPlayerPlay,
+}
+
+const props = defineProps({
   variant: {
     type: String,
     default: 'primary',
@@ -15,18 +26,24 @@ defineProps({
   loading: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   type: { type: String, default: 'button' },
-  icon: { type: String, default: '' },
+  icon: { type: [String, Object, Function], default: '' },
   iconSize: { type: [Number, String], default: 14 },
 })
 
 defineEmits(['click'])
+
+const resolvedIcon = computed(() => {
+  if (!props.icon) return null
+  if (typeof props.icon === 'object' || typeof props.icon === 'function') return props.icon
+  return iconMap[props.icon] || IconSparkles
+})
 </script>
 
 <template>
   <button :type="type" class="base-btn" :class="[`btn-${variant}`, `btn-${size}`, { 'is-loading': loading }]"
     :disabled="disabled || loading" @click="$emit('click', $event)">
-    <AppIcon v-if="loading" name="clock" :size="iconSize" class="btn-spinner" />
-    <AppIcon v-else-if="icon" :name="icon" :size="iconSize" />
+    <IconClock v-if="loading" :size="iconSize" class="btn-spinner" />
+    <component :is="resolvedIcon" v-else-if="resolvedIcon" :size="iconSize" />
     <slot />
   </button>
 </template>
