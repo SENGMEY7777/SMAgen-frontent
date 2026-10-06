@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconClock, IconFolder, IconFileText } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate } from '@/utils/formatters'
 
@@ -66,7 +66,7 @@ onMounted(load)
           <p>Inspect files, code modules, and structured reports generated in the workspace environment.</p>
         </div>
         <button class="secondary-btn" type="button" @click="load">
-          <AppIcon name="clock" :size="14" /> Refresh
+          <IconClock :size="14" /> Refresh
         </button>
       </div>
 
@@ -82,7 +82,7 @@ onMounted(load)
         <!-- Sidebar file list -->
         <div class="soft-card file-tree-card">
           <div class="file-tree-header">
-            <AppIcon name="folder" :size="16" />
+            <IconFolder :size="16" />
             <span>Generated Files ({{ generatedArtifacts.length }})</span>
           </div>
           <div class="file-list">
@@ -94,7 +94,7 @@ onMounted(load)
               type="button"
               @click="selectedFile = file"
             >
-              <AppIcon name="book" :size="14" />
+              <IconFileText :size="14" />
               <div class="file-info">
                 <span class="file-name">{{ file.fileName }}</span>
                 <small class="file-meta">{{ file.taskTitle }} · {{ formatDate(file.createdAt) }}</small>

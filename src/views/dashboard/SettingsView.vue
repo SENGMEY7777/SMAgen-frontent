@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconShieldCheck, IconLogout } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, apiBaseUrl, ApiError } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -79,7 +79,7 @@ const logout = async () => {
           <h3>Create an API key</h3>
           <p>Keys are returned once. Keep the value private and rotate it if it is exposed.</p>
           <button class="secondary-btn key-button" type="button" :disabled="loading" @click="createKey">
-            <AppIcon name="shield" :size="15" />
+            <IconShieldCheck :size="15" />
             {{ loading ? 'Creating…' : 'Create API key' }}
           </button>
           <div v-if="apiKey" class="key-box">
@@ -92,7 +92,7 @@ const logout = async () => {
       </div>
 
       <button class="danger-btn logout-button" type="button" @click="logout">
-        <AppIcon name="logout" :size="15" /> Sign out
+        <IconLogout :size="15" /> Sign out
       </button>
     </section>
   </DashboardLayout>

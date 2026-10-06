@@ -2,7 +2,20 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import {
+  IconCheck,
+  IconCopy,
+  IconFile,
+  IconInfoCircle,
+  IconRefresh,
+  IconPencil,
+  IconChevronDown,
+  IconX,
+  IconPlus,
+  IconBulb,
+  IconPlayerStop,
+  IconArrowUp,
+} from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
@@ -463,7 +476,7 @@ onUnmounted(() => {
                 <div class="assistant-markdown" v-html="renderMarkdown(message.content)"></div>
                 <div class="message-actions">
                   <button class="action-btn" type="button" @click="copyMessage(message.content, index)">
-                    <AppIcon :name="copiedIndex === index ? 'check' : 'copy'" :size="13" />
+                    <component :is="copiedIndex === index ? IconCheck : IconCopy" :size="13" />
                     <span>{{ copiedIndex === index ? 'Copied' : 'Copy' }}</span>
                   </button>
                 </div>
@@ -491,7 +504,7 @@ onUnmounted(() => {
                     :title="file.name"
                   >
                     <div class="file-chip-icon">
-                      <AppIcon name="file" :size="14" />
+                      <IconFile :size="14" />
                     </div>
                     <div class="file-chip-info">
                       <span class="file-chip-name">{{ file.name }}</span>
@@ -514,7 +527,7 @@ onUnmounted(() => {
                   </div>
                   <div class="user-edit-actions-row">
                     <span class="edit-info-icon" title="Press Enter to save, Esc to cancel">
-                      <AppIcon name="info" :size="15" />
+                      <IconInfoCircle :size="15" />
                     </span>
                     <button class="edit-cancel-btn" type="button" @click="cancelEditUserMessage">
                       Cancel
@@ -537,7 +550,7 @@ onUnmounted(() => {
                       :disabled="loading"
                       @click="retryUserMessage(index)"
                     >
-                      <AppIcon name="refresh" :size="13" />
+                      <IconRefresh :size="13" />
                     </button>
                     <button
                       class="user-action-btn"
@@ -545,7 +558,7 @@ onUnmounted(() => {
                       title="Edit message"
                       @click="startEditUserMessage(index, message.content)"
                     >
-                      <AppIcon name="edit" :size="13" />
+                      <IconPencil :size="13" />
                     </button>
                     <button
                       class="user-action-btn"
@@ -553,7 +566,7 @@ onUnmounted(() => {
                       :title="copiedUserIndex === index ? 'Copied!' : 'Copy message'"
                       @click="copyUserMessage(message.content, index)"
                     >
-                      <AppIcon :name="copiedUserIndex === index ? 'check' : 'copy'" :size="13" />
+                      <component :is="copiedUserIndex === index ? IconCheck : IconCopy" :size="13" />
                     </button>
                   </div>
                 </div>
@@ -582,7 +595,7 @@ onUnmounted(() => {
           aria-label="Scroll to bottom"
           @click="scrollToBottom"
         >
-          <AppIcon name="chevron-down" :size="16" />
+          <IconChevronDown :size="16" />
         </button>
 
         <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
@@ -603,7 +616,7 @@ onUnmounted(() => {
                 aria-label="Remove image"
                 @click="removeAttachedImage(idx)"
               >
-                <AppIcon name="close" :size="12" />
+                <IconX :size="12" />
               </button>
             </div>
 
@@ -614,7 +627,7 @@ onUnmounted(() => {
               class="attachment-file-chip"
             >
               <div class="file-badge-icon">
-                <AppIcon name="file" :size="14" />
+                <IconFile :size="14" />
               </div>
               <div class="file-badge-text">
                 <span class="file-badge-name">{{ file.name }}</span>
@@ -626,7 +639,7 @@ onUnmounted(() => {
                 aria-label="Remove file"
                 @click="removeAttachedFile(idx)"
               >
-                <AppIcon name="close" :size="11" />
+                <IconX :size="11" />
               </button>
             </div>
           </div>
@@ -639,7 +652,7 @@ onUnmounted(() => {
               title="Add attachment, code file, or image"
               @click="triggerFileUpload"
             >
-              <AppIcon name="plus" :size="16" />
+              <IconPlus :size="16" />
             </button>
 
             <textarea
@@ -659,7 +672,7 @@ onUnmounted(() => {
                 :class="{ active: activeMode === 'workflow' }"
                 @click="activeMode = activeMode === 'workflow' ? 'chat' : 'workflow'"
               >
-                <AppIcon name="bulb" :size="13" />
+                <IconBulb :size="13" />
                 <span>Workflow</span>
               </button>
               <!-- Stop Button when generating vs Start/Send Button when idle -->
@@ -671,7 +684,7 @@ onUnmounted(() => {
                 aria-label="Stop generating"
                 @click="stopGeneration"
               >
-                <AppIcon name="stop" :size="14" />
+                <IconPlayerStop :size="14" />
               </button>
               <button
                 v-else
@@ -682,7 +695,7 @@ onUnmounted(() => {
                 aria-label="Send message"
                 @click="send"
               >
-                <AppIcon name="arrow-up" :size="16" />
+                <IconArrowUp :size="16" />
               </button>
             </div>
           </div>
@@ -701,7 +714,7 @@ onUnmounted(() => {
       <div v-if="previewImageUrl" class="image-lightbox-overlay" @click="previewImageUrl = null">
         <div class="image-lightbox-card" @click.stop>
           <button class="lightbox-close" type="button" @click="previewImageUrl = null" aria-label="Close image">
-            <AppIcon name="close" :size="18" />
+            <IconX :size="18" />
           </button>
           <img :src="previewImageUrl" alt="Enlarged view" class="lightbox-img" />
         </div>

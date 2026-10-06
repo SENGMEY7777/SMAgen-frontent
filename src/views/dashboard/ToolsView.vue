@@ -1,7 +1,25 @@
 <script setup>
 import { ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import {
+  IconCheck,
+  IconShieldCheck,
+  IconTerminal2,
+  IconDatabase,
+  IconSearch,
+  IconWorld,
+  IconCode,
+  IconTool,
+} from '@tabler/icons-vue'
+
+const toolIconMap = {
+  terminal: IconTerminal2,
+  database: IconDatabase,
+  search: IconSearch,
+  globe: IconWorld,
+  sandbox: IconCode,
+  code: IconCode,
+}
 
 const tools = ref([
   {
@@ -102,7 +120,7 @@ const saveConfiguration = () => {
           <p>Configure agent capabilities, manage execution privileges, and monitor tool usage.</p>
         </div>
         <button class="primary-btn" type="button" @click="saveConfiguration">
-          <AppIcon name="check" :size="14" /> Save Changes
+          <IconCheck :size="14" /> Save Changes
         </button>
       </div>
 
@@ -149,7 +167,7 @@ const saveConfiguration = () => {
           <div class="tool-card-header">
             <div class="tool-badge-wrap">
               <div class="tool-icon">
-                <AppIcon :name="tool.icon" :size="18" />
+                <component :is="toolIconMap[tool.icon] || IconTool" :size="18" />
               </div>
               <div>
                 <h3 class="tool-title">{{ tool.name }}</h3>
@@ -168,7 +186,7 @@ const saveConfiguration = () => {
 
           <div class="tool-footer">
             <span class="security-tag" :class="tool.securityColor">
-              <AppIcon name="shield" :size="12" /> {{ tool.securityTier }}
+              <IconShieldCheck :size="12" /> {{ tool.securityTier }}
             </span>
             <span class="calls-count">{{ tool.callsCount }} calls</span>
           </div>

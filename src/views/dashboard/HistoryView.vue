@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconClock, IconArrowRight } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate, formatTokens } from '@/utils/formatters'
@@ -42,7 +42,7 @@ onMounted(load)
           <p>Follow each goal from its first prompt to the last task log.</p>
         </div>
         <button class="secondary-btn" type="button" @click="load">
-          <AppIcon name="clock" :size="15" /> Refresh
+          <IconClock :size="15" /> Refresh
         </button>
       </div>
 
@@ -76,7 +76,7 @@ onMounted(load)
           <div class="row-actions">
             <StatusPill :status="run.status" />
             <RouterLink class="secondary-btn" :to="`/runs/${run.id}`">
-              View run <AppIcon name="arrow" :size="13" />
+              View run <IconArrowRight :size="13" />
             </RouterLink>
           </div>
         </article>

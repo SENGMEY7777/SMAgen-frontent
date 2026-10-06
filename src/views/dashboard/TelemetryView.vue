@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconClock } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
 
@@ -103,7 +103,7 @@ onMounted(loadData)
             </button>
           </div>
           <button class="secondary-btn" type="button" @click="loadData">
-            <AppIcon name="clock" :size="14" /> Refresh
+            <IconClock :size="14" /> Refresh
           </button>
         </div>
       </div>

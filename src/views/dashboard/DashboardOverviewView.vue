@@ -2,7 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import {
+  IconClock,
+  IconMessageCircle2,
+  IconGitFork,
+  IconShieldCheck,
+  IconTool,
+  IconArrowRight,
+} from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
@@ -60,7 +67,7 @@ onMounted(loadData)
           <p>Overall system performance, active autonomous tasks, and operational costs.</p>
         </div>
         <button class="secondary-btn" type="button" @click="loadData">
-          <AppIcon name="clock" :size="14" /> Refresh
+          <IconClock :size="14" /> Refresh
         </button>
       </div>
 
@@ -109,7 +116,7 @@ onMounted(loadData)
       <div class="modules-grid">
         <article class="soft-card module-card">
           <div class="module-icon">
-            <AppIcon name="chat" :size="18" />
+            <IconMessageCircle2 :size="18" />
           </div>
           <div class="module-info">
             <h3>AI Chat & Agent</h3>
@@ -120,7 +127,7 @@ onMounted(loadData)
 
         <article class="soft-card module-card">
           <div class="module-icon purple">
-            <AppIcon name="diagram" :size="18" />
+            <IconGitFork :size="18" />
           </div>
           <div class="module-info">
             <h3>Workflows (DAG)</h3>
@@ -131,7 +138,7 @@ onMounted(loadData)
 
         <article class="soft-card module-card">
           <div class="module-icon orange">
-            <AppIcon name="shield" :size="18" />
+            <IconShieldCheck :size="18" />
           </div>
           <div class="module-info">
             <h3>Security Approvals</h3>
@@ -142,7 +149,7 @@ onMounted(loadData)
 
         <article class="soft-card module-card">
           <div class="module-icon green">
-            <AppIcon name="tools" :size="18" />
+            <IconTool :size="18" />
           </div>
           <div class="module-info">
             <h3>Tool Integrations</h3>
@@ -173,7 +180,7 @@ onMounted(loadData)
           <div class="row-actions">
             <StatusPill :status="run.status" />
             <RouterLink class="secondary-btn sm" :to="`/runs/${run.id}`">
-              Inspect <AppIcon name="arrow" :size="12" />
+              Inspect <IconArrowRight :size="12" />
             </RouterLink>
           </div>
         </article>

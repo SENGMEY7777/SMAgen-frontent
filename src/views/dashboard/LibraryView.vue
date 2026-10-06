@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconPlus, IconX, IconPlayerPlay } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDateShort } from '@/utils/formatters'
 
@@ -69,7 +69,7 @@ onMounted(load)
           <p>Reusable instructions for the jobs you run more than once.</p>
         </div>
         <button class="primary-btn" type="button" @click="showCreate = !showCreate">
-          <AppIcon :name="showCreate ? 'close' : 'plus'" :size="15" />
+          <component :is="showCreate ? IconX : IconPlus" :size="15" />
           {{ showCreate ? 'Close' : 'New workflow' }}
         </button>
       </div>
@@ -133,7 +133,7 @@ onMounted(load)
         <div class="form-actions">
           <button class="secondary-btn" type="button" @click="runTarget = null">Cancel</button>
           <button class="primary-btn" type="button" :disabled="loading || !runGoal.trim()" @click="runWorkflow">
-            <AppIcon name="play" :size="14" /> {{ loading ? 'Starting…' : 'Start run' }}
+            <IconPlayerPlay :size="14" /> {{ loading ? 'Starting…' : 'Start run' }}
           </button>
         </div>
       </div>

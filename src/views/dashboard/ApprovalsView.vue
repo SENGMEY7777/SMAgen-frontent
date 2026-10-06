@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconClock, IconArrowRight, IconX, IconCheck } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate } from '@/utils/formatters'
@@ -71,7 +71,7 @@ onMounted(load)
           <p>Review risky actions before they continue through a workflow.</p>
         </div>
         <button class="secondary-btn" type="button" @click="load">
-          <AppIcon name="clock" :size="15" /> Refresh
+          <IconClock :size="15" /> Refresh
         </button>
       </div>
 
@@ -91,7 +91,7 @@ onMounted(load)
           <div class="row-actions">
             <StatusPill status="AWAITING_APPROVAL" />
             <button class="secondary-btn" type="button" @click="openApproval(approval)">
-              Review <AppIcon name="arrow" :size="13" />
+              Review <IconArrowRight :size="13" />
             </button>
           </div>
         </article>
@@ -99,7 +99,7 @@ onMounted(load)
 
       <div v-if="selected" class="soft-card approval-detail">
         <button class="close-detail" type="button" @click="selected = null" aria-label="Close detail">
-          <AppIcon name="close" :size="16" />
+          <IconX :size="16" />
         </button>
         <div class="eyebrow">Approval request</div>
         <h2>{{ selected.action_summary }}</h2>
@@ -123,7 +123,7 @@ onMounted(load)
             Reject
           </button>
           <button class="primary-btn" type="button" :disabled="deciding" @click="decide('APPROVED')">
-            <AppIcon name="check" :size="14" /> Approve
+            <IconCheck :size="14" /> Approve
           </button>
         </div>
       </div>

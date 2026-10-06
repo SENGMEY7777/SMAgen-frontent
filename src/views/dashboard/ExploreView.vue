@@ -1,7 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconSparkles, IconArrowRight, IconPlayerPlay, IconShieldCheck } from '@tabler/icons-vue'
 </script>
 
 <template>
@@ -17,32 +17,32 @@ import AppIcon from '@/components/common/AppIcon.vue'
       <div class="card-grid">
         <article class="soft-card">
           <div class="feature-icon">
-            <AppIcon name="spark" :size="19" />
+            <IconSparkles :size="19" />
           </div>
           <h3>Ask SMAgen</h3>
           <p>Get a clear answer with context, examples, and the next move already in view.</p>
           <RouterLink class="feature-link" to="/">Start a chat
-            <AppIcon name="arrow" :size="14" />
+            <IconArrowRight :size="14" />
           </RouterLink>
         </article>
         <article class="soft-card">
           <div class="feature-icon green">
-            <AppIcon name="play" :size="18" />
+            <IconPlayerPlay :size="18" />
           </div>
           <h3>Run a workflow</h3>
           <p>Describe a goal and let the planner break it into safe, observable task nodes.</p>
           <RouterLink class="feature-link" to="/">Build a workflow
-            <AppIcon name="arrow" :size="14" />
+            <IconArrowRight :size="14" />
           </RouterLink>
         </article>
         <article class="soft-card">
           <div class="feature-icon orange">
-            <AppIcon name="shield" :size="18" />
+            <IconShieldCheck :size="18" />
           </div>
           <h3>Human checkpoints</h3>
           <p>Risky actions pause for review, so important decisions stay visible and accountable.</p>
           <RouterLink class="feature-link" to="/approvals">Review approvals
-            <AppIcon name="arrow" :size="14" />
+            <IconArrowRight :size="14" />
           </RouterLink>
         </article>
       </div>
