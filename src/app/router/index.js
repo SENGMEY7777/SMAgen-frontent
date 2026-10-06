@@ -25,6 +25,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  if (to.path === '/runs/demo') return true
   if (to.meta.requiresAuth && !isAuthenticated()) return { name: 'login', query: { redirect: to.fullPath } }
   if ((to.name === 'login' || to.name === 'register') && isAuthenticated()) return { name: 'chat' }
   return true

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import AppIcon from '@/components/common/AppIcon.vue'
+import { IconClock, IconGitFork, IconPlayerPlay, IconArrowRight } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate, formatTokens } from '@/utils/formatters'
@@ -68,7 +68,7 @@ onMounted(load)
           <p>Multi-step autonomous DAG task planner, dependency resolution, and execution visualizer.</p>
         </div>
         <button class="secondary-btn" type="button" @click="load">
-          <AppIcon name="clock" :size="14" /> Refresh
+          <IconClock :size="14" /> Refresh
         </button>
       </div>
 
@@ -78,7 +78,7 @@ onMounted(load)
       <div class="soft-card dag-builder-card">
         <div class="builder-header">
           <div class="builder-icon">
-            <AppIcon name="diagram" :size="18" />
+            <IconGitFork :size="18" />
           </div>
           <div>
             <h3>Launch Autonomous DAG Workflow</h3>
@@ -93,15 +93,26 @@ onMounted(load)
             rows="2"
             @keydown.enter.exact.prevent="startDagWorkflow"
           ></textarea>
-          <button
-            class="primary-btn launch-btn"
-            type="button"
-            :disabled="!goalPrompt.trim() || launching"
-            @click="startDagWorkflow"
-          >
-            <AppIcon :name="launching ? 'clock' : 'play'" :size="14" />
-            <span>{{ launching ? 'Planning DAG…' : 'Execute DAG' }}</span>
-          </button>
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="primary-btn launch-btn"
+              type="button"
+              :disabled="!goalPrompt.trim() || launching"
+              @click="startDagWorkflow"
+            >
+              <component :is="launching ? IconClock : IconPlayerPlay" :size="14" />
+              <span>{{ launching ? 'Planning DAG…' : 'Execute DAG' }}</span>
+            </button>
+            <button
+              class="secondary-btn launch-btn"
+              type="button"
+              style="background: rgba(147, 51, 234, 0.08); border-color: rgba(147, 51, 234, 0.3); color: #9333ea;"
+              @click="router.push('/runs/demo')"
+            >
+              <IconGitFork :size="14" />
+              <span>Preview Canvas (Demo)</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -124,7 +135,7 @@ onMounted(load)
           <div class="row-actions">
             <StatusPill :status="run.status" />
             <RouterLink class="secondary-btn sm" :to="`/runs/${run.id}`">
-              View DAG Graph <AppIcon name="arrow" :size="12" />
+              View DAG Graph <IconArrowRight :size="12" />
             </RouterLink>
           </div>
         </article>
@@ -148,7 +159,7 @@ onMounted(load)
           <div class="row-actions">
             <StatusPill :status="run.status" />
             <RouterLink class="secondary-btn sm" :to="`/runs/${run.id}`">
-              Inspect <AppIcon name="arrow" :size="12" />
+              Inspect <IconArrowRight :size="12" />
             </RouterLink>
           </div>
         </article>
