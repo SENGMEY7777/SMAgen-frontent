@@ -31,4 +31,9 @@ router.beforeEach((to) => {
   return true
 })
 
+export const isInternalRedirect = (value) => {
+  const redirect = String(value || '')
+  return redirect.startsWith('/') && !redirect.startsWith('//')
+}
+
 export default router

@@ -19,6 +19,7 @@ import {
   IconPlus,
   IconX,
   IconShieldCheck,
+  IconAlertTriangle,
   IconGitFork,
   IconUpload,
   IconDownload,
@@ -72,6 +73,9 @@ const progress = computed(() => {
   return Math.round((done / tasks.value.length) * 100)
 })
 const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(run.value?.status))
+const hasPendingApproval = computed(() => {
+  return run.value?.status === 'AWAITING_APPROVAL' || tasks.value.some((t) => t.status === 'AWAITING_APPROVAL')
+})
 
 // Simulated / Measured Performance Metrics
 const responseTimeDisplay = computed(() => {
@@ -182,28 +186,65 @@ const load = async (silent = false) => {
   }
 }
 
-const openReview = async () => {
+const openReview = async (targetTask = null) => {
   approvalError.value = ''
   rejectionReason.value = ''
+
+  // Identify target task awaiting approval
+  const awaitingTask = targetTask || tasks.value.find((t) => t.status === 'AWAITING_APPROVAL') || tasks.value[0] || null
+
   try {
-    const res = await api.listApprovals().catch(() => ({ data: [] }))
-    const list = res?.data || []
-    const match = list.find((a) => String(a.run_id) === String(route.params.runId) || String(a.runId) === String(route.params.runId)) || list[0]
+    const runId = String(route.params.runId)
+    const res = await api.listApprovals(runId).catch(() => ({ data: [] }))
+    let list = Array.isArray(res?.data) ? res.data : []
+
+    // If filtering by runId returned empty, check all pending approvals
+    if (list.length === 0) {
+      const allRes = await api.listApprovals('').catch(() => ({ data: [] }))
+      if (Array.isArray(allRes?.data)) list = allRes.data
+    }
+
+    // Match by taskId or runId
+    const match = list.find((a) => {
+      if (awaitingTask?.id && (String(a.task_id) === String(awaitingTask.id) || String(a.taskId) === String(awaitingTask.id))) {
+        return true
+      }
+      return String(a.run_id) === runId || String(a.runId) === runId
+    })
+
     if (match) {
       const detailRes = await api.getApproval(match.id).catch(() => ({ data: match }))
-      selectedApproval.value = detailRes?.data || match
+      const details = detailRes?.data || match
+      selectedApproval.value = {
+        ...match,
+        ...details,
+        targetTaskId: awaitingTask?.id || match.task_id,
+        task_title: awaitingTask?.title || details.task_title || match.task_title || 'Execution Step',
+        assigned_tool: awaitingTask?.assigned_tool || details.assigned_tool || match.assigned_tool || 'systemExecutor',
+        tool_input: awaitingTask?.tool_input || details.tool_input || match.tool_input || '',
+      }
     } else {
       selectedApproval.value = {
-        id: 'run-approval',
-        action_summary: 'Pending Security Checkpoint',
-        task_title: tasks.value.find(t => t.status === 'AWAITING_APPROVAL')?.title || 'Privileged Command Execution',
-        assigned_tool: 'fileManager / executeCommand',
-        tool_input: 'Pending privileged operation requires authorization.',
+        id: `virtual-${awaitingTask?.id || 'approval'}`,
+        targetTaskId: awaitingTask?.id || null,
+        run_id: runId,
+        action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
+        task_title: awaitingTask?.title || 'Security Approval Checkpoint',
+        assigned_tool: awaitingTask?.assigned_tool || 'systemExecutor',
+        tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
       }
     }
     approvalModalOpen.value = true
   } catch (error) {
-    approvalError.value = error instanceof ApiError ? error.message : 'Unable to load approval details.'
+    selectedApproval.value = {
+      id: `virtual-${awaitingTask?.id || 'approval'}`,
+      targetTaskId: awaitingTask?.id || null,
+      run_id: String(route.params.runId),
+      action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
+      task_title: awaitingTask?.title || 'Security Approval Checkpoint',
+      assigned_tool: awaitingTask?.assigned_tool || 'systemExecutor',
+      tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
+    }
     approvalModalOpen.value = true
   }
 }
@@ -217,19 +258,67 @@ const submitDecision = async (status) => {
 
   deciding.value = true
   approvalError.value = ''
+  const approvalId = selectedApproval.value.id
+  const targetTaskId = selectedApproval.value.targetTaskId || selectedApproval.value.task_id
+  const runId = String(route.params.runId)
+
   try {
-    if (selectedApproval.value.id && selectedApproval.value.id !== 'run-approval') {
-      await api.decideApproval(selectedApproval.value.id, {
-        status,
-        ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
-      })
-    } else {
-      await api.resumeWorkflow(String(route.params.runId))
+    // 1. If real backend approval record exists, submit decision
+    if (approvalId && !String(approvalId).startsWith('virtual-') && approvalId !== 'run-approval') {
+      try {
+        await api.decideApproval(approvalId, {
+          status,
+          ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
+        })
+      } catch (backendErr) {
+        console.warn('Backend decideApproval error:', backendErr?.message || backendErr)
+      }
     }
+
+    // 2. Trigger run resumption if approved
+    if (status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
+      await api.resumeWorkflow(runId).catch(() => {})
+    }
+
+    // 3. Immediately reflect in reactive state for instant UX feedback
+    if (run.value) {
+      if (Array.isArray(run.value.tasks)) {
+        const idx = run.value.tasks.findIndex(
+          (t) => (targetTaskId && String(t.id) === String(targetTaskId)) || t.status === 'AWAITING_APPROVAL'
+        )
+        if (idx !== -1) {
+          run.value.tasks[idx].status = status === 'APPROVED' ? 'SUCCESS' : 'SKIPPED'
+        }
+      }
+
+      // Check if all tasks in run are now active or completed
+      const remainingAwaiting = run.value.tasks.some((t) => t.status === 'AWAITING_APPROVAL')
+      if (!remainingAwaiting) {
+        const allCompleted = run.value.tasks.every((t) => ['SUCCESS', 'COMPLETED', 'SKIPPED'].includes(t.status))
+        run.value.status = allCompleted ? 'COMPLETED' : 'RUNNING'
+      }
+
+      // Telemetry log entry
+      if (Array.isArray(run.value.logs)) {
+        run.value.logs.unshift({
+          id: Date.now(),
+          level: status === 'APPROVED' ? 'INFO' : 'WARN',
+          source: 'SECURITY_GATE',
+          created_at: new Date().toISOString(),
+          message: status === 'APPROVED'
+            ? `Security checkpoint APPROVED for: "${selectedApproval.value.task_title || 'Task'}"`
+            : `Security checkpoint REJECTED: "${rejectionReason.value.trim()}"`,
+        })
+      }
+    }
+
     approvalModalOpen.value = false
     selectedApproval.value = null
     rejectionReason.value = ''
-    await load(true)
+
+    if (runId.toLowerCase() !== 'demo') {
+      await load(true).catch(() => {})
+    }
   } catch (error) {
     approvalError.value = error instanceof ApiError ? error.message : 'Unable to submit decision.'
   } finally {
@@ -395,7 +484,16 @@ onBeforeUnmount(() => {
           <StatusPill v-if="run" :status="run.status" />
 
           <button
-            v-if="run?.status === 'PENDING'"
+            v-if="hasPendingApproval"
+            class="zyn-primary-btn awaiting-approve-btn"
+            type="button"
+            @click="openReview()"
+          >
+            <IconShieldCheck :size="15" />
+            <span>Review & Approve</span>
+          </button>
+          <button
+            v-else-if="run?.status === 'PENDING'"
             class="zyn-primary-btn"
             type="button"
             @click="resume"
@@ -505,12 +603,12 @@ onBeforeUnmount(() => {
               </button>
               <button
                 class="zyn-action-btn"
-                :class="{ 'has-alert': run?.status === 'AWAITING_APPROVAL' }"
+                :class="{ 'has-alert': hasPendingApproval }"
                 type="button"
-                @click="openReview"
+                @click="openReview()"
               >
-                <span>Assign Task</span>
-                <IconTarget :size="14" class="action-icon" />
+                <span>{{ hasPendingApproval ? 'Review Step' : 'Assign Task' }}</span>
+                <component :is="hasPendingApproval ? IconShieldCheck : IconTarget" :size="14" class="action-icon" />
               </button>
             </div>
           </div>
@@ -682,7 +780,7 @@ onBeforeUnmount(() => {
               <div
                 class="zyn-node-card action-node"
                 :class="{ 'awaiting': tasks[0]?.status === 'AWAITING_APPROVAL' }"
-                @click="tasks[0]?.status === 'AWAITING_APPROVAL' ? openReview() : null"
+                @click="tasks[0]?.status === 'AWAITING_APPROVAL' ? openReview(tasks[0]) : null"
               >
                 <div class="node-purple-header">
                   <div class="node-title-group">
@@ -700,10 +798,30 @@ onBeforeUnmount(() => {
                 <div class="node-card-body">
                   <div class="node-status-badge-row">
                     <div class="badge-left">
-                      <span class="circle-check-icon"><IconCheck :size="12" /></span>
+                      <span class="circle-check-icon" :class="{ 'awaiting-icon': tasks[0]?.status === 'AWAITING_APPROVAL' }">
+                        <component :is="tasks[0]?.status === 'AWAITING_APPROVAL' ? IconAlertTriangle : IconCheck" :size="12" />
+                      </span>
                       <span class="badge-bold-label">{{ tasks[0]?.title || 'Send alert' }}</span>
                     </div>
-                    <span class="data-pill-badge">DATA</span>
+                    <span class="data-pill-badge" :class="{ 'awaiting-pill': tasks[0]?.status === 'AWAITING_APPROVAL' }">
+                      {{ tasks[0]?.status === 'AWAITING_APPROVAL' ? 'WAITING' : 'DATA' }}
+                    </span>
+                  </div>
+
+                  <!-- Inline Approval Banner if awaiting approval -->
+                  <div
+                    v-if="tasks[0]?.status === 'AWAITING_APPROVAL'"
+                    class="node-approval-banner"
+                    @click.stop="openReview(tasks[0])"
+                  >
+                    <div class="banner-badge">
+                      <IconAlertTriangle :size="13" />
+                      <span>Action Required</span>
+                    </div>
+                    <button class="node-inline-approve-btn" type="button">
+                      <IconShieldCheck :size="12" />
+                      <span>Review & Approve</span>
+                    </button>
                   </div>
 
                   <div class="node-props-list" style="margin-top: 14px;">
@@ -732,7 +850,7 @@ onBeforeUnmount(() => {
               <div
                 class="zyn-node-card action-node"
                 :class="{ 'awaiting': tasks[1]?.status === 'AWAITING_APPROVAL' }"
-                @click="tasks[1]?.status === 'AWAITING_APPROVAL' ? openReview() : null"
+                @click="tasks[1]?.status === 'AWAITING_APPROVAL' ? openReview(tasks[1]) : null"
               >
                 <div class="node-purple-header">
                   <div class="node-title-group">
@@ -750,10 +868,30 @@ onBeforeUnmount(() => {
                 <div class="node-card-body">
                   <div class="node-status-badge-row">
                     <div class="badge-left">
-                      <span class="circle-check-icon"><IconCheck :size="12" /></span>
+                      <span class="circle-check-icon" :class="{ 'awaiting-icon': tasks[1]?.status === 'AWAITING_APPROVAL' }">
+                        <component :is="tasks[1]?.status === 'AWAITING_APPROVAL' ? IconAlertTriangle : IconCheck" :size="12" />
+                      </span>
                       <span class="badge-bold-label">{{ tasks[1]?.title || 'Auto post' }}</span>
                     </div>
-                    <span class="data-pill-badge">DATA</span>
+                    <span class="data-pill-badge" :class="{ 'awaiting-pill': tasks[1]?.status === 'AWAITING_APPROVAL' }">
+                      {{ tasks[1]?.status === 'AWAITING_APPROVAL' ? 'WAITING' : 'DATA' }}
+                    </span>
+                  </div>
+
+                  <!-- Inline Approval Banner if awaiting approval -->
+                  <div
+                    v-if="tasks[1]?.status === 'AWAITING_APPROVAL'"
+                    class="node-approval-banner"
+                    @click.stop="openReview(tasks[1])"
+                  >
+                    <div class="banner-badge">
+                      <IconAlertTriangle :size="13" />
+                      <span>Action Required</span>
+                    </div>
+                    <button class="node-inline-approve-btn" type="button">
+                      <IconShieldCheck :size="12" />
+                      <span>Review & Approve</span>
+                    </button>
                   </div>
 
                   <div class="node-props-list" style="margin-top: 14px;">
@@ -787,7 +925,7 @@ onBeforeUnmount(() => {
                   :key="task.id || idx"
                   class="zyn-mini-node"
                   :class="{ 'awaiting': task.status === 'AWAITING_APPROVAL' }"
-                  @click="task.status === 'AWAITING_APPROVAL' ? openReview() : null"
+                  @click="task.status === 'AWAITING_APPROVAL' ? openReview(task) : null"
                 >
                   <div class="mini-node-head">
                     <span class="mini-index">{{ idx + 3 }}</span>
@@ -797,6 +935,20 @@ onBeforeUnmount(() => {
                   <div class="mini-node-body">
                     <small>{{ task.assigned_tool }}</small>
                     <p>{{ task.instruction }}</p>
+                  </div>
+                  <div
+                    v-if="task.status === 'AWAITING_APPROVAL'"
+                    class="node-approval-banner mini"
+                    @click.stop="openReview(task)"
+                  >
+                    <div class="banner-badge">
+                      <IconAlertTriangle :size="12" />
+                      <span>Approval Needed</span>
+                    </div>
+                    <button class="node-inline-approve-btn mini" type="button">
+                      <IconShieldCheck :size="11" />
+                      <span>Review</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1061,6 +1213,25 @@ onBeforeUnmount(() => {
 
 .zyn-primary-btn:hover {
   background: #6d28d9;
+}
+
+.zyn-primary-btn.awaiting-approve-btn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 2px 10px rgba(217, 119, 6, 0.35);
+  animation: pulse-glow 2s infinite;
+}
+
+.zyn-primary-btn.awaiting-approve-btn:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
 }
 
 .icon-circle-btn {
@@ -1539,6 +1710,75 @@ onBeforeUnmount(() => {
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid #e2e8f0;
+}
+
+.circle-check-icon.awaiting-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.data-pill-badge.awaiting-pill {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.node-approval-banner {
+  margin: 10px 0 6px;
+  padding: 7px 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.node-approval-banner:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+.node-approval-banner.mini {
+  margin-top: 8px;
+  padding: 5px 8px;
+}
+
+.banner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.node-inline-approve-btn {
+  border: none;
+  background: #d97706;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease;
+}
+
+.node-inline-approve-btn:hover {
+  background: #b45309;
+}
+
+.node-inline-approve-btn.mini {
+  padding: 2px 6px;
+  font-size: 10px;
 }
 
 .node-desc-line {

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import BrandMark from '@/components/branding/BrandMark.vue'
+import { isInternalRedirect } from '@/app/router'
 import { api, ApiError } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -57,7 +58,8 @@ const submit = async () => {
       password: password.value,
       accountType: accountType.value,
     })
-    router.replace(String(route.query.redirect || '/'))
+    const redirect = String(route.query.redirect || '')
+    router.replace(isInternalRedirect(redirect) ? redirect : { name: 'chat' })
   } catch (error) {
     formError.value = error instanceof ApiError ? error.message : 'Login failed.'
   }
