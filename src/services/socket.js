@@ -20,7 +20,10 @@ export function createSocketClient() {
   return io(socketUrl, {
     path: '/socket.io',
     auth: { token },
-    transports: ['polling', 'websocket'],
+    // The upstream deployment does not preserve Engine.IO polling sessions
+    // between requests. Start with a direct WebSocket connection so it does
+    // not need a polling sid that will be rejected by the upstream server.
+    transports: ['websocket'],
     reconnectionAttempts: 2,
     timeout: 6000,
   })
