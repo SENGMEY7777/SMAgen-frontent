@@ -191,7 +191,19 @@ const openReview = async (targetTask = null) => {
   rejectionReason.value = ''
 
   // Identify target task awaiting approval
-  const awaitingTask = targetTask || tasks.value.find((t) => t.status === 'AWAITING_APPROVAL') || tasks.value[0] || null
+  const awaitingTask = targetTask?.status === 'AWAITING_APPROVAL'
+    ? targetTask
+    : tasks.value.find((t) => t.status === 'AWAITING_APPROVAL') || null
+  const runIsAwaitingApproval = run.value?.status === 'AWAITING_APPROVAL'
+
+  // Do not query the pending-approval endpoint for a decision that has
+  // already been completed. This also prevents the stale action buttons from
+  // reopening an approval lookup after the run has resumed.
+  if (!awaitingTask && !runIsAwaitingApproval) {
+    approvalModalOpen.value = false
+    selectedApproval.value = null
+    return
+  }
 
   try {
     const runId = String(route.params.runId)
@@ -211,7 +223,10 @@ const openReview = async (targetTask = null) => {
 
     let list = []
     try {
-      const res = await api.listApprovals(runId)
+      // Fetch the pending queue without the runId query filter. The upstream
+      // endpoint currently returns 500 for that optional filter; the response
+      // is filtered by run/task ID below instead.
+      const res = await api.listApprovals()
       list = Array.isArray(res?.data) ? res.data : []
     } catch (err) {
       console.warn('Approvals list fetch warning:', err?.message)
@@ -278,19 +293,15 @@ const submitDecision = async (status) => {
   try {
     // 1. If real backend approval record exists, submit decision
     if (approvalId && !String(approvalId).startsWith('virtual-') && approvalId !== 'run-approval') {
-      try {
-        await api.decideApproval(approvalId, {
-          status,
-          ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
-        })
-      } catch (backendErr) {
-        console.warn('Backend decideApproval error:', backendErr?.message || backendErr)
-      }
+      await api.decideApproval(approvalId, {
+        status,
+        ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
+      })
     }
 
     // 2. Trigger run resumption if approved
     if (status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
-      await api.resumeWorkflow(runId).catch(() => {})
+      await api.resumeWorkflow(runId)
     }
 
     // 3. Immediately reflect in reactive state for instant UX feedback
