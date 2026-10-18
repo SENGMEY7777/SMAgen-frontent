@@ -253,7 +253,7 @@ const openReview = async (targetTask = null) => {
       }
     } else {
       selectedApproval.value = {
-        id: `virtual-${awaitingTask?.id || 'approval'}`,
+        id: awaitingTask?.id ? `task-${awaitingTask.id}` : `virtual-${runId}`,
         targetTaskId: awaitingTask?.id || null,
         run_id: runId,
         action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
@@ -265,7 +265,7 @@ const openReview = async (targetTask = null) => {
     approvalModalOpen.value = true
   } catch (error) {
     selectedApproval.value = {
-      id: `virtual-${awaitingTask?.id || 'approval'}`,
+      id: awaitingTask?.id ? `task-${awaitingTask.id}` : `virtual-${String(route.params.runId)}`,
       targetTaskId: awaitingTask?.id || null,
       run_id: String(route.params.runId),
       action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
