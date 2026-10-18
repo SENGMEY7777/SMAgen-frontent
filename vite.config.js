@@ -34,6 +34,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         ws: true,
+        configure: (proxy) => {
+          // Match the production Nginx proxy. The upstream Socket.IO server
+          // does not accept the localhost Origin sent by the dev browser.
+          proxy.on('proxyReq', (proxyRequest) => {
+            proxyRequest.removeHeader('origin')
+          })
+          proxy.on('proxyReqWs', (proxyRequest) => {
+            proxyRequest.removeHeader('origin')
+          })
+        },
       },
     },
   },
