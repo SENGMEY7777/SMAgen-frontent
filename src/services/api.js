@@ -14,6 +14,16 @@ export class ApiError extends Error {
 
 const getToken = () => localStorage.getItem('omni_token')
 
+const isJsonContentType = (contentType) => contentType.toLowerCase().includes('json')
+
+const getApiErrorMessage = (payload, status) => {
+  if (typeof payload === 'string' && payload.trim()) return payload.trim()
+  return payload?.message
+    || payload?.detail
+    || payload?.error?.message
+    || (status ? `The request failed with HTTP ${status}.` : 'The request could not be completed.')
+}
+
 const request = async (path, options = {}) => {
   const headers = new Headers(options.headers || {})
   if (options.body && !(options.body instanceof FormData)) {
@@ -34,16 +44,16 @@ const request = async (path, options = {}) => {
   }
 
   const contentType = response.headers.get('content-type') || ''
-  const payload = contentType.includes('application/json')
+  const payload = isJsonContentType(contentType)
     ? await response.json().catch(() => null)
     : await response.text().catch(() => '')
 
   if (!response.ok || payload?.success === false) {
     const error = payload?.error || {}
     throw new ApiError(
-      payload?.message || 'The request could not be completed.',
+      getApiErrorMessage(payload, response.status),
       response.status,
-      error.code || 'API_ERROR',
+      error.code || payload?.title || 'API_ERROR',
       payload,
     )
   }
@@ -117,14 +127,14 @@ const streamChat = async (message, history = [], options = {}) => {
 
   if (!response.ok) {
     const contentType = response.headers.get('content-type') || ''
-    const payload = contentType.includes('application/json')
+    const payload = isJsonContentType(contentType)
       ? await response.json().catch(() => null)
       : await response.text().catch(() => '')
     const error = payload?.error || {}
     throw new ApiError(
-      payload?.message || 'The request could not be completed.',
+      getApiErrorMessage(payload, response.status),
       response.status,
-      error.code || 'API_ERROR',
+      error.code || payload?.title || 'API_ERROR',
       payload,
     )
   }
