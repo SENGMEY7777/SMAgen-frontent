@@ -4,7 +4,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-const API_TARGET = 'https://kairo-sengmey-dev.duckdns.org'
+const API_TARGET = 'http://localhost:8080'
 
 // https://vite.dev/config/
 export default defineConfig({
