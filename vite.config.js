@@ -4,9 +4,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-const API_TARGET = 'http://localhost:8080'
+const API_TARGET = 'http://localhost:8081'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
@@ -44,6 +43,11 @@ export default defineConfig({
             proxyRequest.removeHeader('origin')
           })
         },
+      },
+      '/workspaces': {
+        target: API_TARGET,
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

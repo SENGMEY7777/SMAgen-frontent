@@ -1016,6 +1016,17 @@
   text-underline-offset: 2px;
 }
 
+.assistant-markdown .md-image {
+  display: block;
+  width: min(100%, 720px);
+  max-height: 720px;
+  margin: 16px 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  object-fit: contain;
+  background: #f8fafc;
+}
+
 /* Assistant Message Action Toolbar */
 .message-actions {
   display: flex;

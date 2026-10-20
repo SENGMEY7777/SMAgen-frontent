@@ -139,6 +139,11 @@ const renderInline = (text) => {
   // Strikethrough ~~text~~
   text = text.replace(/~~(.*?)~~/g, '<del>$1</del>')
 
+  // Images: allow only same-origin paths and HTTPS URLs.
+  text = text.replace(/!\[([^\]]*)\]\(((?:https:\/\/|\/)[^\s)]+)\)/g, (_, alt, url) => {
+    return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" class="md-image" loading="lazy" />`
+  })
+
   // Links [text](url)
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>')
 
