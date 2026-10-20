@@ -2,9 +2,7 @@ import { io } from 'socket.io-client'
 import { apiBaseUrl } from '@/services/api'
 import { STORAGE_KEYS } from '@/config/constants'
 
-/**
- * Creates and configures a Socket.IO client instance connected to the backend.
- */
+
 export function createSocketClient() {
   const token = localStorage.getItem(STORAGE_KEYS.TOKEN) || ''
   if (!token) {
@@ -20,9 +18,6 @@ export function createSocketClient() {
   return io(socketUrl, {
     path: '/socket.io',
     auth: { token },
-    // The upstream deployment does not preserve Engine.IO polling sessions
-    // between requests. Start with a direct WebSocket connection so it does
-    // not need a polling sid that will be rejected by the upstream server.
     transports: ['websocket'],
     reconnectionAttempts: 2,
     timeout: 6000,
