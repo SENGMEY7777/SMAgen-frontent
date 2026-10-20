@@ -3,12 +3,13 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
 export class ApiError extends Error {
-  constructor(message, status = 0, code = 'API_ERROR', details = null) {
+  constructor(message, status = 0, code = 'API_ERROR', details = null, retryAfter = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.details = details
+    this.retryAfter = retryAfter
   }
 }
 
@@ -50,11 +51,18 @@ const request = async (path, options = {}) => {
 
   if (!response.ok || payload?.success === false) {
     const error = payload?.error || {}
+    const retryHeader = response.headers.get('retry-after')
+    const retryParsed = retryHeader ? Number.parseInt(retryHeader, 10) : null
+    const retryAfter = payload?.retryAfter
+      || error.retryAfter
+      || (Number.isFinite(retryParsed) && retryParsed > 0 ? retryParsed : null)
+
     throw new ApiError(
       getApiErrorMessage(payload, response.status),
       response.status,
       error.code || payload?.title || 'API_ERROR',
       payload,
+      retryAfter,
     )
   }
 

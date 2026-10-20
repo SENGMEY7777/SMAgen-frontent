@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { IconClock } from '@tabler/icons-vue'
 import BrandMark from '@/components/branding/BrandMark.vue'
 import { isInternalRedirect } from '@/app/router'
 import { api, ApiError } from '@/services/api'
@@ -25,9 +26,60 @@ const registered = ref(false)
 const verificationMessage = ref('')
 const formError = ref('')
 
+const countdownSeconds = ref(0)
+let countdownTimer = null
+
+const startCountdown = (seconds = 900) => {
+  if (countdownTimer) clearInterval(countdownTimer)
+  countdownSeconds.value = Math.max(1, Math.round(seconds))
+  countdownTimer = setInterval(() => {
+    countdownSeconds.value -= 1
+    if (countdownSeconds.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      formError.value = ''
+      auth.resetError()
+    }
+  }, 1000)
+}
+
+const formatCountdown = (totalSeconds) => {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  if (m > 0) {
+    return `${m}m ${s < 10 ? '0' : ''}${s}s`
+  }
+  return `${s}s`
+}
+
+const parseSecondsFromText = (text) => {
+  if (!text || typeof text !== 'string') return null
+  const match = text.match(/(\d+)\s*(?:seconds?|secs?|s)\b/i)
+  if (match) return Number.parseInt(match[1], 10)
+  return null
+}
+
+watch(
+  () => formError.value || auth.authError,
+  (newVal) => {
+    if (newVal && (newVal.includes('Too many authentication attempts') || newVal.includes('rate limit'))) {
+      if (countdownSeconds.value <= 0) {
+        const parsed = parseSecondsFromText(newVal)
+        startCountdown(parsed || 900)
+      }
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (countdownTimer) clearInterval(countdownTimer)
+})
+
 const isRegister = computed(() => props.mode === 'register')
 
 const submit = async () => {
+  if (countdownSeconds.value > 0) return
   formError.value = ''
   verificationMessage.value = ''
   auth.resetError()
@@ -47,6 +99,9 @@ const submit = async () => {
       registered.value = true
       verificationMessage.value = 'Account created. Check your email for the verification link, then sign in.'
     } catch (error) {
+      if (error?.status === 429 || error?.code === 'AUTH_RATE_LIMITED' || error?.retryAfter) {
+        startCountdown(error.retryAfter || parseSecondsFromText(error.message) || 900)
+      }
       formError.value = error instanceof ApiError ? error.message : 'Registration failed.'
     }
     return
@@ -61,6 +116,9 @@ const submit = async () => {
     const redirect = String(route.query.redirect || '')
     router.replace(isInternalRedirect(redirect) ? redirect : { name: 'chat' })
   } catch (error) {
+    if (error?.status === 429 || error?.code === 'AUTH_RATE_LIMITED' || error?.retryAfter) {
+      startCountdown(error.retryAfter || parseSecondsFromText(error.message) || 900)
+    }
     formError.value = error instanceof ApiError ? error.message : 'Login failed.'
   }
 }
@@ -131,7 +189,11 @@ const resend = async () => {
           </button>
         </div>
 
-        <div v-if="formError || auth.authError" class="auth-error">
+        <div v-if="(formError || auth.authError) && countdownSeconds > 0" class="auth-error countdown-box">
+          <IconClock :size="15" class="countdown-icon" />
+          <span>Too many authentication attempts. Please try again in <strong>{{ formatCountdown(countdownSeconds) }}</strong>.</span>
+        </div>
+        <div v-else-if="formError || auth.authError" class="auth-error">
           {{ formError || auth.authError }}
         </div>
         <div v-if="verificationMessage" class="auth-success">
@@ -181,8 +243,8 @@ const resend = async () => {
             />
           </div>
 
-          <button class="auth-submit" type="submit" :disabled="auth.loading">
-            {{ auth.loading ? 'Please wait…' : (isRegister ? 'Create account' : 'Sign in') }}
+          <button class="auth-submit" type="submit" :disabled="auth.loading || countdownSeconds > 0">
+            {{ auth.loading ? 'Please wait…' : (countdownSeconds > 0 ? `Try again in ${formatCountdown(countdownSeconds)}` : (isRegister ? 'Create account' : 'Sign in')) }}
           </button>
         </template>
 
@@ -248,5 +310,32 @@ const resend = async () => {
   background: transparent;
   font-size: 11px;
   font-weight: 750;
+}
+
+.countdown-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.countdown-icon {
+  flex-shrink: 0;
+  color: #e11d48;
+}
+
+.countdown-box strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #9f1239;
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 </style>
