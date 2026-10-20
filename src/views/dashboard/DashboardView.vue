@@ -27,6 +27,7 @@ const auth = useAuthStore()
 const chatStore = useChatStore()
 
 const chatThreadRef = ref(null)
+const showScrollButton = ref(false)
 const textareaRef = ref(null)
 const fileInputRef = ref(null)
 const runs = ref([])
