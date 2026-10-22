@@ -67,10 +67,24 @@ let socket
 
 const tasks = computed(() => run.value?.tasks || [])
 const logs = computed(() => run.value?.logs || [])
+const isTaskAwaiting = (task) => task?.status === 'AWAITING_APPROVAL'
+const isTaskSuccessful = (task) => ['SUCCESS', 'COMPLETED'].includes(task?.status)
+const isTaskFailed = (task) => ['FAILED', 'SKIPPED'].includes(task?.status)
+const taskStatusLabel = (task) => {
+  if (isTaskAwaiting(task)) return 'WAITING'
+  if (isTaskFailed(task)) return task?.status || 'FAILED'
+  if (isTaskSuccessful(task)) return 'SUCCESS'
+  return task?.status || 'PENDING'
+}
+const taskStatusIcon = (task) => {
+  if (isTaskAwaiting(task)) return IconAlertTriangle
+  if (isTaskFailed(task)) return IconX
+  return IconCheck
+}
 const progress = computed(() => {
   if (!tasks.value.length) return run.value?.status === 'COMPLETED' ? 100 : 8
-  const done = tasks.value.filter((task) => ['SUCCESS', 'FAILED', 'SKIPPED'].includes(task.status)).length
-  return Math.round((done / tasks.value.length) * 100)
+  const successful = tasks.value.filter((task) => isTaskSuccessful(task)).length
+  return Math.round((successful / tasks.value.length) * 100)
 })
 const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(run.value?.status))
 const hasPendingApproval = computed(() => {
@@ -426,12 +440,21 @@ const sendAiPrompt = async () => {
 
 const formatLogMessage = (rawMessage) => {
   if (!rawMessage) return ''
-  if (typeof rawMessage !== 'string') return JSON.stringify(rawMessage)
+  const stringifyValue = (value) => {
+    if (typeof value === 'string') return value
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+
+  if (typeof rawMessage !== 'string') return stringifyValue(rawMessage)
   try {
     const parsed = JSON.parse(rawMessage)
     if (parsed && typeof parsed === 'object') {
-      if (parsed.payload?.message) return parsed.payload.message
-      if (parsed.payload?.error) return `Error: ${parsed.payload.error}`
+      if (parsed.payload?.message) return stringifyValue(parsed.payload.message)
+      if (parsed.payload?.error) return `Error: ${stringifyValue(parsed.payload.error)}`
       if (parsed.event) {
         const details = parsed.payload ? ` (${JSON.stringify(parsed.payload)})` : ''
         return `${parsed.event}${details}`
@@ -828,8 +851,11 @@ onBeforeUnmount(() => {
               <!-- Left Action Node (e.g. Task 1 or Send Alert) -->
               <div
                 class="zyn-node-card action-node"
-                :class="{ 'awaiting': tasks[0]?.status === 'AWAITING_APPROVAL' }"
-                @click="tasks[0]?.status === 'AWAITING_APPROVAL' ? openReview(tasks[0]) : null"
+                :class="{
+                  'awaiting': isTaskAwaiting(tasks[0]),
+                  'failed': isTaskFailed(tasks[0]),
+                }"
+                @click="isTaskAwaiting(tasks[0]) ? openReview(tasks[0]) : null"
               >
                 <div class="node-purple-header">
                   <div class="node-title-group">
@@ -847,13 +873,25 @@ onBeforeUnmount(() => {
                 <div class="node-card-body">
                   <div class="node-status-badge-row">
                     <div class="badge-left">
-                      <span class="circle-check-icon" :class="{ 'awaiting-icon': tasks[0]?.status === 'AWAITING_APPROVAL' }">
-                        <component :is="tasks[0]?.status === 'AWAITING_APPROVAL' ? IconAlertTriangle : IconCheck" :size="12" />
+                      <span
+                        class="circle-check-icon"
+                        :class="{
+                          'awaiting-icon': isTaskAwaiting(tasks[0]),
+                          'failed-icon': isTaskFailed(tasks[0]),
+                        }"
+                      >
+                        <component :is="taskStatusIcon(tasks[0])" :size="12" />
                       </span>
                       <span class="badge-bold-label">{{ tasks[0]?.title || 'Send alert' }}</span>
                     </div>
-                    <span class="data-pill-badge" :class="{ 'awaiting-pill': tasks[0]?.status === 'AWAITING_APPROVAL' }">
-                      {{ tasks[0]?.status === 'AWAITING_APPROVAL' ? 'WAITING' : 'DATA' }}
+                    <span
+                      class="data-pill-badge"
+                      :class="{
+                        'awaiting-pill': isTaskAwaiting(tasks[0]),
+                        'failed-pill': isTaskFailed(tasks[0]),
+                      }"
+                    >
+                      {{ taskStatusLabel(tasks[0]) }}
                     </span>
                   </div>
 
@@ -898,8 +936,11 @@ onBeforeUnmount(() => {
               <!-- Right Action Node (e.g. Task 2 or Auto post) -->
               <div
                 class="zyn-node-card action-node"
-                :class="{ 'awaiting': tasks[1]?.status === 'AWAITING_APPROVAL' }"
-                @click="tasks[1]?.status === 'AWAITING_APPROVAL' ? openReview(tasks[1]) : null"
+                :class="{
+                  'awaiting': isTaskAwaiting(tasks[1]),
+                  'failed': isTaskFailed(tasks[1]),
+                }"
+                @click="isTaskAwaiting(tasks[1]) ? openReview(tasks[1]) : null"
               >
                 <div class="node-purple-header">
                   <div class="node-title-group">
@@ -917,13 +958,25 @@ onBeforeUnmount(() => {
                 <div class="node-card-body">
                   <div class="node-status-badge-row">
                     <div class="badge-left">
-                      <span class="circle-check-icon" :class="{ 'awaiting-icon': tasks[1]?.status === 'AWAITING_APPROVAL' }">
-                        <component :is="tasks[1]?.status === 'AWAITING_APPROVAL' ? IconAlertTriangle : IconCheck" :size="12" />
+                      <span
+                        class="circle-check-icon"
+                        :class="{
+                          'awaiting-icon': isTaskAwaiting(tasks[1]),
+                          'failed-icon': isTaskFailed(tasks[1]),
+                        }"
+                      >
+                        <component :is="taskStatusIcon(tasks[1])" :size="12" />
                       </span>
                       <span class="badge-bold-label">{{ tasks[1]?.title || 'Auto post' }}</span>
                     </div>
-                    <span class="data-pill-badge" :class="{ 'awaiting-pill': tasks[1]?.status === 'AWAITING_APPROVAL' }">
-                      {{ tasks[1]?.status === 'AWAITING_APPROVAL' ? 'WAITING' : 'DATA' }}
+                    <span
+                      class="data-pill-badge"
+                      :class="{
+                        'awaiting-pill': isTaskAwaiting(tasks[1]),
+                        'failed-pill': isTaskFailed(tasks[1]),
+                      }"
+                    >
+                      {{ taskStatusLabel(tasks[1]) }}
                     </span>
                   </div>
 
@@ -1655,6 +1708,11 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
 }
 
+.zyn-node-card.failed {
+  border-color: #fca5a5;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
 .node-purple-header {
   display: flex;
   align-items: center;
@@ -1766,10 +1824,21 @@ onBeforeUnmount(() => {
   color: #d97706;
 }
 
+.circle-check-icon.failed-icon {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 .data-pill-badge.awaiting-pill {
   background: #fffbeb;
   color: #b45309;
   border-color: #fde68a;
+}
+
+.data-pill-badge.failed-pill {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
 .node-approval-banner {
@@ -2317,10 +2386,13 @@ onBeforeUnmount(() => {
 .modal-content {
   width: 500px;
   max-width: 90vw;
+  max-height: calc(100vh - 32px);
   background: #ffffff;
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -2370,6 +2442,8 @@ onBeforeUnmount(() => {
 
 .approval-card-body {
   padding: 16px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .field-row {
@@ -2398,6 +2472,30 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   color: #f8fafc;
   font-size: 11px;
+  max-height: min(44vh, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b #1e293b;
+}
+
+.code-box::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-box::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 8px;
+}
+
+.code-box::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 8px;
+}
+
+.code-box::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .code-label {
@@ -2409,9 +2507,10 @@ onBeforeUnmount(() => {
 }
 
 .code-box code {
+  display: block;
   font-family: monospace;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .field label {
