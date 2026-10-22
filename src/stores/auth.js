@@ -81,6 +81,10 @@ export const useAuthStore = defineStore('auth', () => {
         if (isPrivileged.value) await api.adminLogout()
         else await api.developerLogout()
       }
+    } catch (error) {
+      // A failed remote logout must not keep the user signed in locally or
+      // turn the sign-out button into an unhandled promise rejection.
+      console.warn('Remote logout failed; clearing the local session.', error)
     } finally {
       clearSession()
     }
