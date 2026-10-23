@@ -1,61 +1,3 @@
-<script setup>
-import { computed, onMounted, ref } from 'vue'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock, IconFolder, IconFileText } from '@tabler/icons-vue'
-import { api, ApiError } from '@/services/api'
-import { formatDate } from '@/utils/formatters'
-
-const runs = ref([])
-const loading = ref(true)
-const errorMessage = ref('')
-const selectedFile = ref(null)
-
-const generatedArtifacts = computed(() => {
-  const list = []
-  runs.value.forEach((run) => {
-    if (run.tasks && Array.isArray(run.tasks)) {
-      run.tasks.forEach((task) => {
-        if (task.output_payload) {
-          try {
-            const parsed = typeof task.output_payload === 'string' ? JSON.parse(task.output_payload) : task.output_payload
-            if (parsed && (parsed.file || parsed.path || parsed.output || parsed.code || parsed.report)) {
-              list.push({
-                id: `${run.id}_${task.id}`,
-                runId: run.id,
-                taskTitle: task.title,
-                fileName: parsed.file || parsed.path || `${task.assigned_tool}_output.txt`,
-                content: parsed.code || parsed.output || parsed.report || JSON.stringify(parsed, null, 2),
-                type: parsed.file?.endsWith('.js') || parsed.path?.endsWith('.js') ? 'javascript' : (parsed.file?.endsWith('.json') ? 'json' : 'text'),
-                createdAt: task.completed_at || run.created_at,
-              })
-            }
-          } catch {}
-        }
-      })
-    }
-  })
-  return list
-})
-
-const load = async () => {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const res = await api.listRuns()
-    runs.value = res?.data || []
-    if (generatedArtifacts.value.length) {
-      selectedFile.value = generatedArtifacts.value[0]
-    }
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load sandbox artifacts.'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
-</script>
-
 <template>
   <DashboardLayout :recent-items="runs">
     <section class="section-page">
@@ -120,6 +62,64 @@ onMounted(load)
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconClock, IconFolder, IconFileText } from '@tabler/icons-vue'
+import { api, ApiError } from '@/services/api'
+import { formatDate } from '@/utils/formatters'
+
+const runs = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
+const selectedFile = ref(null)
+
+const generatedArtifacts = computed(() => {
+  const list = []
+  runs.value.forEach((run) => {
+    if (run.tasks && Array.isArray(run.tasks)) {
+      run.tasks.forEach((task) => {
+        if (task.output_payload) {
+          try {
+            const parsed = typeof task.output_payload === 'string' ? JSON.parse(task.output_payload) : task.output_payload
+            if (parsed && (parsed.file || parsed.path || parsed.output || parsed.code || parsed.report)) {
+              list.push({
+                id: `${run.id}_${task.id}`,
+                runId: run.id,
+                taskTitle: task.title,
+                fileName: parsed.file || parsed.path || `${task.assigned_tool}_output.txt`,
+                content: parsed.code || parsed.output || parsed.report || JSON.stringify(parsed, null, 2),
+                type: parsed.file?.endsWith('.js') || parsed.path?.endsWith('.js') ? 'javascript' : (parsed.file?.endsWith('.json') ? 'json' : 'text'),
+                createdAt: task.completed_at || run.created_at,
+              })
+            }
+          } catch {}
+        }
+      })
+    }
+  })
+  return list
+})
+
+const load = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const res = await api.listRuns()
+    runs.value = res?.data || []
+    if (generatedArtifacts.value.length) {
+      selectedFile.value = generatedArtifacts.value[0]
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load sandbox artifacts.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+</script>
 
 <style scoped>
 .artifacts-layout {

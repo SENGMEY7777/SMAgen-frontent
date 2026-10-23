@@ -1,74 +1,3 @@
-<script setup>
-import { computed, onMounted, ref } from 'vue'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock } from '@tabler/icons-vue'
-import { api, ApiError } from '@/services/api'
-import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
-
-const runs = ref([])
-const loading = ref(true)
-const errorMessage = ref('')
-const selectedTimeframe = ref('7d')
-
-const loadData = async () => {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const res = await api.listRuns().catch(() => ({ data: [] }))
-    runs.value = res?.data || []
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load telemetry.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const stats = computed(() => {
-  const totalTokens = runs.value.reduce((sum, r) => sum + (r.total_tokens || 0), 0)
-  const totalCost = runs.value.reduce((sum, r) => sum + Number(r.estimated_cost_usd || 0), 0)
-  const promptTokens = Math.round(totalTokens * 0.65)
-  const completionTokens = totalTokens - promptTokens
-  const avgLatency = runs.value.length ? '1.42s' : '0.00s'
-  const p95Latency = runs.value.length ? '2.18s' : '0.00s'
-
-  return {
-    totalTokens,
-    totalCost,
-    promptTokens,
-    completionTokens,
-    avgLatency,
-    p95Latency,
-    tokensPerSec: '84.5 tok/s',
-  }
-})
-
-const modelBreakdown = computed(() => [
-  {
-    name: 'KAIRO 4o (Omni Reasoning)',
-    tokens: Math.round(stats.value.totalTokens * 0.72),
-    cost: (stats.value.totalCost * 0.78).toFixed(4),
-    share: '72%',
-    rate: '$2.50 / 1M in · $10.00 / 1M out',
-  },
-  {
-    name: 'KAIRO 4o-mini (Fast Execution)',
-    tokens: Math.round(stats.value.totalTokens * 0.23),
-    cost: (stats.value.totalCost * 0.18).toFixed(4),
-    share: '23%',
-    rate: '$0.15 / 1M in · $0.60 / 1M out',
-  },
-  {
-    name: 'KAIRO Embeddings (text-embed-3)',
-    tokens: Math.round(stats.value.totalTokens * 0.05),
-    cost: (stats.value.totalCost * 0.04).toFixed(4),
-    share: '5%',
-    rate: '$0.02 / 1M in',
-  },
-])
-
-onMounted(loadData)
-</script>
-
 <template>
   <DashboardLayout :recent-items="runs">
     <section class="section-page">
@@ -208,6 +137,77 @@ onMounted(loadData)
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconClock } from '@tabler/icons-vue'
+import { api, ApiError } from '@/services/api'
+import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
+
+const runs = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
+const selectedTimeframe = ref('7d')
+
+const loadData = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const res = await api.listRuns().catch(() => ({ data: [] }))
+    runs.value = res?.data || []
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load telemetry.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const stats = computed(() => {
+  const totalTokens = runs.value.reduce((sum, r) => sum + (r.total_tokens || 0), 0)
+  const totalCost = runs.value.reduce((sum, r) => sum + Number(r.estimated_cost_usd || 0), 0)
+  const promptTokens = Math.round(totalTokens * 0.65)
+  const completionTokens = totalTokens - promptTokens
+  const avgLatency = runs.value.length ? '1.42s' : '0.00s'
+  const p95Latency = runs.value.length ? '2.18s' : '0.00s'
+
+  return {
+    totalTokens,
+    totalCost,
+    promptTokens,
+    completionTokens,
+    avgLatency,
+    p95Latency,
+    tokensPerSec: '84.5 tok/s',
+  }
+})
+
+const modelBreakdown = computed(() => [
+  {
+    name: 'KAIRO 4o (Omni Reasoning)',
+    tokens: Math.round(stats.value.totalTokens * 0.72),
+    cost: (stats.value.totalCost * 0.78).toFixed(4),
+    share: '72%',
+    rate: '$2.50 / 1M in · $10.00 / 1M out',
+  },
+  {
+    name: 'KAIRO 4o-mini (Fast Execution)',
+    tokens: Math.round(stats.value.totalTokens * 0.23),
+    cost: (stats.value.totalCost * 0.18).toFixed(4),
+    share: '23%',
+    rate: '$0.15 / 1M in · $0.60 / 1M out',
+  },
+  {
+    name: 'KAIRO Embeddings (text-embed-3)',
+    tokens: Math.round(stats.value.totalTokens * 0.05),
+    cost: (stats.value.totalCost * 0.04).toFixed(4),
+    share: '5%',
+    rate: '$0.02 / 1M in',
+  },
+])
+
+onMounted(loadData)
+</script>
 
 <style scoped>
 .head-controls {

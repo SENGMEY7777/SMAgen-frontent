@@ -1,3 +1,289 @@
+<template>
+  <DashboardLayout :recent-items="runs">
+    <div class="dashboard-page">
+      <!-- Hidden File Picker (accepts code, docs, images, any files) -->
+      <input
+        ref="fileInputRef"
+        type="file"
+        multiple
+        class="visually-hidden"
+        @change="handleFileSelect"
+      />
+
+      <div v-if="!currentMessages.length" class="hero">
+        <div class="orb"></div>
+        <h1>Good Morning, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
+        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
+        <div class="prompt-suggestions">
+          <button type="button" @click="startPrompt('Help me understand this project and suggest the next best step.')">
+            Understand my project
+          </button>
+          <button type="button" @click="startPrompt('Create a safe workflow to inspect my workspace.')">
+            Inspect my workspace
+          </button>
+        </div>
+      </div>
+
+      <div v-else ref="chatThreadRef" class="chat-thread" aria-live="polite">
+        <div class="chat-thread-inner">
+          <div
+            v-for="(message, index) in currentMessages"
+            :key="`${message.role}-${index}`"
+            class="message-row"
+            :class="message.role"
+          >
+            <div class="message-content-box">
+              <div v-if="message.role === 'assistant'" class="assistant-response-wrap">
+                <div class="assistant-markdown" v-html="renderMarkdown(message.content)"></div>
+                <div class="message-actions">
+                  <button class="action-btn" type="button" @click="copyMessage(message.content, index)">
+                    <component :is="copiedIndex === index ? IconCheck : IconCopy" :size="13" />
+                    <span>{{ copiedIndex === index ? 'Copied' : 'Copy' }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-else class="user-message-container">
+                <!-- Attached User Images Gallery -->
+                <div v-if="message.images && message.images.length" class="message-images-gallery">
+                  <img
+                    v-for="(img, imgIdx) in message.images"
+                    :key="imgIdx"
+                    :src="img"
+                    alt="User uploaded attachment"
+                    class="message-thumbnail"
+                    @click="previewImageUrl = img"
+                  />
+                </div>
+
+                <!-- Attached User Files Gallery -->
+                <div v-if="message.files && message.files.length" class="message-files-gallery">
+                  <div
+                    v-for="(file, fIdx) in message.files"
+                    :key="fIdx"
+                    class="message-file-chip"
+                    :title="file.name"
+                  >
+                    <div class="file-chip-icon">
+                      <IconFile :size="14" />
+                    </div>
+                    <div class="file-chip-info">
+                      <span class="file-chip-name">{{ file.name }}</span>
+                      <span v-if="file.size" class="file-chip-size">{{ formatFileSize(file.size) }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Inline Editing Box matching User Mockup -->
+                <div v-if="editingIndex === index" class="user-inline-editor-wrapper">
+                  <div class="user-inline-edit-bubble">
+                    <textarea
+                      v-model="editDraft"
+                      class="edit-textarea"
+                      rows="1"
+                      placeholder="Edit message…"
+                      @keydown.enter.exact.prevent="submitEditUserMessage(index)"
+                      @keydown.esc="cancelEditUserMessage"
+                    ></textarea>
+                  </div>
+                  <div class="user-edit-actions-row">
+                    <span class="edit-info-icon" title="Press Enter to save, Esc to cancel">
+                      <IconInfoCircle :size="15" />
+                    </span>
+                    <button class="edit-cancel-btn" type="button" @click="cancelEditUserMessage">
+                      Cancel
+                    </button>
+                    <button class="edit-save-btn" type="button" @click="submitEditUserMessage(index)">
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Normal Bubble & Actions -->
+                <div v-else class="user-bubble-wrapper">
+                  <div v-if="message.content" class="user-bubble">{{ message.content }}</div>
+                  <div class="user-meta-row">
+                    <span class="user-time">{{ formatRelativeTime(message.createdAt) }}</span>
+                    <button
+                      class="user-action-btn"
+                      type="button"
+                      title="Retry response"
+                      :disabled="loading"
+                      @click="retryUserMessage(index)"
+                    >
+                      <IconRefresh :size="13" />
+                    </button>
+                    <button
+                      class="user-action-btn"
+                      type="button"
+                      title="Edit message"
+                      @click="startEditUserMessage(index, message.content)"
+                    >
+                      <IconPencil :size="13" />
+                    </button>
+                    <button
+                      class="user-action-btn"
+                      type="button"
+                      :title="copiedUserIndex === index ? 'Copied!' : 'Copy message'"
+                      @click="copyUserMessage(message.content, index)"
+                    >
+                      <component :is="copiedUserIndex === index ? IconCheck : IconCopy" :size="13" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="loading && activeMode === 'chat'" class="message-row assistant">
+            <div class="message-content-box">
+              <div class="assistant-response-wrap">
+                <div v-if="streamingContent" class="assistant-markdown" v-html="renderMarkdown(streamingContent)"></div>
+                <div v-if="streamingContent" class="streaming-caret" aria-label="Generating response"></div>
+                <div v-else class="typing-dots"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-container">
+        <!-- Floating scroll down button -->
+        <button
+          v-if="showScrollButton"
+          class="scroll-down-btn"
+          type="button"
+          aria-label="Scroll to bottom"
+          @click="scrollToBottom"
+        >
+          <IconChevronDown :size="16" />
+        </button>
+
+        <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
+
+        <div class="composer">
+          <!-- Attachments (Images & Files) Previews in Composer -->
+          <div v-if="attachedImages.length || attachedFiles.length" class="composer-attachments">
+            <!-- Images -->
+            <div
+              v-for="(img, idx) in attachedImages"
+              :key="img.id"
+              class="attachment-chip"
+            >
+              <img :src="img.dataUrl" :alt="img.name" class="attachment-preview-img" />
+              <button
+                class="remove-attachment-btn"
+                type="button"
+                aria-label="Remove image"
+                @click="removeAttachedImage(idx)"
+              >
+                <IconX :size="12" />
+              </button>
+            </div>
+
+            <!-- Files -->
+            <div
+              v-for="(file, idx) in attachedFiles"
+              :key="file.id"
+              class="attachment-file-chip"
+            >
+              <div class="file-badge-icon">
+                <IconFile :size="14" />
+              </div>
+              <div class="file-badge-text">
+                <span class="file-badge-name">{{ file.name }}</span>
+                <span v-if="file.size" class="file-badge-size">{{ formatFileSize(file.size) }}</span>
+              </div>
+              <button
+                class="remove-file-btn"
+                type="button"
+                aria-label="Remove file"
+                @click="removeAttachedFile(idx)"
+              >
+                <IconX :size="11" />
+              </button>
+            </div>
+          </div>
+
+          <div class="composer-main-row">
+            <!-- Upload / Attach Button -->
+            <button
+              class="tool-circle-btn"
+              type="button"
+              title="Add attachment, code file, or image"
+              @click="triggerFileUpload"
+            >
+              <IconPlus :size="16" />
+            </button>
+
+            <textarea
+              ref="textareaRef"
+              v-model="input"
+              class="composer-input"
+              :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
+              rows="1"
+              @paste="handlePaste"
+              @keydown.enter.exact.prevent="send"
+            ></textarea>
+
+            <div class="composer-actions-right">
+              <button
+                class="tool-btn-pill"
+                type="button"
+                :class="{ active: activeMode === 'workflow' }"
+                @click="activeMode = activeMode === 'workflow' ? 'chat' : 'workflow'"
+              >
+                <IconBulb :size="13" />
+                <span>Workflow</span>
+              </button>
+              <!-- Stop Button when generating vs Start/Send Button when idle -->
+              <button
+                v-if="loading"
+                class="stop-button"
+                type="button"
+                title="Stop generating"
+                aria-label="Stop generating"
+                @click="stopGeneration"
+              >
+                <IconPlayerStop :size="14" />
+              </button>
+              <button
+                v-else
+                class="send-button"
+                type="button"
+                :disabled="!input.trim() && !attachedImages.length && !attachedFiles.length"
+                title="Send message"
+                aria-label="Send message"
+                @click="send"
+              >
+                <IconArrowUp :size="16" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-footer-bar">
+          <span class="footer-disclaimer">SMAgen is AI and can make mistakes. Please double-check responses.</span>
+          <div class="footer-model-badge">
+            <span class="status-dot"></span>
+            <span>SMAgen Pro</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lightbox Image Modal -->
+      <div v-if="previewImageUrl" class="image-lightbox-overlay" @click="previewImageUrl = null">
+        <div class="image-lightbox-card" @click.stop>
+          <button class="lightbox-close" type="button" @click="previewImageUrl = null" aria-label="Close image">
+            <IconX :size="18" />
+          </button>
+          <img :src="previewImageUrl" alt="Enlarged view" class="lightbox-img" />
+        </div>
+      </div>
+    </div>
+  </DashboardLayout>
+</template>
+
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -437,292 +723,6 @@ onUnmounted(() => {
   }
 })
 </script>
-
-<template>
-  <DashboardLayout :recent-items="runs">
-    <div class="dashboard-page">
-      <!-- Hidden File Picker (accepts code, docs, images, any files) -->
-      <input
-        ref="fileInputRef"
-        type="file"
-        multiple
-        class="visually-hidden"
-        @change="handleFileSelect"
-      />
-
-      <div v-if="!currentMessages.length" class="hero">
-        <div class="orb"></div>
-        <h1>Good Morning, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
-        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
-        <div class="prompt-suggestions">
-          <button type="button" @click="startPrompt('Help me understand this project and suggest the next best step.')">
-            Understand my project
-          </button>
-          <button type="button" @click="startPrompt('Create a safe workflow to inspect my workspace.')">
-            Inspect my workspace
-          </button>
-        </div>
-      </div>
-
-      <div v-else ref="chatThreadRef" class="chat-thread" aria-live="polite">
-        <div class="chat-thread-inner">
-          <div
-            v-for="(message, index) in currentMessages"
-            :key="`${message.role}-${index}`"
-            class="message-row"
-            :class="message.role"
-          >
-            <div class="message-content-box">
-              <div v-if="message.role === 'assistant'" class="assistant-response-wrap">
-                <div class="assistant-markdown" v-html="renderMarkdown(message.content)"></div>
-                <div class="message-actions">
-                  <button class="action-btn" type="button" @click="copyMessage(message.content, index)">
-                    <component :is="copiedIndex === index ? IconCheck : IconCopy" :size="13" />
-                    <span>{{ copiedIndex === index ? 'Copied' : 'Copy' }}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div v-else class="user-message-container">
-                <!-- Attached User Images Gallery -->
-                <div v-if="message.images && message.images.length" class="message-images-gallery">
-                  <img
-                    v-for="(img, imgIdx) in message.images"
-                    :key="imgIdx"
-                    :src="img"
-                    alt="User uploaded attachment"
-                    class="message-thumbnail"
-                    @click="previewImageUrl = img"
-                  />
-                </div>
-
-                <!-- Attached User Files Gallery -->
-                <div v-if="message.files && message.files.length" class="message-files-gallery">
-                  <div
-                    v-for="(file, fIdx) in message.files"
-                    :key="fIdx"
-                    class="message-file-chip"
-                    :title="file.name"
-                  >
-                    <div class="file-chip-icon">
-                      <IconFile :size="14" />
-                    </div>
-                    <div class="file-chip-info">
-                      <span class="file-chip-name">{{ file.name }}</span>
-                      <span v-if="file.size" class="file-chip-size">{{ formatFileSize(file.size) }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Inline Editing Box matching User Mockup -->
-                <div v-if="editingIndex === index" class="user-inline-editor-wrapper">
-                  <div class="user-inline-edit-bubble">
-                    <textarea
-                      v-model="editDraft"
-                      class="edit-textarea"
-                      rows="1"
-                      placeholder="Edit message…"
-                      @keydown.enter.exact.prevent="submitEditUserMessage(index)"
-                      @keydown.esc="cancelEditUserMessage"
-                    ></textarea>
-                  </div>
-                  <div class="user-edit-actions-row">
-                    <span class="edit-info-icon" title="Press Enter to save, Esc to cancel">
-                      <IconInfoCircle :size="15" />
-                    </span>
-                    <button class="edit-cancel-btn" type="button" @click="cancelEditUserMessage">
-                      Cancel
-                    </button>
-                    <button class="edit-save-btn" type="button" @click="submitEditUserMessage(index)">
-                      Save
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Normal Bubble & Actions -->
-                <div v-else class="user-bubble-wrapper">
-                  <div v-if="message.content" class="user-bubble">{{ message.content }}</div>
-                  <div class="user-meta-row">
-                    <span class="user-time">{{ formatRelativeTime(message.createdAt) }}</span>
-                    <button
-                      class="user-action-btn"
-                      type="button"
-                      title="Retry response"
-                      :disabled="loading"
-                      @click="retryUserMessage(index)"
-                    >
-                      <IconRefresh :size="13" />
-                    </button>
-                    <button
-                      class="user-action-btn"
-                      type="button"
-                      title="Edit message"
-                      @click="startEditUserMessage(index, message.content)"
-                    >
-                      <IconPencil :size="13" />
-                    </button>
-                    <button
-                      class="user-action-btn"
-                      type="button"
-                      :title="copiedUserIndex === index ? 'Copied!' : 'Copy message'"
-                      @click="copyUserMessage(message.content, index)"
-                    >
-                      <component :is="copiedUserIndex === index ? IconCheck : IconCopy" :size="13" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="loading && activeMode === 'chat'" class="message-row assistant">
-            <div class="message-content-box">
-              <div class="assistant-response-wrap">
-                <div v-if="streamingContent" class="assistant-markdown" v-html="renderMarkdown(streamingContent)"></div>
-                <div v-if="streamingContent" class="streaming-caret" aria-label="Generating response"></div>
-                <div v-else class="typing-dots"><i></i><i></i><i></i></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="composer-container">
-        <!-- Floating scroll down button -->
-        <button
-          v-if="showScrollButton"
-          class="scroll-down-btn"
-          type="button"
-          aria-label="Scroll to bottom"
-          @click="scrollToBottom"
-        >
-          <IconChevronDown :size="16" />
-        </button>
-
-        <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
-
-        <div class="composer">
-          <!-- Attachments (Images & Files) Previews in Composer -->
-          <div v-if="attachedImages.length || attachedFiles.length" class="composer-attachments">
-            <!-- Images -->
-            <div
-              v-for="(img, idx) in attachedImages"
-              :key="img.id"
-              class="attachment-chip"
-            >
-              <img :src="img.dataUrl" :alt="img.name" class="attachment-preview-img" />
-              <button
-                class="remove-attachment-btn"
-                type="button"
-                aria-label="Remove image"
-                @click="removeAttachedImage(idx)"
-              >
-                <IconX :size="12" />
-              </button>
-            </div>
-
-            <!-- Files -->
-            <div
-              v-for="(file, idx) in attachedFiles"
-              :key="file.id"
-              class="attachment-file-chip"
-            >
-              <div class="file-badge-icon">
-                <IconFile :size="14" />
-              </div>
-              <div class="file-badge-text">
-                <span class="file-badge-name">{{ file.name }}</span>
-                <span v-if="file.size" class="file-badge-size">{{ formatFileSize(file.size) }}</span>
-              </div>
-              <button
-                class="remove-file-btn"
-                type="button"
-                aria-label="Remove file"
-                @click="removeAttachedFile(idx)"
-              >
-                <IconX :size="11" />
-              </button>
-            </div>
-          </div>
-
-          <div class="composer-main-row">
-            <!-- Upload / Attach Button -->
-            <button
-              class="tool-circle-btn"
-              type="button"
-              title="Add attachment, code file, or image"
-              @click="triggerFileUpload"
-            >
-              <IconPlus :size="16" />
-            </button>
-
-            <textarea
-              ref="textareaRef"
-              v-model="input"
-              class="composer-input"
-              :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
-              rows="1"
-              @paste="handlePaste"
-              @keydown.enter.exact.prevent="send"
-            ></textarea>
-
-            <div class="composer-actions-right">
-              <button
-                class="tool-btn-pill"
-                type="button"
-                :class="{ active: activeMode === 'workflow' }"
-                @click="activeMode = activeMode === 'workflow' ? 'chat' : 'workflow'"
-              >
-                <IconBulb :size="13" />
-                <span>Workflow</span>
-              </button>
-              <!-- Stop Button when generating vs Start/Send Button when idle -->
-              <button
-                v-if="loading"
-                class="stop-button"
-                type="button"
-                title="Stop generating"
-                aria-label="Stop generating"
-                @click="stopGeneration"
-              >
-                <IconPlayerStop :size="14" />
-              </button>
-              <button
-                v-else
-                class="send-button"
-                type="button"
-                :disabled="!input.trim() && !attachedImages.length && !attachedFiles.length"
-                title="Send message"
-                aria-label="Send message"
-                @click="send"
-              >
-                <IconArrowUp :size="16" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="chat-footer-bar">
-          <span class="footer-disclaimer">SMAgen is AI and can make mistakes. Please double-check responses.</span>
-          <div class="footer-model-badge">
-            <span class="status-dot"></span>
-            <span>SMAgen Pro</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Lightbox Image Modal -->
-      <div v-if="previewImageUrl" class="image-lightbox-overlay" @click="previewImageUrl = null">
-        <div class="image-lightbox-card" @click.stop>
-          <button class="lightbox-close" type="button" @click="previewImageUrl = null" aria-label="Close image">
-            <IconX :size="18" />
-          </button>
-          <img :src="previewImageUrl" alt="Enlarged view" class="lightbox-img" />
-        </div>
-      </div>
-    </div>
-  </DashboardLayout>
-</template>
 
 <style scoped>
 .user-message-container {

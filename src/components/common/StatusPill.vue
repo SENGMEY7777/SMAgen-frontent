@@ -1,3 +1,10 @@
+<template>
+  <span class="status-pill" :class="statusClass">
+    <span class="status-dot"></span>
+    <span class="status-text">{{ displayLabel }}</span>
+  </span>
+</template>
+
 <script setup>
 import { computed } from 'vue'
 
@@ -16,13 +23,6 @@ const statusClass = computed(() => {
   return String(props.status || '').toLowerCase()
 })
 </script>
-
-<template>
-  <span class="status-pill" :class="statusClass">
-    <span class="status-dot"></span>
-    <span class="status-text">{{ displayLabel }}</span>
-  </span>
-</template>
 
 <style scoped>
 .status-pill {

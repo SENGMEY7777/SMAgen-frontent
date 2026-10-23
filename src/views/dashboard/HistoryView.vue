@@ -1,92 +1,3 @@
-<script setup>
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import {
-  IconClock,
-  IconArrowRight,
-  IconChevronLeft,
-  IconChevronRight,
-} from '@tabler/icons-vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import { api, ApiError } from '@/services/api'
-import { formatDate, formatTokens } from '@/utils/formatters'
-
-const runs = ref([])
-const loading = ref(true)
-const errorMessage = ref('')
-const filter = ref('ALL')
-const currentPage = ref(1)
-const pageSize = ref(10)
-
-const setFilter = (newFilter) => {
-  filter.value = newFilter
-  currentPage.value = 1
-}
-
-const filteredRuns = computed(() => {
-  return filter.value === 'ALL'
-    ? runs.value
-    : runs.value.filter((run) => run.status === filter.value)
-})
-
-const filterCounts = computed(() => ({
-  ALL: runs.value.length,
-  RUNNING: runs.value.filter((r) => r.status === 'RUNNING').length,
-  COMPLETED: runs.value.filter((r) => r.status === 'COMPLETED').length,
-  FAILED: runs.value.filter((r) => r.status === 'FAILED').length,
-  AWAITING_APPROVAL: runs.value.filter((r) => r.status === 'AWAITING_APPROVAL').length,
-}))
-
-const totalPages = computed(() => Math.ceil(filteredRuns.value.length / pageSize.value) || 1)
-
-const paginatedRuns = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return filteredRuns.value.slice(start, start + pageSize.value)
-})
-
-const displayedPages = computed(() => {
-  const total = totalPages.value
-  const current = currentPage.value
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1)
-  }
-  const pages = []
-  if (current <= 4) {
-    for (let i = 1; i <= 5; i++) pages.push(i)
-    pages.push('...')
-    pages.push(total)
-  } else if (current >= total - 3) {
-    pages.push(1)
-    pages.push('...')
-    for (let i = total - 4; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    pages.push('...')
-    pages.push(current - 1)
-    pages.push(current)
-    pages.push(current + 1)
-    pages.push('...')
-    pages.push(total)
-  }
-  return pages
-})
-
-const load = async () => {
-  loading.value = true
-  try {
-    const response = await api.listRuns()
-    runs.value = response?.data || []
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load run history.'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
-</script>
-
 <template>
   <DashboardLayout :recent-items="runs">
     <section class="section-page">
@@ -188,6 +99,95 @@ onMounted(load)
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import {
+  IconClock,
+  IconArrowRight,
+  IconChevronLeft,
+  IconChevronRight,
+} from '@tabler/icons-vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { formatDate, formatTokens } from '@/utils/formatters'
+
+const runs = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
+const filter = ref('ALL')
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+const setFilter = (newFilter) => {
+  filter.value = newFilter
+  currentPage.value = 1
+}
+
+const filteredRuns = computed(() => {
+  return filter.value === 'ALL'
+    ? runs.value
+    : runs.value.filter((run) => run.status === filter.value)
+})
+
+const filterCounts = computed(() => ({
+  ALL: runs.value.length,
+  RUNNING: runs.value.filter((r) => r.status === 'RUNNING').length,
+  COMPLETED: runs.value.filter((r) => r.status === 'COMPLETED').length,
+  FAILED: runs.value.filter((r) => r.status === 'FAILED').length,
+  AWAITING_APPROVAL: runs.value.filter((r) => r.status === 'AWAITING_APPROVAL').length,
+}))
+
+const totalPages = computed(() => Math.ceil(filteredRuns.value.length / pageSize.value) || 1)
+
+const paginatedRuns = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredRuns.value.slice(start, start + pageSize.value)
+})
+
+const displayedPages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const pages = []
+  if (current <= 4) {
+    for (let i = 1; i <= 5; i++) pages.push(i)
+    pages.push('...')
+    pages.push(total)
+  } else if (current >= total - 3) {
+    pages.push(1)
+    pages.push('...')
+    for (let i = total - 4; i <= total; i++) pages.push(i)
+  } else {
+    pages.push(1)
+    pages.push('...')
+    pages.push(current - 1)
+    pages.push(current)
+    pages.push(current + 1)
+    pages.push('...')
+    pages.push(total)
+  }
+  return pages
+})
+
+const load = async () => {
+  loading.value = true
+  try {
+    const response = await api.listRuns()
+    runs.value = response?.data || []
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load run history.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+</script>
 
 <style scoped>
 .filter-bar {

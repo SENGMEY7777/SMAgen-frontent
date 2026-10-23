@@ -1,62 +1,3 @@
-<script setup>
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import {
-  IconClock,
-  IconMessageCircle2,
-  IconGitFork,
-  IconShieldCheck,
-  IconTool,
-  IconArrowRight,
-} from '@tabler/icons-vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import { api, ApiError } from '@/services/api'
-import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
-
-const runs = ref([])
-const approvals = ref([])
-const loading = ref(true)
-const errorMessage = ref('')
-
-const metrics = computed(() => {
-  const totalRuns = runs.value.length
-  const completed = runs.value.filter((r) => r.status === 'COMPLETED').length
-  const successRate = totalRuns ? Math.round((completed / totalRuns) * 100) : 100
-  const activeTasks = runs.value.filter((r) => ['RUNNING', 'PENDING', 'AWAITING_APPROVAL'].includes(r.status)).length
-  const totalTokens = runs.value.reduce((sum, r) => sum + (r.total_tokens || 0), 0)
-  const totalCost = runs.value.reduce((sum, r) => sum + Number(r.estimated_cost_usd || 0), 0)
-
-  return {
-    totalRuns,
-    successRate,
-    activeTasks,
-    totalTokens,
-    totalCost,
-    pendingApprovals: approvals.value.length,
-  }
-})
-
-const loadData = async () => {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const [runsRes, approvalsRes] = await Promise.all([
-      api.listRuns().catch(() => ({ data: [] })),
-      api.listApprovals().catch(() => ({ data: [] })),
-    ])
-    runs.value = runsRes?.data || []
-    approvals.value = approvalsRes?.data || []
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load dashboard metrics.'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(loadData)
-</script>
-
 <template>
   <DashboardLayout :recent-items="runs">
     <section class="section-page">
@@ -188,6 +129,65 @@ onMounted(loadData)
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import {
+  IconClock,
+  IconMessageCircle2,
+  IconGitFork,
+  IconShieldCheck,
+  IconTool,
+  IconArrowRight,
+} from '@tabler/icons-vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
+
+const runs = ref([])
+const approvals = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
+
+const metrics = computed(() => {
+  const totalRuns = runs.value.length
+  const completed = runs.value.filter((r) => r.status === 'COMPLETED').length
+  const successRate = totalRuns ? Math.round((completed / totalRuns) * 100) : 100
+  const activeTasks = runs.value.filter((r) => ['RUNNING', 'PENDING', 'AWAITING_APPROVAL'].includes(r.status)).length
+  const totalTokens = runs.value.reduce((sum, r) => sum + (r.total_tokens || 0), 0)
+  const totalCost = runs.value.reduce((sum, r) => sum + Number(r.estimated_cost_usd || 0), 0)
+
+  return {
+    totalRuns,
+    successRate,
+    activeTasks,
+    totalTokens,
+    totalCost,
+    pendingApprovals: approvals.value.length,
+  }
+})
+
+const loadData = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const [runsRes, approvalsRes] = await Promise.all([
+      api.listRuns().catch(() => ({ data: [] })),
+      api.listApprovals().catch(() => ({ data: [] })),
+    ])
+    runs.value = runsRes?.data || []
+    approvals.value = approvalsRes?.data || []
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load dashboard metrics.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
+</script>
 
 <style scoped>
 .stats-grid {

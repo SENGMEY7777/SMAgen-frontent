@@ -1,516 +1,3 @@
-<script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import {
-  IconArrowLeft,
-  IconArrowRight,
-  IconPlayerPlay,
-  IconClock,
-  IconCheck,
-  IconDotsVertical,
-  IconChevronDown,
-  IconBolt,
-  IconRefresh,
-  IconTarget,
-  IconSparkles,
-  IconHandStop,
-  IconFocus2,
-  IconPlus,
-  IconX,
-  IconShieldCheck,
-  IconAlertTriangle,
-  IconGitFork,
-  IconUpload,
-  IconDownload,
-} from '@tabler/icons-vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import { api, ApiError } from '@/services/api'
-import { createSocketClient } from '@/services/socket'
-import { formatDate } from '@/utils/formatters'
-import { ACTIVE_RUN_STATUSES } from '@/config/constants'
-
-const route = useRoute()
-const router = useRouter()
-const run = ref(null)
-const loading = ref(true)
-const refreshing = ref(false)
-const errorMessage = ref('')
-
-// Editable Inspector Fields
-const workflowName = ref('Hello Lads!')
-const workflowDescription = ref('Automated multi-agent execution pipeline')
-const autoRunOnTrigger = ref('On')
-const timeoutMs = ref('1500ms')
-const retryAttempts = ref('3')
-const stopOnError = ref('On')
-
-// Interactive Canvas Controls
-const zoomLevel = ref(100)
-const isPanning = ref(false)
-const canvasOffset = ref({ x: 0, y: 0 })
-const activeTab = ref('canvas') // 'canvas' | 'logs'
-const showAiDrawer = ref(false)
-const aiPrompt = ref('')
-const aiResponse = ref('')
-const aiLoading = ref(false)
-
-// Approvals & Security Checkpoint
-const approvalModalOpen = ref(false)
-const selectedApproval = ref(null)
-const deciding = ref(false)
-const rejectionReason = ref('')
-const approvalError = ref('')
-
-let timer
-let socket
-
-const tasks = computed(() => run.value?.tasks || [])
-const logs = computed(() => run.value?.logs || [])
-const isTaskAwaiting = (task) => task?.status === 'AWAITING_APPROVAL'
-const isTaskSuccessful = (task) => ['SUCCESS', 'COMPLETED'].includes(task?.status)
-const isTaskFailed = (task) => ['FAILED', 'SKIPPED'].includes(task?.status)
-const taskStatusLabel = (task) => {
-  if (isTaskAwaiting(task)) return 'WAITING'
-  if (isTaskFailed(task)) return task?.status || 'FAILED'
-  if (isTaskSuccessful(task)) return 'SUCCESS'
-  return task?.status || 'PENDING'
-}
-const taskStatusIcon = (task) => {
-  if (isTaskAwaiting(task)) return IconAlertTriangle
-  if (isTaskFailed(task)) return IconX
-  return IconCheck
-}
-const progress = computed(() => {
-  if (!tasks.value.length) return run.value?.status === 'COMPLETED' ? 100 : 8
-  const successful = tasks.value.filter((task) => isTaskSuccessful(task)).length
-  return Math.round((successful / tasks.value.length) * 100)
-})
-const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(run.value?.status))
-const hasPendingApproval = computed(() => {
-  return run.value?.status === 'AWAITING_APPROVAL' || tasks.value.some((t) => t.status === 'AWAITING_APPROVAL')
-})
-
-// Simulated / Measured Performance Metrics
-const responseTimeDisplay = computed(() => {
-  if (run.value?.status === 'COMPLETED') return '1.4s'
-  if (isActive.value) return '0.8s'
-  return '1.2s'
-})
-
-const accuracyDisplay = computed(() => {
-  if (run.value?.status === 'COMPLETED') return '98.5%'
-  if (run.value?.status === 'FAILED') return '64.0%'
-  return '88.2%'
-})
-
-const createDemoRun = (runId = 'demo') => ({
-  id: runId,
-  goal_prompt: 'Record ID in Companies updated: Execute AI security verification and notify owners',
-  status: 'RUNNING',
-  created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-  tasks: [
-    {
-      id: 1,
-      node_key: 'task_1',
-      title: 'Send alert',
-      instruction: 'Trigger high priority notification webhook to company administrator',
-      assigned_tool: 'httpRequester',
-      status: 'SUCCESS',
-      tool_input: JSON.stringify({ url: 'https://api.notify.io/dispatch', event: 'company_updated' }, null, 2),
-    },
-    {
-      id: 2,
-      node_key: 'task_2',
-      title: 'Auto post to social media',
-      instruction: 'Format and publish company update announcement post',
-      assigned_tool: 'fileManager',
-      status: 'RUNNING',
-      tool_input: JSON.stringify({ channel: 'linkedin', post: 'Exciting company milestone reached!' }, null, 2),
-    },
-    {
-      id: 3,
-      node_key: 'task_3',
-      title: 'Run privileged security scan',
-      instruction: 'Execute deep infrastructure compliance and privileged audit',
-      assigned_tool: 'fileManager',
-      status: 'AWAITING_APPROVAL',
-      tool_input: JSON.stringify({ path: '/workspace/security/audit-report.json', action: 'verify' }, null, 2),
-    },
-  ],
-  logs: [
-    {
-      id: 1,
-      level: 'INFO',
-      source: 'PLANNER',
-      created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-      message: 'Autonomous DAG execution initialized with 3 planned tasks.',
-    },
-    {
-      id: 2,
-      level: 'INFO',
-      source: 'TRIGGER',
-      created_at: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-      message: 'Trigger received: Record ID in Companies updated.',
-    },
-    {
-      id: 3,
-      level: 'INFO',
-      source: 'TASK_1',
-      created_at: new Date(Date.now() - 1000 * 60 * 1).toISOString(),
-      message: 'Task 1: Alert sent successfully via httpRequester.',
-    },
-    {
-      id: 4,
-      level: 'WARN',
-      source: 'SECURITY_GATE',
-      created_at: new Date().toISOString(),
-      message: 'Task 3 paused: Awaiting operator manual approval for fileManager.',
-    },
-  ],
-})
-
-const load = async (silent = false) => {
-  if (silent) refreshing.value = true
-  else loading.value = true
-  try {
-    if (String(route.params.runId).toLowerCase() === 'demo') {
-      run.value = createDemoRun('demo')
-      workflowName.value = 'Hello Lads!'
-      workflowDescription.value = run.value.goal_prompt
-      errorMessage.value = ''
-      return
-    }
-    const response = await api.getRun(String(route.params.runId))
-    run.value = response?.data || null
-    if (run.value?.goal_prompt) {
-      workflowName.value = run.value.goal_prompt.slice(0, 48) || 'Hello Lads!'
-      workflowDescription.value = run.value.goal_prompt
-    }
-    errorMessage.value = ''
-  } catch (error) {
-    // If backend is not available or run not found, provide demo workflow data for seamless testing
-    run.value = createDemoRun(String(route.params.runId))
-    workflowName.value = 'Hello Lads!'
-    workflowDescription.value = run.value.goal_prompt
-    errorMessage.value = ''
-  } finally {
-    loading.value = false
-    refreshing.value = false
-  }
-}
-
-const openReview = async (targetTask = null) => {
-  approvalError.value = ''
-  rejectionReason.value = ''
-
-  // Identify target task awaiting approval
-  const awaitingTask = targetTask?.status === 'AWAITING_APPROVAL'
-    ? targetTask
-    : tasks.value.find((t) => t.status === 'AWAITING_APPROVAL') || null
-  const runIsAwaitingApproval = run.value?.status === 'AWAITING_APPROVAL'
-
-  // Do not query the pending-approval endpoint for a decision that has
-  // already been completed. This also prevents the stale action buttons from
-  // reopening an approval lookup after the run has resumed.
-  if (!awaitingTask && !runIsAwaitingApproval) {
-    approvalModalOpen.value = false
-    selectedApproval.value = null
-    return
-  }
-
-  try {
-    const runId = String(route.params.runId)
-    if (runId.toLowerCase() === 'demo') {
-      selectedApproval.value = {
-        id: 'virtual-demo-approval',
-        targetTaskId: awaitingTask?.id || null,
-        run_id: runId,
-        action_summary: awaitingTask?.instruction || 'Privileged security verification and infrastructure compliance check.',
-        task_title: awaitingTask?.title || 'Security Approval Checkpoint',
-        assigned_tool: awaitingTask?.assigned_tool || 'fileManager',
-        tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
-      }
-      approvalModalOpen.value = true
-      return
-    }
-
-    let list = []
-    try {
-      // Fetch the pending queue without the runId query filter. The upstream
-      // endpoint currently returns 500 for that optional filter; the response
-      // is filtered by run/task ID below instead.
-      const res = await api.listApprovals()
-      list = Array.isArray(res?.data) ? res.data : []
-    } catch (err) {
-      console.warn('Approvals list fetch warning:', err?.message)
-    }
-
-    // Match by taskId or runId
-    const match = list.find((a) => {
-      if (awaitingTask?.id && (String(a.task_id) === String(awaitingTask.id) || String(a.taskId) === String(awaitingTask.id))) {
-        return true
-      }
-      return String(a.run_id) === runId || String(a.runId) === runId
-    })
-
-    if (match) {
-      const detailRes = await api.getApproval(match.id).catch(() => ({ data: match }))
-      const details = detailRes?.data || match
-      selectedApproval.value = {
-        ...match,
-        ...details,
-        targetTaskId: awaitingTask?.id || match.task_id,
-        task_title: awaitingTask?.title || details.task_title || match.task_title || 'Execution Step',
-        assigned_tool: awaitingTask?.assigned_tool || details.assigned_tool || match.assigned_tool || 'systemExecutor',
-        tool_input: awaitingTask?.tool_input || details.tool_input || match.tool_input || '',
-      }
-    } else {
-      selectedApproval.value = {
-        id: awaitingTask?.id ? `task-${awaitingTask.id}` : `virtual-${runId}`,
-        targetTaskId: awaitingTask?.id || null,
-        run_id: runId,
-        action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
-        task_title: awaitingTask?.title || 'Security Approval Checkpoint',
-        assigned_tool: awaitingTask?.assigned_tool || 'systemExecutor',
-        tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
-      }
-    }
-    approvalModalOpen.value = true
-  } catch (error) {
-    selectedApproval.value = {
-      id: awaitingTask?.id ? `task-${awaitingTask.id}` : `virtual-${String(route.params.runId)}`,
-      targetTaskId: awaitingTask?.id || null,
-      run_id: String(route.params.runId),
-      action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
-      task_title: awaitingTask?.title || 'Security Approval Checkpoint',
-      assigned_tool: awaitingTask?.assigned_tool || 'systemExecutor',
-      tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
-    }
-    approvalModalOpen.value = true
-  }
-}
-
-const submitDecision = async (status) => {
-  if (!selectedApproval.value || deciding.value) return
-  if (status === 'REJECTED' && !rejectionReason.value.trim()) {
-    approvalError.value = 'A rejection reason is required when rejecting.'
-    return
-  }
-
-  deciding.value = true
-  approvalError.value = ''
-  const approvalId = selectedApproval.value.id
-  const targetTaskId = selectedApproval.value.targetTaskId || selectedApproval.value.task_id
-  const runId = String(route.params.runId)
-
-  try {
-    let decided = false
-    // 1. If backend approval record exists, submit decision
-    if (approvalId && !String(approvalId).startsWith('virtual-') && approvalId !== 'run-approval') {
-      try {
-        await api.decideApproval(approvalId, {
-          status,
-          ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
-        })
-        decided = true
-      } catch (decideErr) {
-        console.warn('Decide approval warning:', decideErr?.message || decideErr)
-      }
-    }
-
-    // 2. Trigger run resumption only if approval wasn't already triggered by decideApproval
-    if (!decided && status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
-      try {
-        await api.resumeWorkflow(runId)
-      } catch (resumeErr) {
-        // 409 Conflict means the run is already in progress/running, which is expected
-        if (resumeErr?.status !== 409) {
-          console.warn('Resume workflow error:', resumeErr?.message)
-        }
-      }
-    }
-
-    // 3. Immediately reflect in reactive state for instant UX feedback
-    if (run.value) {
-      if (Array.isArray(run.value.tasks)) {
-        const idx = run.value.tasks.findIndex(
-          (t) => (targetTaskId && String(t.id) === String(targetTaskId)) || t.status === 'AWAITING_APPROVAL'
-        )
-        if (idx !== -1) {
-          run.value.tasks[idx].status = status === 'APPROVED' ? 'SUCCESS' : 'SKIPPED'
-        }
-      }
-
-      // Check if all tasks in run are now active or completed
-      const remainingAwaiting = run.value.tasks.some((t) => t.status === 'AWAITING_APPROVAL')
-      if (!remainingAwaiting) {
-        const allCompleted = run.value.tasks.every((t) => ['SUCCESS', 'COMPLETED', 'SKIPPED'].includes(t.status))
-        run.value.status = allCompleted ? 'COMPLETED' : 'RUNNING'
-      }
-
-      // Telemetry log entry
-      if (Array.isArray(run.value.logs)) {
-        run.value.logs.unshift({
-          id: Date.now(),
-          level: status === 'APPROVED' ? 'INFO' : 'WARN',
-          source: 'SECURITY_GATE',
-          created_at: new Date().toISOString(),
-          message: status === 'APPROVED'
-            ? `Security checkpoint APPROVED for: "${selectedApproval.value.task_title || 'Task'}"`
-            : `Security checkpoint REJECTED: "${rejectionReason.value.trim()}"`,
-        })
-      }
-    }
-
-    approvalModalOpen.value = false
-    selectedApproval.value = null
-    rejectionReason.value = ''
-
-    if (runId.toLowerCase() !== 'demo') {
-      await load(true).catch(() => {})
-    }
-  } catch (error) {
-    approvalError.value = error instanceof ApiError ? error.message : 'Unable to submit decision.'
-  } finally {
-    deciding.value = false
-  }
-}
-
-const resume = async () => {
-  try {
-    await api.resumeWorkflow(String(route.params.runId))
-    await load(true)
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to resume this run.'
-  }
-}
-
-const zoomIn = () => {
-  if (zoomLevel.value < 160) zoomLevel.value += 10
-}
-
-const zoomOut = () => {
-  if (zoomLevel.value > 60) zoomLevel.value -= 10
-}
-
-const resetZoom = () => {
-  zoomLevel.value = 100
-  canvasOffset.value = { x: 0, y: 0 }
-}
-
-const togglePan = () => {
-  isPanning.value = !isPanning.value
-}
-
-const downloadWorkflow = () => {
-  const data = JSON.stringify(run.value, null, 2)
-  const blob = new Blob([data], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `workflow-${route.params.runId}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-const askAiAssist = () => {
-  showAiDrawer.value = true
-  if (!aiResponse.value) {
-    aiResponse.value = `SMAgen Assistant: This workflow is configured with ${tasks.value.length || 2} nodes. All dependency chains are acyclic. You can optimize throughput by enabling parallel task dispatching.`
-  }
-}
-
-const sendAiPrompt = async () => {
-  if (!aiPrompt.value.trim()) return
-  aiLoading.value = true
-  try {
-    const res = await api.chat(
-      `Workflow Context: ${run.value?.goal_prompt || 'DAG'}. Question: ${aiPrompt.value}`,
-      []
-    )
-    aiResponse.value = res?.data?.message || 'I have analyzed the workflow.'
-  } catch {
-    aiResponse.value = 'Analysis complete: Execution pipeline structure is verified and optimal.'
-  } finally {
-    aiLoading.value = false
-    aiPrompt.value = ''
-  }
-}
-
-const formatLogMessage = (rawMessage) => {
-  if (!rawMessage) return ''
-  const stringifyValue = (value) => {
-    if (typeof value === 'string') return value
-    try {
-      return JSON.stringify(value)
-    } catch {
-      return String(value)
-    }
-  }
-
-  if (typeof rawMessage !== 'string') return stringifyValue(rawMessage)
-  try {
-    const parsed = JSON.parse(rawMessage)
-    if (parsed && typeof parsed === 'object') {
-      if (parsed.payload?.message) return stringifyValue(parsed.payload.message)
-      if (parsed.payload?.error) return `Error: ${stringifyValue(parsed.payload.error)}`
-      if (parsed.event) {
-        const details = parsed.payload ? ` (${JSON.stringify(parsed.payload)})` : ''
-        return `${parsed.event}${details}`
-      }
-      return JSON.stringify(parsed, null, 2)
-    }
-  } catch {}
-  return rawMessage
-}
-
-onMounted(async () => {
-  await load()
-  timer = window.setInterval(() => {
-    if (isActive.value) load(true)
-  }, 4500)
-
-  const runId = String(route.params.runId)
-  if (runId.toLowerCase() !== 'demo') {
-    socket = createSocketClient()
-    if (socket) {
-      socket.on('connect', () => {
-        socket.emit('join_run', runId)
-      })
-
-      const refreshEvents = [
-        'telemetry',
-        'task_started',
-        'task_completed',
-        'task_failed',
-        'approval_required',
-        'workflow_completed',
-        'workflow_failed',
-      ]
-      refreshEvents.forEach((evt) => {
-        socket.on(evt, () => load(true))
-      })
-
-      socket.on('connect_error', () => {
-        // Quietly ignore connection errors to prevent console flooding
-      })
-    }
-  }
-})
-
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-  if (socket) {
-    try {
-      socket.emit('leave_run', String(route.params.runId))
-      socket.disconnect()
-    } catch {}
-    socket = null
-  }
-})
-</script>
-
 <template>
   <DashboardLayout :recent-items="run ? [run] : []">
     <div class="zyn-workflow-shell">
@@ -1185,6 +672,519 @@ onBeforeUnmount(() => {
     </div>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconPlayerPlay,
+  IconClock,
+  IconCheck,
+  IconDotsVertical,
+  IconChevronDown,
+  IconBolt,
+  IconRefresh,
+  IconTarget,
+  IconSparkles,
+  IconHandStop,
+  IconFocus2,
+  IconPlus,
+  IconX,
+  IconShieldCheck,
+  IconAlertTriangle,
+  IconGitFork,
+  IconUpload,
+  IconDownload,
+} from '@tabler/icons-vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { createSocketClient } from '@/services/socket'
+import { formatDate } from '@/utils/formatters'
+import { ACTIVE_RUN_STATUSES } from '@/config/constants'
+
+const route = useRoute()
+const router = useRouter()
+const run = ref(null)
+const loading = ref(true)
+const refreshing = ref(false)
+const errorMessage = ref('')
+
+// Editable Inspector Fields
+const workflowName = ref('Hello Lads!')
+const workflowDescription = ref('Automated multi-agent execution pipeline')
+const autoRunOnTrigger = ref('On')
+const timeoutMs = ref('1500ms')
+const retryAttempts = ref('3')
+const stopOnError = ref('On')
+
+// Interactive Canvas Controls
+const zoomLevel = ref(100)
+const isPanning = ref(false)
+const canvasOffset = ref({ x: 0, y: 0 })
+const activeTab = ref('canvas') // 'canvas' | 'logs'
+const showAiDrawer = ref(false)
+const aiPrompt = ref('')
+const aiResponse = ref('')
+const aiLoading = ref(false)
+
+// Approvals & Security Checkpoint
+const approvalModalOpen = ref(false)
+const selectedApproval = ref(null)
+const deciding = ref(false)
+const rejectionReason = ref('')
+const approvalError = ref('')
+
+let timer
+let socket
+
+const tasks = computed(() => run.value?.tasks || [])
+const logs = computed(() => run.value?.logs || [])
+const isTaskAwaiting = (task) => task?.status === 'AWAITING_APPROVAL'
+const isTaskSuccessful = (task) => ['SUCCESS', 'COMPLETED'].includes(task?.status)
+const isTaskFailed = (task) => ['FAILED', 'SKIPPED'].includes(task?.status)
+const taskStatusLabel = (task) => {
+  if (isTaskAwaiting(task)) return 'WAITING'
+  if (isTaskFailed(task)) return task?.status || 'FAILED'
+  if (isTaskSuccessful(task)) return 'SUCCESS'
+  return task?.status || 'PENDING'
+}
+const taskStatusIcon = (task) => {
+  if (isTaskAwaiting(task)) return IconAlertTriangle
+  if (isTaskFailed(task)) return IconX
+  return IconCheck
+}
+const progress = computed(() => {
+  if (!tasks.value.length) return run.value?.status === 'COMPLETED' ? 100 : 8
+  const successful = tasks.value.filter((task) => isTaskSuccessful(task)).length
+  return Math.round((successful / tasks.value.length) * 100)
+})
+const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(run.value?.status))
+const hasPendingApproval = computed(() => {
+  return run.value?.status === 'AWAITING_APPROVAL' || tasks.value.some((t) => t.status === 'AWAITING_APPROVAL')
+})
+
+// Simulated / Measured Performance Metrics
+const responseTimeDisplay = computed(() => {
+  if (run.value?.status === 'COMPLETED') return '1.4s'
+  if (isActive.value) return '0.8s'
+  return '1.2s'
+})
+
+const accuracyDisplay = computed(() => {
+  if (run.value?.status === 'COMPLETED') return '98.5%'
+  if (run.value?.status === 'FAILED') return '64.0%'
+  return '88.2%'
+})
+
+const createDemoRun = (runId = 'demo') => ({
+  id: runId,
+  goal_prompt: 'Record ID in Companies updated: Execute AI security verification and notify owners',
+  status: 'RUNNING',
+  created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
+  tasks: [
+    {
+      id: 1,
+      node_key: 'task_1',
+      title: 'Send alert',
+      instruction: 'Trigger high priority notification webhook to company administrator',
+      assigned_tool: 'httpRequester',
+      status: 'SUCCESS',
+      tool_input: JSON.stringify({ url: 'https://api.notify.io/dispatch', event: 'company_updated' }, null, 2),
+    },
+    {
+      id: 2,
+      node_key: 'task_2',
+      title: 'Auto post to social media',
+      instruction: 'Format and publish company update announcement post',
+      assigned_tool: 'fileManager',
+      status: 'RUNNING',
+      tool_input: JSON.stringify({ channel: 'linkedin', post: 'Exciting company milestone reached!' }, null, 2),
+    },
+    {
+      id: 3,
+      node_key: 'task_3',
+      title: 'Run privileged security scan',
+      instruction: 'Execute deep infrastructure compliance and privileged audit',
+      assigned_tool: 'fileManager',
+      status: 'AWAITING_APPROVAL',
+      tool_input: JSON.stringify({ path: '/workspace/security/audit-report.json', action: 'verify' }, null, 2),
+    },
+  ],
+  logs: [
+    {
+      id: 1,
+      level: 'INFO',
+      source: 'PLANNER',
+      created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
+      message: 'Autonomous DAG execution initialized with 3 planned tasks.',
+    },
+    {
+      id: 2,
+      level: 'INFO',
+      source: 'TRIGGER',
+      created_at: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
+      message: 'Trigger received: Record ID in Companies updated.',
+    },
+    {
+      id: 3,
+      level: 'INFO',
+      source: 'TASK_1',
+      created_at: new Date(Date.now() - 1000 * 60 * 1).toISOString(),
+      message: 'Task 1: Alert sent successfully via httpRequester.',
+    },
+    {
+      id: 4,
+      level: 'WARN',
+      source: 'SECURITY_GATE',
+      created_at: new Date().toISOString(),
+      message: 'Task 3 paused: Awaiting operator manual approval for fileManager.',
+    },
+  ],
+})
+
+const load = async (silent = false) => {
+  if (silent) refreshing.value = true
+  else loading.value = true
+  try {
+    if (String(route.params.runId).toLowerCase() === 'demo') {
+      run.value = createDemoRun('demo')
+      workflowName.value = 'Hello Lads!'
+      workflowDescription.value = run.value.goal_prompt
+      errorMessage.value = ''
+      return
+    }
+    const response = await api.getRun(String(route.params.runId))
+    run.value = response?.data || null
+    if (run.value?.goal_prompt) {
+      workflowName.value = run.value.goal_prompt.slice(0, 48) || 'Hello Lads!'
+      workflowDescription.value = run.value.goal_prompt
+    }
+    errorMessage.value = ''
+  } catch (error) {
+    // If backend is not available or run not found, provide demo workflow data for seamless testing
+    run.value = createDemoRun(String(route.params.runId))
+    workflowName.value = 'Hello Lads!'
+    workflowDescription.value = run.value.goal_prompt
+    errorMessage.value = ''
+  } finally {
+    loading.value = false
+    refreshing.value = false
+  }
+}
+
+const openReview = async (targetTask = null) => {
+  approvalError.value = ''
+  rejectionReason.value = ''
+
+  // Identify target task awaiting approval
+  const awaitingTask = targetTask?.status === 'AWAITING_APPROVAL'
+    ? targetTask
+    : tasks.value.find((t) => t.status === 'AWAITING_APPROVAL') || null
+  const runIsAwaitingApproval = run.value?.status === 'AWAITING_APPROVAL'
+
+  // Do not query the pending-approval endpoint for a decision that has
+  // already been completed. This also prevents the stale action buttons from
+  // reopening an approval lookup after the run has resumed.
+  if (!awaitingTask && !runIsAwaitingApproval) {
+    approvalModalOpen.value = false
+    selectedApproval.value = null
+    return
+  }
+
+  try {
+    const runId = String(route.params.runId)
+    if (runId.toLowerCase() === 'demo') {
+      selectedApproval.value = {
+        id: 'virtual-demo-approval',
+        targetTaskId: awaitingTask?.id || null,
+        run_id: runId,
+        action_summary: awaitingTask?.instruction || 'Privileged security verification and infrastructure compliance check.',
+        task_title: awaitingTask?.title || 'Security Approval Checkpoint',
+        assigned_tool: awaitingTask?.assigned_tool || 'fileManager',
+        tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
+      }
+      approvalModalOpen.value = true
+      return
+    }
+
+    let list = []
+    try {
+      // Fetch the pending queue without the runId query filter. The upstream
+      // endpoint currently returns 500 for that optional filter; the response
+      // is filtered by run/task ID below instead.
+      const res = await api.listApprovals()
+      list = Array.isArray(res?.data) ? res.data : []
+    } catch (err) {
+      console.warn('Approvals list fetch warning:', err?.message)
+    }
+
+    // Match by taskId or runId
+    const match = list.find((a) => {
+      if (awaitingTask?.id && (String(a.task_id) === String(awaitingTask.id) || String(a.taskId) === String(awaitingTask.id))) {
+        return true
+      }
+      return String(a.run_id) === runId || String(a.runId) === runId
+    })
+
+    if (match) {
+      const detailRes = await api.getApproval(match.id).catch(() => ({ data: match }))
+      const details = detailRes?.data || match
+      selectedApproval.value = {
+        ...match,
+        ...details,
+        targetTaskId: awaitingTask?.id || match.task_id,
+        task_title: awaitingTask?.title || details.task_title || match.task_title || 'Execution Step',
+        assigned_tool: awaitingTask?.assigned_tool || details.assigned_tool || match.assigned_tool || 'systemExecutor',
+        tool_input: awaitingTask?.tool_input || details.tool_input || match.tool_input || '',
+      }
+    } else {
+      selectedApproval.value = {
+        id: awaitingTask?.id ? `task-${awaitingTask.id}` : `virtual-${runId}`,
+        targetTaskId: awaitingTask?.id || null,
+        run_id: runId,
+        action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
+        task_title: awaitingTask?.title || 'Security Approval Checkpoint',
+        assigned_tool: awaitingTask?.assigned_tool || 'systemExecutor',
+        tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
+      }
+    }
+    approvalModalOpen.value = true
+  } catch (error) {
+    selectedApproval.value = {
+      id: awaitingTask?.id ? `task-${awaitingTask.id}` : `virtual-${String(route.params.runId)}`,
+      targetTaskId: awaitingTask?.id || null,
+      run_id: String(route.params.runId),
+      action_summary: awaitingTask?.instruction || 'Security checkpoint authorization required',
+      task_title: awaitingTask?.title || 'Security Approval Checkpoint',
+      assigned_tool: awaitingTask?.assigned_tool || 'systemExecutor',
+      tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
+    }
+    approvalModalOpen.value = true
+  }
+}
+
+const submitDecision = async (status) => {
+  if (!selectedApproval.value || deciding.value) return
+  if (status === 'REJECTED' && !rejectionReason.value.trim()) {
+    approvalError.value = 'A rejection reason is required when rejecting.'
+    return
+  }
+
+  deciding.value = true
+  approvalError.value = ''
+  const approvalId = selectedApproval.value.id
+  const targetTaskId = selectedApproval.value.targetTaskId || selectedApproval.value.task_id
+  const runId = String(route.params.runId)
+
+  try {
+    let decided = false
+    // 1. If backend approval record exists, submit decision
+    if (approvalId && !String(approvalId).startsWith('virtual-') && approvalId !== 'run-approval') {
+      try {
+        await api.decideApproval(approvalId, {
+          status,
+          ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
+        })
+        decided = true
+      } catch (decideErr) {
+        console.warn('Decide approval warning:', decideErr?.message || decideErr)
+      }
+    }
+
+    // 2. Trigger run resumption only if approval wasn't already triggered by decideApproval
+    if (!decided && status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
+      try {
+        await api.resumeWorkflow(runId)
+      } catch (resumeErr) {
+        // 409 Conflict means the run is already in progress/running, which is expected
+        if (resumeErr?.status !== 409) {
+          console.warn('Resume workflow error:', resumeErr?.message)
+        }
+      }
+    }
+
+    // 3. Immediately reflect in reactive state for instant UX feedback
+    if (run.value) {
+      if (Array.isArray(run.value.tasks)) {
+        const idx = run.value.tasks.findIndex(
+          (t) => (targetTaskId && String(t.id) === String(targetTaskId)) || t.status === 'AWAITING_APPROVAL'
+        )
+        if (idx !== -1) {
+          run.value.tasks[idx].status = status === 'APPROVED' ? 'SUCCESS' : 'SKIPPED'
+        }
+      }
+
+      // Check if all tasks in run are now active or completed
+      const remainingAwaiting = run.value.tasks.some((t) => t.status === 'AWAITING_APPROVAL')
+      if (!remainingAwaiting) {
+        const allCompleted = run.value.tasks.every((t) => ['SUCCESS', 'COMPLETED', 'SKIPPED'].includes(t.status))
+        run.value.status = allCompleted ? 'COMPLETED' : 'RUNNING'
+      }
+
+      // Telemetry log entry
+      if (Array.isArray(run.value.logs)) {
+        run.value.logs.unshift({
+          id: Date.now(),
+          level: status === 'APPROVED' ? 'INFO' : 'WARN',
+          source: 'SECURITY_GATE',
+          created_at: new Date().toISOString(),
+          message: status === 'APPROVED'
+            ? `Security checkpoint APPROVED for: "${selectedApproval.value.task_title || 'Task'}"`
+            : `Security checkpoint REJECTED: "${rejectionReason.value.trim()}"`,
+        })
+      }
+    }
+
+    approvalModalOpen.value = false
+    selectedApproval.value = null
+    rejectionReason.value = ''
+
+    if (runId.toLowerCase() !== 'demo') {
+      await load(true).catch(() => {})
+    }
+  } catch (error) {
+    approvalError.value = error instanceof ApiError ? error.message : 'Unable to submit decision.'
+  } finally {
+    deciding.value = false
+  }
+}
+
+const resume = async () => {
+  try {
+    await api.resumeWorkflow(String(route.params.runId))
+    await load(true)
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to resume this run.'
+  }
+}
+
+const zoomIn = () => {
+  if (zoomLevel.value < 160) zoomLevel.value += 10
+}
+
+const zoomOut = () => {
+  if (zoomLevel.value > 60) zoomLevel.value -= 10
+}
+
+const resetZoom = () => {
+  zoomLevel.value = 100
+  canvasOffset.value = { x: 0, y: 0 }
+}
+
+const togglePan = () => {
+  isPanning.value = !isPanning.value
+}
+
+const downloadWorkflow = () => {
+  const data = JSON.stringify(run.value, null, 2)
+  const blob = new Blob([data], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `workflow-${route.params.runId}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const askAiAssist = () => {
+  showAiDrawer.value = true
+  if (!aiResponse.value) {
+    aiResponse.value = `SMAgen Assistant: This workflow is configured with ${tasks.value.length || 2} nodes. All dependency chains are acyclic. You can optimize throughput by enabling parallel task dispatching.`
+  }
+}
+
+const sendAiPrompt = async () => {
+  if (!aiPrompt.value.trim()) return
+  aiLoading.value = true
+  try {
+    const res = await api.chat(
+      `Workflow Context: ${run.value?.goal_prompt || 'DAG'}. Question: ${aiPrompt.value}`,
+      []
+    )
+    aiResponse.value = res?.data?.message || 'I have analyzed the workflow.'
+  } catch {
+    aiResponse.value = 'Analysis complete: Execution pipeline structure is verified and optimal.'
+  } finally {
+    aiLoading.value = false
+    aiPrompt.value = ''
+  }
+}
+
+const formatLogMessage = (rawMessage) => {
+  if (!rawMessage) return ''
+  const stringifyValue = (value) => {
+    if (typeof value === 'string') return value
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+
+  if (typeof rawMessage !== 'string') return stringifyValue(rawMessage)
+  try {
+    const parsed = JSON.parse(rawMessage)
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.payload?.message) return stringifyValue(parsed.payload.message)
+      if (parsed.payload?.error) return `Error: ${stringifyValue(parsed.payload.error)}`
+      if (parsed.event) {
+        const details = parsed.payload ? ` (${JSON.stringify(parsed.payload)})` : ''
+        return `${parsed.event}${details}`
+      }
+      return JSON.stringify(parsed, null, 2)
+    }
+  } catch {}
+  return rawMessage
+}
+
+onMounted(async () => {
+  await load()
+  timer = window.setInterval(() => {
+    if (isActive.value) load(true)
+  }, 4500)
+
+  const runId = String(route.params.runId)
+  if (runId.toLowerCase() !== 'demo') {
+    socket = createSocketClient()
+    if (socket) {
+      socket.on('connect', () => {
+        socket.emit('join_run', runId)
+      })
+
+      const refreshEvents = [
+        'telemetry',
+        'task_started',
+        'task_completed',
+        'task_failed',
+        'approval_required',
+        'workflow_completed',
+        'workflow_failed',
+      ]
+      refreshEvents.forEach((evt) => {
+        socket.on(evt, () => load(true))
+      })
+
+      socket.on('connect_error', () => {
+        // Quietly ignore connection errors to prevent console flooding
+      })
+    }
+  }
+})
+
+onBeforeUnmount(() => {
+  if (timer) window.clearInterval(timer)
+  if (socket) {
+    try {
+      socket.emit('leave_run', String(route.params.runId))
+      socket.disconnect()
+    } catch {}
+    socket = null
+  }
+})
+</script>
 
 <style scoped>
 /* Top Level View Shell */

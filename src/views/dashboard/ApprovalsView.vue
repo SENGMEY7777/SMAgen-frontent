@@ -1,66 +1,3 @@
-<script setup>
-import { onMounted, ref } from 'vue'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock, IconArrowRight, IconX, IconCheck } from '@tabler/icons-vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import { api, ApiError } from '@/services/api'
-import { formatDate } from '@/utils/formatters'
-
-const approvals = ref([])
-const selected = ref(null)
-const loading = ref(true)
-const deciding = ref(false)
-const rejectionReason = ref('')
-const errorMessage = ref('')
-
-const load = async () => {
-  loading.value = true
-  try {
-    const response = await api.listApprovals()
-    approvals.value = response?.data || []
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load approvals.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const openApproval = async (approval) => {
-  try {
-    const response = await api.getApproval(approval.id)
-    selected.value = response?.data || approval
-  } catch {
-    selected.value = approval
-  }
-}
-
-const decide = async (status) => {
-  if (!selected.value || deciding.value) return
-  if (status === 'REJECTED' && !rejectionReason.value.trim()) {
-    errorMessage.value = 'A rejection reason is required.'
-    return
-  }
-
-  deciding.value = true
-  errorMessage.value = ''
-  try {
-    await api.decideApproval(selected.value.id, {
-      status,
-      ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
-    })
-    selected.value = null
-    rejectionReason.value = ''
-    await load()
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to update approval.'
-  } finally {
-    deciding.value = false
-  }
-}
-
-onMounted(load)
-</script>
-
 <template>
   <DashboardLayout :recent-items="approvals">
     <section class="section-page">
@@ -130,6 +67,69 @@ onMounted(load)
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { onMounted, ref } from 'vue'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconClock, IconArrowRight, IconX, IconCheck } from '@tabler/icons-vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { formatDate } from '@/utils/formatters'
+
+const approvals = ref([])
+const selected = ref(null)
+const loading = ref(true)
+const deciding = ref(false)
+const rejectionReason = ref('')
+const errorMessage = ref('')
+
+const load = async () => {
+  loading.value = true
+  try {
+    const response = await api.listApprovals()
+    approvals.value = response?.data || []
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load approvals.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const openApproval = async (approval) => {
+  try {
+    const response = await api.getApproval(approval.id)
+    selected.value = response?.data || approval
+  } catch {
+    selected.value = approval
+  }
+}
+
+const decide = async (status) => {
+  if (!selected.value || deciding.value) return
+  if (status === 'REJECTED' && !rejectionReason.value.trim()) {
+    errorMessage.value = 'A rejection reason is required.'
+    return
+  }
+
+  deciding.value = true
+  errorMessage.value = ''
+  try {
+    await api.decideApproval(selected.value.id, {
+      status,
+      ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
+    })
+    selected.value = null
+    rejectionReason.value = ''
+    await load()
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to update approval.'
+  } finally {
+    deciding.value = false
+  }
+}
+
+onMounted(load)
+</script>
 
 <style scoped>
 .approval-detail {

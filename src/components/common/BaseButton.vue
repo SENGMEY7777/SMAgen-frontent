@@ -1,3 +1,12 @@
+<template>
+  <button :type="type" class="base-btn" :class="[`btn-${variant}`, `btn-${size}`, { 'is-loading': loading }]"
+    :disabled="disabled || loading" @click="$emit('click', $event)">
+    <IconClock v-if="loading" :size="iconSize" class="btn-spinner" />
+    <component :is="resolvedIcon" v-else-if="resolvedIcon" :size="iconSize" />
+    <slot />
+  </button>
+</template>
+
 <script setup>
 import { computed } from 'vue'
 import { IconClock, IconSparkles, IconCheck, IconPlus, IconTrash, IconArrowRight, IconPlayerPlay } from '@tabler/icons-vue'
@@ -38,15 +47,6 @@ const resolvedIcon = computed(() => {
   return iconMap[props.icon] || IconSparkles
 })
 </script>
-
-<template>
-  <button :type="type" class="base-btn" :class="[`btn-${variant}`, `btn-${size}`, { 'is-loading': loading }]"
-    :disabled="disabled || loading" @click="$emit('click', $event)">
-    <IconClock v-if="loading" :size="iconSize" class="btn-spinner" />
-    <component :is="resolvedIcon" v-else-if="resolvedIcon" :size="iconSize" />
-    <slot />
-  </button>
-</template>
 
 <style scoped>
 .base-btn {

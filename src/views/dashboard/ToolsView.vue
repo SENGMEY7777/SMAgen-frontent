@@ -1,3 +1,89 @@
+<template>
+  <DashboardLayout>
+    <section class="section-page">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Integrations</div>
+          <h1>Tool Integrations</h1>
+          <p>Configure agent capabilities, manage execution privileges, and monitor tool usage.</p>
+        </div>
+        <button class="primary-btn" type="button" @click="saveConfiguration">
+          <IconCheck :size="14" /> Save Changes
+        </button>
+      </div>
+
+      <div v-if="statusMessage" class="inline-success">{{ statusMessage }}</div>
+
+      <!-- Overview Header Cards -->
+      <div class="stats-grid">
+        <div class="soft-card stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Active Tools</span>
+            <span class="stat-badge green">{{ tools.filter(t => t.enabled).length }}/{{ tools.length }}</span>
+          </div>
+          <div class="stat-value">{{ tools.filter(t => t.enabled).length }} Active</div>
+          <div class="stat-desc">Available to KAIRO reasoning engine</div>
+        </div>
+
+        <div class="soft-card stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Total Invocations</span>
+            <span class="stat-badge blue">1,330</span>
+          </div>
+          <div class="stat-value">1,330 calls</div>
+          <div class="stat-desc">Past 30 days execution volume</div>
+        </div>
+
+        <div class="soft-card stat-card">
+          <div class="stat-header">
+            <span class="stat-label">HITL Protected</span>
+            <span class="stat-badge orange">1 Tool</span>
+          </div>
+          <div class="stat-value">SQL</div>
+          <div class="stat-desc">Requires human authorization gate</div>
+        </div>
+      </div>
+
+      <!-- Tools Grid -->
+      <div class="tools-grid">
+        <article
+          v-for="tool in tools"
+          :key="tool.id"
+          class="soft-card tool-card"
+          :class="{ disabled: !tool.enabled }"
+        >
+          <div class="tool-card-header">
+            <div class="tool-badge-wrap">
+              <div class="tool-icon">
+                <component :is="toolIconMap[tool.icon] || IconTool" :size="18" />
+              </div>
+              <div>
+                <h3 class="tool-title">{{ tool.name }}</h3>
+                <span class="tool-cat">{{ tool.category }}</span>
+              </div>
+            </div>
+
+            <!-- Clean Switch Toggle -->
+            <label class="switch-toggle" :title="tool.enabled ? 'Disable tool' : 'Enable tool'">
+              <input type="checkbox" :checked="tool.enabled" @change="toggleTool(tool)" />
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <p class="tool-desc">{{ tool.description }}</p>
+
+          <div class="tool-footer">
+            <span class="security-tag" :class="tool.securityColor">
+              <IconShieldCheck :size="12" /> {{ tool.securityTier }}
+            </span>
+            <span class="calls-count">{{ tool.callsCount }} calls</span>
+          </div>
+        </article>
+      </div>
+    </section>
+  </DashboardLayout>
+</template>
+
 <script setup>
 import { ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
@@ -95,92 +181,6 @@ const saveConfiguration = () => {
   }, 3000)
 }
 </script>
-
-<template>
-  <DashboardLayout>
-    <section class="section-page">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow">Integrations</div>
-          <h1>Tool Integrations</h1>
-          <p>Configure agent capabilities, manage execution privileges, and monitor tool usage.</p>
-        </div>
-        <button class="primary-btn" type="button" @click="saveConfiguration">
-          <IconCheck :size="14" /> Save Changes
-        </button>
-      </div>
-
-      <div v-if="statusMessage" class="inline-success">{{ statusMessage }}</div>
-
-      <!-- Overview Header Cards -->
-      <div class="stats-grid">
-        <div class="soft-card stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Active Tools</span>
-            <span class="stat-badge green">{{ tools.filter(t => t.enabled).length }}/{{ tools.length }}</span>
-          </div>
-          <div class="stat-value">{{ tools.filter(t => t.enabled).length }} Active</div>
-          <div class="stat-desc">Available to KAIRO reasoning engine</div>
-        </div>
-
-        <div class="soft-card stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Total Invocations</span>
-            <span class="stat-badge blue">1,330</span>
-          </div>
-          <div class="stat-value">1,330 calls</div>
-          <div class="stat-desc">Past 30 days execution volume</div>
-        </div>
-
-        <div class="soft-card stat-card">
-          <div class="stat-header">
-            <span class="stat-label">HITL Protected</span>
-            <span class="stat-badge orange">1 Tool</span>
-          </div>
-          <div class="stat-value">SQL</div>
-          <div class="stat-desc">Requires human authorization gate</div>
-        </div>
-      </div>
-
-      <!-- Tools Grid -->
-      <div class="tools-grid">
-        <article
-          v-for="tool in tools"
-          :key="tool.id"
-          class="soft-card tool-card"
-          :class="{ disabled: !tool.enabled }"
-        >
-          <div class="tool-card-header">
-            <div class="tool-badge-wrap">
-              <div class="tool-icon">
-                <component :is="toolIconMap[tool.icon] || IconTool" :size="18" />
-              </div>
-              <div>
-                <h3 class="tool-title">{{ tool.name }}</h3>
-                <span class="tool-cat">{{ tool.category }}</span>
-              </div>
-            </div>
-
-            <!-- Clean Switch Toggle -->
-            <label class="switch-toggle" :title="tool.enabled ? 'Disable tool' : 'Enable tool'">
-              <input type="checkbox" :checked="tool.enabled" @change="toggleTool(tool)" />
-              <span class="slider round"></span>
-            </label>
-          </div>
-
-          <p class="tool-desc">{{ tool.description }}</p>
-
-          <div class="tool-footer">
-            <span class="security-tag" :class="tool.securityColor">
-              <IconShieldCheck :size="12" /> {{ tool.securityTier }}
-            </span>
-            <span class="calls-count">{{ tool.callsCount }} calls</span>
-          </div>
-        </article>
-      </div>
-    </section>
-  </DashboardLayout>
-</template>
 
 <style scoped>
 .stats-grid {

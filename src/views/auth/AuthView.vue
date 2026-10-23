@@ -1,3 +1,128 @@
+<template>
+  <div class="auth-page">
+    <section class="auth-art">
+      <div class="brand">
+        <BrandMark />
+        <span>KAIRO</span>
+      </div>
+      <div class="art-copy">
+        <h1>Make work<br /><em>feel lighter.</em></h1>
+        <p>One calm workspace for questions, safe automations, and workflows that keep moving.</p>
+      </div>
+      <span class="art-foot">SMAgen workspace · Secure by design</span>
+    </section>
+
+    <section class="auth-panel">
+      <form class="auth-form" @submit.prevent="submit">
+        <div class="brand">
+          <BrandMark />
+          <span>KAIRO</span>
+        </div>
+        <h2>{{ isRegister ? 'Create your account' : 'Welcome back' }}</h2>
+        <p class="lead">
+          {{ isRegister ? 'Start building calmer, smarter workflows.' : 'Sign in to continue to your workspace.' }}
+        </p>
+
+        <div v-if="!isRegister" class="auth-tabs">
+          <button
+            class="auth-tab"
+            :class="{ active: accountType === 'DEVELOPER' }"
+            type="button"
+            @click="accountType = 'DEVELOPER'; formError = ''; auth.resetError()"
+          >
+            Developer
+          </button>
+          <button
+            class="auth-tab"
+            :class="{ active: accountType === 'ADMIN' }"
+            type="button"
+            @click="accountType = 'ADMIN'; formError = ''; auth.resetError()"
+          >
+            Admin / Operator
+          </button>
+        </div>
+
+        <div v-if="(formError || auth.authError) && countdownSeconds > 0" class="auth-error countdown-box">
+          <IconClock :size="15" class="countdown-icon" />
+          <span>Too many authentication attempts. Please try again in <strong>{{ formatCountdown(countdownSeconds) }}</strong>.</span>
+        </div>
+        <div v-else-if="formError || auth.authError" class="auth-error">
+          {{ formError || auth.authError }}
+        </div>
+        <div v-if="verificationMessage" class="auth-success">
+          {{ verificationMessage }}
+        </div>
+
+        <template v-if="!registered">
+          <div v-if="isRegister" class="field">
+            <label for="name">Full name</label>
+            <input id="name" v-model="fullName" required autocomplete="name" placeholder="Alex Rivers" />
+          </div>
+
+          <div class="field" :style="{ marginTop: isRegister ? '15px' : '0' }">
+            <label for="email">Email address</label>
+            <input id="email" v-model="email" required type="email" autocomplete="email" placeholder="you@example.com" />
+          </div>
+
+          <div class="field" style="margin-top: 15px">
+            <label for="password">Password</label>
+            <div class="password-input">
+              <input
+                id="password"
+                v-model="password"
+                required
+                :type="showPassword ? 'text' : 'password'"
+                :autocomplete="isRegister ? 'new-password' : 'current-password'"
+                placeholder="••••••••"
+              />
+              <button type="button" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
+                {{ showPassword ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            <small v-if="isRegister" class="password-hint">
+              8+ characters, uppercase, lowercase, number, and special character
+            </small>
+          </div>
+
+          <div v-if="isRegister" class="field" style="margin-top: 15px">
+            <label for="confirm">Confirm password</label>
+            <input
+              id="confirm"
+              v-model="confirmPassword"
+              required
+              type="password"
+              autocomplete="new-password"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button class="auth-submit" type="submit" :disabled="auth.loading || countdownSeconds > 0">
+            {{ auth.loading ? 'Please wait…' : (countdownSeconds > 0 ? `Try again in ${formatCountdown(countdownSeconds)}` : (isRegister ? 'Create account' : 'Sign in')) }}
+          </button>
+        </template>
+
+        <template v-else>
+          <div class="field">
+            <label for="verify-token">Verification token</label>
+            <input id="verify-token" v-model="verificationToken" placeholder="Paste the token from your email" />
+          </div>
+          <div class="form-actions">
+            <button class="secondary-btn" type="button" @click="resend">Resend email</button>
+            <button class="primary-btn" type="button" @click="verify">Verify email</button>
+          </div>
+        </template>
+
+        <p class="auth-switch">
+          {{ isRegister ? 'Already have an account?' : 'New to KAIRO?' }}
+          <RouterLink :to="isRegister ? '/login' : '/register'">
+            {{ isRegister ? 'Sign in' : 'Create an account' }}
+          </RouterLink>
+        </p>
+      </form>
+    </section>
+  </div>
+</template>
+
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -144,131 +269,6 @@ const resend = async () => {
   }
 }
 </script>
-
-<template>
-  <div class="auth-page">
-    <section class="auth-art">
-      <div class="brand">
-        <BrandMark />
-        <span>KAIRO</span>
-      </div>
-      <div class="art-copy">
-        <h1>Make work<br /><em>feel lighter.</em></h1>
-        <p>One calm workspace for questions, safe automations, and workflows that keep moving.</p>
-      </div>
-      <span class="art-foot">SMAgen workspace · Secure by design</span>
-    </section>
-
-    <section class="auth-panel">
-      <form class="auth-form" @submit.prevent="submit">
-        <div class="brand">
-          <BrandMark />
-          <span>KAIRO</span>
-        </div>
-        <h2>{{ isRegister ? 'Create your account' : 'Welcome back' }}</h2>
-        <p class="lead">
-          {{ isRegister ? 'Start building calmer, smarter workflows.' : 'Sign in to continue to your workspace.' }}
-        </p>
-
-        <div v-if="!isRegister" class="auth-tabs">
-          <button
-            class="auth-tab"
-            :class="{ active: accountType === 'DEVELOPER' }"
-            type="button"
-            @click="accountType = 'DEVELOPER'; formError = ''; auth.resetError()"
-          >
-            Developer
-          </button>
-          <button
-            class="auth-tab"
-            :class="{ active: accountType === 'ADMIN' }"
-            type="button"
-            @click="accountType = 'ADMIN'; formError = ''; auth.resetError()"
-          >
-            Admin / Operator
-          </button>
-        </div>
-
-        <div v-if="(formError || auth.authError) && countdownSeconds > 0" class="auth-error countdown-box">
-          <IconClock :size="15" class="countdown-icon" />
-          <span>Too many authentication attempts. Please try again in <strong>{{ formatCountdown(countdownSeconds) }}</strong>.</span>
-        </div>
-        <div v-else-if="formError || auth.authError" class="auth-error">
-          {{ formError || auth.authError }}
-        </div>
-        <div v-if="verificationMessage" class="auth-success">
-          {{ verificationMessage }}
-        </div>
-
-        <template v-if="!registered">
-          <div v-if="isRegister" class="field">
-            <label for="name">Full name</label>
-            <input id="name" v-model="fullName" required autocomplete="name" placeholder="Alex Rivers" />
-          </div>
-
-          <div class="field" :style="{ marginTop: isRegister ? '15px' : '0' }">
-            <label for="email">Email address</label>
-            <input id="email" v-model="email" required type="email" autocomplete="email" placeholder="you@example.com" />
-          </div>
-
-          <div class="field" style="margin-top: 15px">
-            <label for="password">Password</label>
-            <div class="password-input">
-              <input
-                id="password"
-                v-model="password"
-                required
-                :type="showPassword ? 'text' : 'password'"
-                :autocomplete="isRegister ? 'new-password' : 'current-password'"
-                placeholder="••••••••"
-              />
-              <button type="button" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
-                {{ showPassword ? 'Hide' : 'Show' }}
-              </button>
-            </div>
-            <small v-if="isRegister" class="password-hint">
-              8+ characters, uppercase, lowercase, number, and special character
-            </small>
-          </div>
-
-          <div v-if="isRegister" class="field" style="margin-top: 15px">
-            <label for="confirm">Confirm password</label>
-            <input
-              id="confirm"
-              v-model="confirmPassword"
-              required
-              type="password"
-              autocomplete="new-password"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button class="auth-submit" type="submit" :disabled="auth.loading || countdownSeconds > 0">
-            {{ auth.loading ? 'Please wait…' : (countdownSeconds > 0 ? `Try again in ${formatCountdown(countdownSeconds)}` : (isRegister ? 'Create account' : 'Sign in')) }}
-          </button>
-        </template>
-
-        <template v-else>
-          <div class="field">
-            <label for="verify-token">Verification token</label>
-            <input id="verify-token" v-model="verificationToken" placeholder="Paste the token from your email" />
-          </div>
-          <div class="form-actions">
-            <button class="secondary-btn" type="button" @click="resend">Resend email</button>
-            <button class="primary-btn" type="button" @click="verify">Verify email</button>
-          </div>
-        </template>
-
-        <p class="auth-switch">
-          {{ isRegister ? 'Already have an account?' : 'New to KAIRO?' }}
-          <RouterLink :to="isRegister ? '/login' : '/register'">
-            {{ isRegister ? 'Sign in' : 'Create an account' }}
-          </RouterLink>
-        </p>
-      </form>
-    </section>
-  </div>
-</template>
 
 <style scoped>
 .auth-art em {

@@ -1,20 +1,3 @@
-<script setup>
-defineProps({
-  modelValue: { type: [String, Number], default: '' },
-  label: { type: String, default: '' },
-  id: { type: String, default: '' },
-  type: { type: String, default: 'text' },
-  placeholder: { type: String, default: '' },
-  required: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
-  error: { type: String, default: '' },
-  hint: { type: String, default: '' },
-  autocomplete: { type: String, default: 'off' },
-})
-
-defineEmits(['update:modelValue'])
-</script>
-
 <template>
   <div class="base-input-group" :class="{ 'has-error': Boolean(error) }">
     <label v-if="label" :for="id" class="input-label">
@@ -42,6 +25,23 @@ defineEmits(['update:modelValue'])
     <span v-else-if="hint" class="input-hint-msg">{{ hint }}</span>
   </div>
 </template>
+
+<script setup>
+defineProps({
+  modelValue: { type: [String, Number], default: '' },
+  label: { type: String, default: '' },
+  id: { type: String, default: '' },
+  type: { type: String, default: 'text' },
+  placeholder: { type: String, default: '' },
+  required: { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false },
+  error: { type: String, default: '' },
+  hint: { type: String, default: '' },
+  autocomplete: { type: String, default: 'off' },
+})
+
+defineEmits(['update:modelValue'])
+</script>
 
 <style scoped>
 .base-input-group {

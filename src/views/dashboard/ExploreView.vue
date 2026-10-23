@@ -1,9 +1,3 @@
-<script setup>
-import { RouterLink } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconSparkles, IconArrowRight, IconPlayerPlay, IconShieldCheck } from '@tabler/icons-vue'
-</script>
-
 <template>
   <DashboardLayout>
     <section class="section-page">
@@ -57,6 +51,12 @@ import { IconSparkles, IconArrowRight, IconPlayerPlay, IconShieldCheck } from '@
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { RouterLink } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconSparkles, IconArrowRight, IconPlayerPlay, IconShieldCheck } from '@tabler/icons-vue'
+</script>
 
 <style scoped>
 .explore-banner {

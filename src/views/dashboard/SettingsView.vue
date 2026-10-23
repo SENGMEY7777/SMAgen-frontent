@@ -1,47 +1,3 @@
-<script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconShieldCheck, IconLogout } from '@tabler/icons-vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import { api, apiBaseUrl, ApiError } from '@/services/api'
-import { useAuthStore } from '@/stores/auth'
-
-const auth = useAuthStore()
-const router = useRouter()
-const apiKey = ref('')
-const loading = ref(false)
-const message = ref('')
-const errorMessage = ref('')
-
-const createKey = async () => {
-  loading.value = true
-  message.value = ''
-  errorMessage.value = ''
-  try {
-    const response = auth.isPrivileged ? await api.createAdminApiKey() : await api.createDeveloperApiKey()
-    apiKey.value = response?.data?.apiKey || ''
-    message.value = 'Store this key now. It will not be shown again.'
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to create an API key.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const copyKey = async () => {
-  if (apiKey.value) {
-    await navigator.clipboard?.writeText(apiKey.value)
-    message.value = 'API key copied to clipboard.'
-  }
-}
-
-const logout = async () => {
-  await auth.logout()
-  router.push('/login')
-}
-</script>
-
 <template>
   <DashboardLayout>
     <section class="section-page">
@@ -97,6 +53,50 @@ const logout = async () => {
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconShieldCheck, IconLogout } from '@tabler/icons-vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, apiBaseUrl, ApiError } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+const router = useRouter()
+const apiKey = ref('')
+const loading = ref(false)
+const message = ref('')
+const errorMessage = ref('')
+
+const createKey = async () => {
+  loading.value = true
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    const response = auth.isPrivileged ? await api.createAdminApiKey() : await api.createDeveloperApiKey()
+    apiKey.value = response?.data?.apiKey || ''
+    message.value = 'Store this key now. It will not be shown again.'
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to create an API key.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const copyKey = async () => {
+  if (apiKey.value) {
+    await navigator.clipboard?.writeText(apiKey.value)
+    message.value = 'API key copied to clipboard.'
+  }
+}
+
+const logout = async () => {
+  await auth.logout()
+  router.push('/login')
+}
+</script>
 
 <style scoped>
 .settings-grid {

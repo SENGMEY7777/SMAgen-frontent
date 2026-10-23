@@ -1,63 +1,3 @@
-<script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock, IconGitFork, IconPlayerPlay, IconArrowRight } from '@tabler/icons-vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import { api, ApiError } from '@/services/api'
-import { formatDate, formatTokens } from '@/utils/formatters'
-
-const router = useRouter()
-const runs = ref([])
-const workflows = ref([])
-const loading = ref(true)
-const launching = ref(false)
-const errorMessage = ref('')
-const goalPrompt = ref('')
-
-const activeRuns = computed(() => {
-  return runs.value.filter((r) => ['RUNNING', 'PENDING', 'AWAITING_APPROVAL'].includes(r.status))
-})
-
-const completedRuns = computed(() => {
-  return runs.value.filter((r) => ['COMPLETED', 'FAILED'].includes(r.status))
-})
-
-const load = async () => {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const [runsRes, workflowsRes] = await Promise.all([
-      api.listRuns().catch(() => ({ data: [] })),
-      api.listWorkflows().catch(() => ({ data: [] })),
-    ])
-    runs.value = runsRes?.data || []
-    workflows.value = workflowsRes?.data || []
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load workflows.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const startDagWorkflow = async () => {
-  if (!goalPrompt.value.trim() || launching.value) return
-  launching.value = true
-  errorMessage.value = ''
-  try {
-    const response = await api.runWorkflow({ goalPrompt: goalPrompt.value.trim() })
-    const runId = response?.data?.runId
-    if (runId) router.push(`/runs/${runId}`)
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to launch DAG workflow.'
-  } finally {
-    launching.value = false
-  }
-}
-
-onMounted(load)
-</script>
-
 <template>
   <DashboardLayout :recent-items="runs">
     <section class="section-page">
@@ -167,6 +107,66 @@ onMounted(load)
     </section>
   </DashboardLayout>
 </template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconClock, IconGitFork, IconPlayerPlay, IconArrowRight } from '@tabler/icons-vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { api, ApiError } from '@/services/api'
+import { formatDate, formatTokens } from '@/utils/formatters'
+
+const router = useRouter()
+const runs = ref([])
+const workflows = ref([])
+const loading = ref(true)
+const launching = ref(false)
+const errorMessage = ref('')
+const goalPrompt = ref('')
+
+const activeRuns = computed(() => {
+  return runs.value.filter((r) => ['RUNNING', 'PENDING', 'AWAITING_APPROVAL'].includes(r.status))
+})
+
+const completedRuns = computed(() => {
+  return runs.value.filter((r) => ['COMPLETED', 'FAILED'].includes(r.status))
+})
+
+const load = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const [runsRes, workflowsRes] = await Promise.all([
+      api.listRuns().catch(() => ({ data: [] })),
+      api.listWorkflows().catch(() => ({ data: [] })),
+    ])
+    runs.value = runsRes?.data || []
+    workflows.value = workflowsRes?.data || []
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load workflows.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const startDagWorkflow = async () => {
+  if (!goalPrompt.value.trim() || launching.value) return
+  launching.value = true
+  errorMessage.value = ''
+  try {
+    const response = await api.runWorkflow({ goalPrompt: goalPrompt.value.trim() })
+    const runId = response?.data?.runId
+    if (runId) router.push(`/runs/${runId}`)
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to launch DAG workflow.'
+  } finally {
+    launching.value = false
+  }
+}
+
+onMounted(load)
+</script>
 
 <style scoped>
 .dag-builder-card {

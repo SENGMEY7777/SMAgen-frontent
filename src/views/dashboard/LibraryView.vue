@@ -1,64 +1,3 @@
-<script setup>
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconPlus, IconX, IconPlayerPlay } from '@tabler/icons-vue'
-import { api, ApiError } from '@/services/api'
-import { formatDateShort } from '@/utils/formatters'
-
-const router = useRouter()
-const workflows = ref([])
-const showCreate = ref(false)
-const loading = ref(false)
-const errorMessage = ref('')
-const form = ref({ title: '', description: '', systemPrompt: '' })
-const runTarget = ref(null)
-const runGoal = ref('')
-
-const load = async () => {
-  try {
-    const response = await api.listWorkflows()
-    workflows.value = response?.data || []
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load workflows.'
-  }
-}
-
-const createWorkflow = async () => {
-  errorMessage.value = ''
-  loading.value = true
-  try {
-    await api.createWorkflow({ ...form.value, isPublic: false })
-    form.value = { title: '', description: '', systemPrompt: '' }
-    showCreate.value = false
-    await load()
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to create workflow.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const runWorkflow = async () => {
-  if (!runGoal.value.trim() || !runTarget.value) return
-  errorMessage.value = ''
-  loading.value = true
-  try {
-    const response = await api.runWorkflow({
-      workflowId: runTarget.value.id,
-      goalPrompt: runGoal.value.trim(),
-    })
-    if (response?.data?.runId) router.push(`/runs/${response.data.runId}`)
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to start workflow.'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
-</script>
-
 <template>
   <DashboardLayout>
     <section class="section-page">
@@ -141,10 +80,70 @@ onMounted(load)
   </DashboardLayout>
 </template>
 
+<script setup>
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import { IconPlus, IconX, IconPlayerPlay } from '@tabler/icons-vue'
+import { api, ApiError } from '@/services/api'
+import { formatDateShort } from '@/utils/formatters'
+
+const router = useRouter()
+const workflows = ref([])
+const showCreate = ref(false)
+const loading = ref(false)
+const errorMessage = ref('')
+const form = ref({ title: '', description: '', systemPrompt: '' })
+const runTarget = ref(null)
+const runGoal = ref('')
+
+const load = async () => {
+  try {
+    const response = await api.listWorkflows()
+    workflows.value = response?.data || []
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load workflows.'
+  }
+}
+
+const createWorkflow = async () => {
+  errorMessage.value = ''
+  loading.value = true
+  try {
+    await api.createWorkflow({ ...form.value, isPublic: false })
+    form.value = { title: '', description: '', systemPrompt: '' }
+    showCreate.value = false
+    await load()
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to create workflow.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const runWorkflow = async () => {
+  if (!runGoal.value.trim() || !runTarget.value) return
+  errorMessage.value = ''
+  loading.value = true
+  try {
+    const response = await api.runWorkflow({
+      workflowId: runTarget.value.id,
+      goalPrompt: runGoal.value.trim(),
+    })
+    if (response?.data?.runId) router.push(`/runs/${response.data.runId}`)
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to start workflow.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+</script>
+
 <style scoped>
 .create-form { margin-bottom: 18px; }
 .run-launcher { width: min(700px, 100%); margin-top: 18px; }
 .run-launcher h2 { margin: 3px 0 5px; font-size: 20px; letter-spacing: -0.035em; }
 .run-launcher p { margin: 0 0 18px; color: #9296a0; font-size: 13px; }
 </style>
-

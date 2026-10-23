@@ -1,179 +1,3 @@
-<script setup>
-import { computed, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import {
-  IconSearch,
-  IconHome,
-  IconMessageCircle2,
-  IconGitFork,
-  IconFolder,
-  IconShieldCheck,
-  IconChartBar,
-  IconTool,
-  IconBook,
-  IconDotsVertical,
-  IconPin,
-  IconPencil,
-  IconStack2,
-  IconChevronRight,
-  IconTrash,
-  IconSettings,
-  IconMenu2,
-  IconSparkles,
-  IconChevronDown,
-  IconPlus,
-} from '@tabler/icons-vue'
-import BrandMark from '@/components/branding/BrandMark.vue'
-import { useAuthStore } from '@/stores/auth'
-import { useChatStore } from '@/stores/chat'
-
-import { api } from '@/services/api'
-
-const props = defineProps({
-  recentItems: { type: Array, default: () => [] },
-})
-
-const router = useRouter()
-const route = useRoute()
-const auth = useAuthStore()
-const chatStore = useChatStore()
-const mobileOpen = ref(false)
-const pendingApprovalsCount = ref(0)
-
-const fetchApprovalsCount = async () => {
-  if (auth.isPrivileged) {
-    try {
-      const res = await api.listApprovals().catch(() => ({ data: [] }))
-      pendingApprovalsCount.value = (res?.data || []).length
-    } catch {
-      pendingApprovalsCount.value = 0
-    }
-  }
-}
-
-fetchApprovalsCount()
-
-const closeMenu = () => {
-  mobileOpen.value = false
-}
-
-const newChat = () => {
-  chatStore.startNewChat()
-  closeMenu()
-  if (route.path !== '/') {
-    router.push('/')
-  }
-}
-
-const selectChat = (sessionId) => {
-  chatStore.selectSession(sessionId)
-  closeMenu()
-  if (route.path !== '/') {
-    router.push('/')
-  }
-}
-
-const activeMenuId = ref(null)
-const renamingId = ref(null)
-const renameDraft = ref('')
-
-const toggleMenu = (id, event) => {
-  event?.stopPropagation()
-  activeMenuId.value = activeMenuId.value === id ? null : id
-}
-
-const closeAllMenus = () => {
-  activeMenuId.value = null
-}
-
-const handlePin = (item) => {
-  if (item.type === 'chat') {
-    chatStore.togglePinSession(item.id)
-  }
-  closeAllMenus()
-}
-
-const startRename = (item) => {
-  renamingId.value = item.id
-  renameDraft.value = item.title
-  closeAllMenus()
-}
-
-const saveRename = (item) => {
-  if (renamingId.value === item.id && renameDraft.value.trim()) {
-    if (item.type === 'chat') {
-      chatStore.renameSession(item.id, renameDraft.value.trim())
-    }
-  }
-  renamingId.value = null
-  renameDraft.value = ''
-}
-
-const cancelRename = () => {
-  renamingId.value = null
-  renameDraft.value = ''
-}
-
-const handleAddToProject = (item) => {
-  closeAllMenus()
-}
-
-const handleMoveToGroup = (item) => {
-  closeAllMenus()
-}
-
-const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
-
-const handleDelete = (item) => {
-  if (item.type === 'chat') {
-    const isCurrentActive = chatStore.activeSessionId === item.id
-    chatStore.deleteSession(item.id)
-    if (isCurrentActive) {
-      chatStore.startNewChat()
-      if (route.path !== '/') router.push('/')
-    }
-  } else if (item.type === 'workflow') {
-    hiddenWorkflowIds.value.push(item.id)
-    try {
-      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
-    } catch {}
-  }
-  closeAllMenus()
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('click', closeAllMenus)
-}
-
-const combinedRecentItems = computed(() => {
-  const chatItems = chatStore.sessions.map((s) => ({
-    id: s.id,
-    title: s.title,
-    type: 'chat',
-    pinned: Boolean(s.pinned),
-    updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
-  }))
-
-  const workflowItems = props.recentItems
-    .filter((r) => !hiddenWorkflowIds.value.includes(r.id))
-    .map((r) => ({
-      id: r.id,
-      title: r.goal_prompt || r.title || 'Workflow run',
-      type: 'workflow',
-      pinned: false,
-      updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
-    }))
-
-  const merged = [...chatItems, ...workflowItems]
-  merged.sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1
-    if (!a.pinned && b.pinned) return 1
-    return b.updatedAt - a.updatedAt
-  })
-  return merged
-})
-</script>
-
 <template>
   <div class="app-shell">
     <aside class="sidebar" :class="{ open: mobileOpen }">
@@ -385,6 +209,182 @@ const combinedRecentItems = computed(() => {
     </section>
   </div>
 </template>
+
+<script setup>
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import {
+  IconSearch,
+  IconHome,
+  IconMessageCircle2,
+  IconGitFork,
+  IconFolder,
+  IconShieldCheck,
+  IconChartBar,
+  IconTool,
+  IconBook,
+  IconDotsVertical,
+  IconPin,
+  IconPencil,
+  IconStack2,
+  IconChevronRight,
+  IconTrash,
+  IconSettings,
+  IconMenu2,
+  IconSparkles,
+  IconChevronDown,
+  IconPlus,
+} from '@tabler/icons-vue'
+import BrandMark from '@/components/branding/BrandMark.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
+
+import { api } from '@/services/api'
+
+const props = defineProps({
+  recentItems: { type: Array, default: () => [] },
+})
+
+const router = useRouter()
+const route = useRoute()
+const auth = useAuthStore()
+const chatStore = useChatStore()
+const mobileOpen = ref(false)
+const pendingApprovalsCount = ref(0)
+
+const fetchApprovalsCount = async () => {
+  if (auth.isPrivileged) {
+    try {
+      const res = await api.listApprovals().catch(() => ({ data: [] }))
+      pendingApprovalsCount.value = (res?.data || []).length
+    } catch {
+      pendingApprovalsCount.value = 0
+    }
+  }
+}
+
+fetchApprovalsCount()
+
+const closeMenu = () => {
+  mobileOpen.value = false
+}
+
+const newChat = () => {
+  chatStore.startNewChat()
+  closeMenu()
+  if (route.path !== '/') {
+    router.push('/')
+  }
+}
+
+const selectChat = (sessionId) => {
+  chatStore.selectSession(sessionId)
+  closeMenu()
+  if (route.path !== '/') {
+    router.push('/')
+  }
+}
+
+const activeMenuId = ref(null)
+const renamingId = ref(null)
+const renameDraft = ref('')
+
+const toggleMenu = (id, event) => {
+  event?.stopPropagation()
+  activeMenuId.value = activeMenuId.value === id ? null : id
+}
+
+const closeAllMenus = () => {
+  activeMenuId.value = null
+}
+
+const handlePin = (item) => {
+  if (item.type === 'chat') {
+    chatStore.togglePinSession(item.id)
+  }
+  closeAllMenus()
+}
+
+const startRename = (item) => {
+  renamingId.value = item.id
+  renameDraft.value = item.title
+  closeAllMenus()
+}
+
+const saveRename = (item) => {
+  if (renamingId.value === item.id && renameDraft.value.trim()) {
+    if (item.type === 'chat') {
+      chatStore.renameSession(item.id, renameDraft.value.trim())
+    }
+  }
+  renamingId.value = null
+  renameDraft.value = ''
+}
+
+const cancelRename = () => {
+  renamingId.value = null
+  renameDraft.value = ''
+}
+
+const handleAddToProject = (item) => {
+  closeAllMenus()
+}
+
+const handleMoveToGroup = (item) => {
+  closeAllMenus()
+}
+
+const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
+
+const handleDelete = (item) => {
+  if (item.type === 'chat') {
+    const isCurrentActive = chatStore.activeSessionId === item.id
+    chatStore.deleteSession(item.id)
+    if (isCurrentActive) {
+      chatStore.startNewChat()
+      if (route.path !== '/') router.push('/')
+    }
+  } else if (item.type === 'workflow') {
+    hiddenWorkflowIds.value.push(item.id)
+    try {
+      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
+    } catch {}
+  }
+  closeAllMenus()
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', closeAllMenus)
+}
+
+const combinedRecentItems = computed(() => {
+  const chatItems = chatStore.sessions.map((s) => ({
+    id: s.id,
+    title: s.title,
+    type: 'chat',
+    pinned: Boolean(s.pinned),
+    updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
+  }))
+
+  const workflowItems = props.recentItems
+    .filter((r) => !hiddenWorkflowIds.value.includes(r.id))
+    .map((r) => ({
+      id: r.id,
+      title: r.goal_prompt || r.title || 'Workflow run',
+      type: 'workflow',
+      pinned: false,
+      updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
+    }))
+
+  const merged = [...chatItems, ...workflowItems]
+  merged.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1
+    if (!a.pinned && b.pinned) return 1
+    return b.updatedAt - a.updatedAt
+  })
+  return merged
+})
+</script>
 
 <style scoped>
 .sidebar-header {
