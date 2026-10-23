@@ -330,5 +330,7 @@ onMounted(loadData)
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
+  font-size: 15px;
+  font-weight: 500;
 }
 </style>
