@@ -26,8 +26,12 @@ export function highlightCode(rawCode, rawLang = '') {
     }
 
     const tokens = []
+    // Use private-use characters for placeholders so later highlighting rules
+    // cannot mistake a protected token for source code (for example, a
+    // function named `___TK0___`).
+    const tokenMarker = (index) => `\uE000${String.fromCharCode(0xE100 + index)}\uE001`
     const addToken = (html) => {
-      const id = `___TK${tokens.length}___`
+      const id = tokenMarker(tokens.length)
       tokens.push(html)
       return id
     }
@@ -109,7 +113,7 @@ export function highlightCode(rawCode, rawLang = '') {
 
     // Restore original highlighted tokens
     tokens.forEach((tokenHtml, idx) => {
-      const id = `___TK${idx}___`
+      const id = tokenMarker(idx)
       result = result.split(id).join(tokenHtml)
     })
 
