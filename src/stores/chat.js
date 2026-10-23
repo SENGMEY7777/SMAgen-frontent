@@ -47,7 +47,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  const addMessage = ({ role, content, images = [], files = [] }) => {
+  const addMessage = ({ role, content, images = [], files = [], ...rest }) => {
     const timestamp = new Date().toISOString()
 
     if (!activeSessionId.value) {
@@ -57,7 +57,7 @@ export const useChatStore = defineStore('chat', () => {
         id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         title,
         type: 'chat',
-        messages: [{ role, content, images, files, createdAt: timestamp }],
+        messages: [{ role, content, images, files, ...rest, createdAt: timestamp }],
         createdAt: timestamp,
         updatedAt: timestamp,
       }
@@ -68,7 +68,7 @@ export const useChatStore = defineStore('chat', () => {
 
     const session = sessions.value.find((s) => s.id === activeSessionId.value)
     if (session) {
-      session.messages.push({ role, content, images, files, createdAt: timestamp })
+      session.messages.push({ role, content, images, files, ...rest, createdAt: timestamp })
       session.updatedAt = timestamp
       // Reorder to top
       const idx = sessions.value.indexOf(session)
