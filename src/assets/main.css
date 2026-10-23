@@ -354,6 +354,30 @@
   overflow: hidden;
 }
 
+/* Allow section pages (Dashboard, Approvals, History, etc.) to scroll vertically */
+.page-content .section-page {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.page-content .section-page::-webkit-scrollbar {
+  width: 5px;
+}
+
+.page-content .section-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page-content .section-page::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 999px;
+}
+
+.page-content .section-page::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
 /* Dashboard Page & Chat Interface */
 .dashboard-page {
   display: flex;

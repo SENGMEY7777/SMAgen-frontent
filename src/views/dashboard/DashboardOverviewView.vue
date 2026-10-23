@@ -170,9 +170,9 @@ onMounted(loadData)
         No active tasks yet. Start a chat or workflow to begin execution.
       </div>
       <div v-else class="data-list">
-        <article v-for="run in runs.slice(0, 5)" :key="run.id" class="data-row">
+        <article v-for="run in runs" :key="run.id" class="data-row">
           <div class="row-main">
-            <div class="row-title">{{ run.goal_prompt }}</div>
+            <div class="row-title" :title="run.goal_prompt">{{ run.goal_prompt }}</div>
             <div class="row-meta">
               {{ formatDate(run.created_at) }} · {{ formatTokens(run.total_tokens) }} tokens · {{ formatCost(run.estimated_cost_usd) }}
             </div>
@@ -312,4 +312,5 @@ onMounted(loadData)
   padding: 6px 12px;
   font-size: 12px;
 }
+
 </style>
