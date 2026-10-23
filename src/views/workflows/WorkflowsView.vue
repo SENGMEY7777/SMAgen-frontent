@@ -118,16 +118,16 @@ onMounted(load)
 
       <!-- Active DAG Tasks -->
       <div class="section-subhead">
-        <h2>In-Flight & Pending DAGs ({{ activeRuns.length }})</h2>
+        <h2>In-Flight &amp; Pending DAGs ({{ activeRuns.length }})</h2>
       </div>
       <div v-if="loading" class="empty-state">Loading autonomous workflows…</div>
       <div v-else-if="!activeRuns.length" class="empty-state">
         No workflows are currently executing. Use the builder above to trigger a new DAG.
       </div>
       <div v-else class="data-list">
-        <article v-for="run in activeRuns" :key="run.id" class="data-row">
+        <article v-for="run in activeRuns.slice(0, 10)" :key="run.id" class="data-row">
           <div class="row-main">
-            <div class="row-title">{{ run.goal_prompt }}</div>
+            <div class="row-title" :title="run.goal_prompt">{{ run.goal_prompt }}</div>
             <div class="row-meta">
               {{ formatDate(run.created_at) }} · {{ formatTokens(run.total_tokens) }} tokens
             </div>
@@ -151,7 +151,7 @@ onMounted(load)
       <div v-else-if="completedRuns.length" class="data-list">
         <article v-for="run in completedRuns.slice(0, 10)" :key="run.id" class="data-row">
           <div class="row-main">
-            <div class="row-title">{{ run.goal_prompt }}</div>
+            <div class="row-title" :title="run.goal_prompt">{{ run.goal_prompt }}</div>
             <div class="row-meta">
               {{ formatDate(run.created_at) }} · {{ formatTokens(run.total_tokens) }} tokens
             </div>
@@ -247,5 +247,24 @@ onMounted(load)
 .secondary-btn.sm {
   padding: 6px 12px;
   font-size: 12px;
+}
+
+.data-row {
+  min-width: 0;
+  width: 100%;
+}
+
+.row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.row-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 </style>
