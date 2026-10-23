@@ -36,18 +36,12 @@
               <div v-if="message.role === 'assistant'" class="assistant-response-wrap">
                 <!-- Inline Workflow Execution Card if message is a workflow -->
                 <div v-if="message.workflow" class="chat-workflow-card">
-                  <!-- Prominent Top Input Goal Banner -->
-                  <div class="workflow-top-goal-section">
-                    <div class="workflow-goal-header">
-                      <div class="goal-tag">
-                        <IconBulb :size="13" />
-                        <span>Input Goal</span>
-                      </div>
-                      <StatusPill :status="message.workflow.status" />
+                  <div class="workflow-card-head">
+                    <div class="workflow-title-wrap">
+                      <IconGitFork :size="16" class="workflow-icon" />
+                      <span class="workflow-goal" :title="message.workflow.goalPrompt">{{ message.workflow.goalPrompt }}</span>
                     </div>
-                    <div class="workflow-goal-text">
-                      {{ message.workflow.goalPrompt || message.content || 'Autonomous DAG Workflow' }}
-                    </div>
+                    <StatusPill :status="message.workflow.status" />
                   </div>
 
                   <!-- Workflow Tasks Progress Nodes -->
@@ -1709,43 +1703,5 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-
-/* Prominent Top Input Goal Banner */
-.workflow-top-goal-section {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
-}
-
-.workflow-goal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.goal-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #7c3aed;
-  background: #f3e8ff;
-  padding: 3px 9px;
-  border-radius: 999px;
-}
-
-.workflow-goal-text {
-  font-size: 14px;
-  font-weight: 650;
-  color: #0f172a;
-  line-height: 1.45;
-  word-break: break-word;
-}
 
 </style>
