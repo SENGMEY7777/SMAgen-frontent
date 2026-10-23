@@ -36,12 +36,18 @@
               <div v-if="message.role === 'assistant'" class="assistant-response-wrap">
                 <!-- Inline Workflow Execution Card if message is a workflow -->
                 <div v-if="message.workflow" class="chat-workflow-card">
-                  <div class="workflow-card-head">
-                    <div class="workflow-title-wrap">
-                      <IconGitFork :size="16" class="workflow-icon" />
-                      <span class="workflow-goal" :title="message.workflow.goalPrompt">{{ message.workflow.goalPrompt }}</span>
+                  <!-- Prominent Top Input Goal Banner -->
+                  <div class="workflow-top-goal-section">
+                    <div class="workflow-goal-header">
+                      <div class="goal-tag">
+                        <IconBulb :size="13" />
+                        <span>Input Goal</span>
+                      </div>
+                      <StatusPill :status="message.workflow.status" />
                     </div>
-                    <StatusPill :status="message.workflow.status" />
+                    <div class="workflow-goal-text">
+                      {{ message.workflow.goalPrompt || message.content || 'Autonomous DAG Workflow' }}
+                    </div>
                   </div>
 
                   <!-- Workflow Tasks Progress Nodes -->
@@ -62,7 +68,7 @@
                   <div v-if="message.workflow.approval" class="permission-prompt-card">
                     <div class="prompt-header">
                       <IconFileText :size="16" class="prompt-icon" />
-                      <span class="prompt-title">Allow read access to this path?</span>
+                      <span class="prompt-title">{{ message.workflow.approval.promptTitle || "Allow read access to this path?" }}</span>
                     </div>
 
                     <div class="prompt-target-box">
@@ -915,6 +921,9 @@ const startWorkflowTracker = (workflowObj) => {
       if (!data) return
 
       workflowObj.status = data.status
+      if (data.goal_prompt && (!workflowObj.goalPrompt || workflowObj.goalPrompt === 'workflow')) {
+        workflowObj.goalPrompt = data.goal_prompt
+      }
       workflowObj.tasks = data.tasks || []
 
       const awaitingTask = workflowObj.tasks.find((t) => t.status === 'AWAITING_APPROVAL')
@@ -932,17 +941,39 @@ const startWorkflowTracker = (workflowObj) => {
           if (toolInput) {
             try {
               const parsed = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput
-              targetPath = parsed.path || parsed.command || parsed.file || parsed.url || JSON.stringify(parsed)
+              if (parsed.path) {
+                targetPath = parsed.action ? `${parsed.action}: ${parsed.path}` : parsed.path
+              } else if (parsed.command) {
+                targetPath = parsed.command
+              } else if (parsed.file) {
+                targetPath = parsed.file
+              } else if (parsed.url) {
+                targetPath = parsed.url
+              } else if (typeof parsed === 'object') {
+                targetPath = parsed.instruction || parsed.target || JSON.stringify(parsed)
+              }
             } catch {
               targetPath = String(toolInput)
             }
           }
 
+          if (!targetPath || targetPath === 'workflow') {
+            targetPath = awaitingTask?.instruction || awaitingTask?.title || 'Execution Checkpoint'
+          }
+
+          const actionTool = awaitingTask?.assigned_tool || 'systemExecutor'
+          const promptTitle = actionTool === 'executeCommand'
+            ? 'Allow command execution?'
+            : (actionTool === 'fileManager'
+                ? 'Allow file & directory access?'
+                : 'Allow permission for this action?')
+
           workflowObj.approval = {
             id: approvalId || `task-${awaitingTask?.id || 'pending'}`,
-            path: targetPath || awaitingTask?.instruction || '/Users/user/Documents/Project/SMAgen',
+            path: targetPath,
             title: awaitingTask?.title || 'Security Permission Checkpoint',
-            action: awaitingTask?.assigned_tool || 'systemExecutor',
+            action: actionTool,
+            promptTitle,
           }
           if (!workflowObj.selectedOption) workflowObj.selectedOption = 3
           scrollToBottom()
@@ -1676,6 +1707,45 @@ onUnmounted(() => {
 
 .view-canvas-link:hover {
   text-decoration: underline;
+}
+
+
+/* Prominent Top Input Goal Banner */
+.workflow-top-goal-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.workflow-goal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.goal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7c3aed;
+  background: #f3e8ff;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.workflow-goal-text {
+  font-size: 14px;
+  font-weight: 650;
+  color: #0f172a;
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 </style>
