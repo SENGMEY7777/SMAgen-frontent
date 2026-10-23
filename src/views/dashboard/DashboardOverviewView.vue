@@ -122,7 +122,7 @@ onMounted(loadData)
             <h3>AI Chat & Agent</h3>
             <p>Start a conversational session with code artifacts and real-time reasoning.</p>
           </div>
-          <RouterLink to="/" class="primary-btn sm">Open Chat</RouterLink>
+          <RouterLink to="/" class="secondary-btn sm">Open Chat</RouterLink>
         </article>
 
         <article class="soft-card module-card">
