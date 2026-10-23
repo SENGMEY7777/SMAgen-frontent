@@ -4,7 +4,7 @@
       <div class="section-head">
         <div>
           <div class="eyebrow">Workspace Sandboxes</div>
-          <h1>Artifacts & Sandboxes</h1>
+          <h1>Artifacts &amp; Sandboxes</h1>
           <p>Inspect files, code modules, and structured reports generated in the workspace environment.</p>
         </div>
         <button class="secondary-btn" type="button" @click="load">
@@ -38,7 +38,7 @@
             >
               <IconFileText :size="14" />
               <div class="file-info">
-                <span class="file-name">{{ file.fileName }}</span>
+                <span class="file-name" :title="file.fileName">{{ file.fileName }}</span>
                 <small class="file-meta">{{ file.taskTitle }} · {{ formatDate(file.createdAt) }}</small>
               </div>
             </button>
@@ -49,10 +49,14 @@
         <div class="soft-card file-viewer-card">
           <div v-if="selectedFile" class="viewer-content">
             <div class="viewer-header">
-              <div>
+              <div class="viewer-meta-info">
                 <h2>{{ selectedFile.fileName }}</h2>
-                <p>Task: {{ selectedFile.taskTitle }} · Run: {{ selectedFile.runId }}</p>
+                <p>Task: {{ selectedFile.taskTitle }} · Tool: {{ selectedFile.tool }}</p>
               </div>
+              <button class="secondary-btn sm" type="button" @click="copyCode">
+                <component :is="copied ? IconCheck : IconCopy" :size="13" />
+                <span>{{ copied ? 'Copied' : 'Copy Code' }}</span>
+              </button>
             </div>
             <pre class="code-preview"><code>{{ selectedFile.content }}</code></pre>
           </div>
@@ -66,7 +70,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock, IconFolder, IconFileText } from '@tabler/icons-vue'
+import { IconClock, IconFolder, IconFileText, IconCopy, IconCheck } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate } from '@/utils/formatters'
 
@@ -74,31 +78,93 @@ const runs = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
 const selectedFile = ref(null)
+const copied = ref(false)
+
+const copyCode = async () => {
+  if (!selectedFile.value?.content) return
+  try {
+    await navigator.clipboard.writeText(selectedFile.value.content)
+    copied.value = true
+    setTimeout(() => {
+      copied.value = false
+    }, 2000)
+  } catch {}
+}
+
+const parsePayload = (val) => {
+  if (!val) return null
+  if (typeof val === 'object') return val
+  try {
+    return JSON.parse(val)
+  } catch {
+    return null
+  }
+}
 
 const generatedArtifacts = computed(() => {
   const list = []
+  const seenIds = new Set()
+
   runs.value.forEach((run) => {
-    if (run.tasks && Array.isArray(run.tasks)) {
-      run.tasks.forEach((task) => {
-        if (task.output_payload) {
-          try {
-            const parsed = typeof task.output_payload === 'string' ? JSON.parse(task.output_payload) : task.output_payload
-            if (parsed && (parsed.file || parsed.path || parsed.output || parsed.code || parsed.report)) {
-              list.push({
-                id: `${run.id}_${task.id}`,
-                runId: run.id,
-                taskTitle: task.title,
-                fileName: parsed.file || parsed.path || `${task.assigned_tool}_output.txt`,
-                content: parsed.code || parsed.output || parsed.report || JSON.stringify(parsed, null, 2),
-                type: parsed.file?.endsWith('.js') || parsed.path?.endsWith('.js') ? 'javascript' : (parsed.file?.endsWith('.json') ? 'json' : 'text'),
-                createdAt: task.completed_at || run.created_at,
-              })
-            }
-          } catch {}
+    const tasks = run.tasks && Array.isArray(run.tasks) ? run.tasks : []
+    tasks.forEach((task) => {
+      const outObj = parsePayload(task.output_payload)
+      const inObj = parsePayload(task.tool_input)
+
+      // Identify file name / path
+      let rawPath =
+        outObj?.file ||
+        outObj?.fileName ||
+        outObj?.path ||
+        inObj?.path ||
+        inObj?.file ||
+        inObj?.fileName
+
+      if (!rawPath && task.assigned_tool === 'fileManager') {
+        rawPath = inObj?.action ? `task_${task.id || 'artifact'}.txt` : null
+      }
+
+      // Identify content / code
+      let content =
+        outObj?.code ||
+        outObj?.content ||
+        outObj?.report ||
+        outObj?.output ||
+        outObj?.stdout ||
+        inObj?.content ||
+        inObj?.code
+
+      // Fallback if output_payload is string
+      if (!content && task.output_payload) {
+        if (typeof task.output_payload === 'string') {
+          content = task.output_payload
+        } else if (outObj) {
+          content = JSON.stringify(outObj, null, 2)
         }
-      })
-    }
+      }
+
+      // If we have content or path, format as artifact
+      if ((rawPath || content) && content && typeof content === 'string' && content.trim()) {
+        const cleanName = rawPath ? String(rawPath).split('/').pop() : `${task.assigned_tool || 'task'}_output.txt`
+        const artifactId = `${run.id}_${task.id || Math.random().toString(36).slice(2)}`
+
+        if (!seenIds.has(artifactId)) {
+          seenIds.add(artifactId)
+          list.push({
+            id: artifactId,
+            runId: run.id,
+            taskTitle: task.title || task.instruction || 'Execution Output',
+            fileName: cleanName,
+            fullPath: rawPath || cleanName,
+            content: content,
+            tool: task.assigned_tool || 'systemExecutor',
+            createdAt: task.completed_at || task.created_at || run.created_at,
+          })
+        }
+      }
+    })
   })
+
   return list
 })
 
@@ -107,9 +173,25 @@ const load = async () => {
   errorMessage.value = ''
   try {
     const res = await api.listRuns()
-    runs.value = res?.data || []
+    const rawRuns = res?.data || []
+
+    // Fetch full run details with tasks for recent runs in parallel (up to 20 runs)
+    const detailedRuns = await Promise.all(
+      rawRuns.slice(0, 20).map(async (runItem) => {
+        try {
+          const detailRes = await api.getRun(runItem.id)
+          return detailRes?.data || runItem
+        } catch {
+          return runItem
+        }
+      })
+    )
+
+    runs.value = detailedRuns
     if (generatedArtifacts.value.length) {
       selectedFile.value = generatedArtifacts.value[0]
+    } else {
+      selectedFile.value = null
     }
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load sandbox artifacts.'
@@ -164,6 +246,7 @@ onMounted(load)
   cursor: pointer;
   text-align: left;
   transition: background 0.12s ease;
+  width: 100%;
 }
 
 .file-row:hover {
@@ -179,6 +262,7 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .file-name {
@@ -198,6 +282,9 @@ onMounted(load)
   font-size: 11px;
   color: #9ca3af;
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-viewer-card {
@@ -206,9 +293,17 @@ onMounted(load)
 }
 
 .viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   padding-bottom: 14px;
   border-bottom: 1px solid #e5e7eb;
   margin-bottom: 16px;
+}
+
+.viewer-meta-info {
+  min-width: 0;
 }
 
 .viewer-header h2 {
@@ -216,6 +311,9 @@ onMounted(load)
   font-weight: 700;
   margin: 0 0 3px;
   color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .viewer-header p {
@@ -234,7 +332,9 @@ onMounted(load)
   font-size: 12.5px;
   line-height: 1.5;
   overflow-x: auto;
-  max-height: 420px;
+  max-height: 520px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .empty-viewer {
@@ -243,6 +343,11 @@ onMounted(load)
   height: 300px;
   color: #9ca3af;
   font-size: 13px;
+}
+
+.secondary-btn.sm {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 @media (max-width: 860px) {
