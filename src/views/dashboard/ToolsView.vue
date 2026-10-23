@@ -4,7 +4,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import {
   IconCheck,
   IconShieldCheck,
-  IconTerminal2,
   IconDatabase,
   IconSearch,
   IconWorld,
@@ -13,7 +12,6 @@ import {
 } from '@tabler/icons-vue'
 
 const toolIconMap = {
-  terminal: IconTerminal2,
   database: IconDatabase,
   search: IconSearch,
   globe: IconWorld,
@@ -22,18 +20,6 @@ const toolIconMap = {
 }
 
 const tools = ref([
-  {
-    id: 'shell',
-    name: 'Shell Command Sandbox',
-    category: 'System & CLI',
-    description: 'Execute isolated bash/sh commands inside Docker or secure local workspace sandbox.',
-    enabled: true,
-    securityTier: 'HITL Required',
-    securityColor: 'orange',
-    icon: 'terminal',
-    callsCount: 142,
-    endpoint: '/api/v1/tools/shell',
-  },
   {
     id: 'mysql',
     name: 'MySQL / SQL Database',
@@ -149,9 +135,9 @@ const saveConfiguration = () => {
         <div class="soft-card stat-card">
           <div class="stat-header">
             <span class="stat-label">HITL Protected</span>
-            <span class="stat-badge orange">2 Tools</span>
+            <span class="stat-badge orange">1 Tool</span>
           </div>
-          <div class="stat-value">Shell & SQL</div>
+          <div class="stat-value">SQL</div>
           <div class="stat-desc">Requires human authorization gate</div>
         </div>
       </div>
