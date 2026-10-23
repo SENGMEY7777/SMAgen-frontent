@@ -292,7 +292,7 @@ onMounted(loadData)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 10px 0 14px;
+  margin: 32px 0 14px;
 }
 
 .section-subhead h2 {
