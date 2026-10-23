@@ -357,6 +357,7 @@
 /* Allow section pages (Dashboard, Approvals, History, etc.) to scroll vertically */
 .page-content .section-page {
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
 }
@@ -1326,6 +1327,9 @@
   border-radius: 10px;
   background: #ffffff;
   transition: border-color 0.15s ease;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .data-row:hover {
@@ -1333,16 +1337,20 @@
 }
 
 .row-main {
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .row-title {
+  display: block;
   overflow: hidden;
   color: #111827;
   font-size: 13.5px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
 }
 
 .row-meta {

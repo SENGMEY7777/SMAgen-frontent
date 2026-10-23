@@ -313,4 +313,22 @@ onMounted(loadData)
   font-size: 12px;
 }
 
+.data-row {
+  min-width: 0;
+  width: 100%;
+}
+
+.row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.row-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
 </style>
