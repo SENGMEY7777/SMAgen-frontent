@@ -133,9 +133,9 @@ const createDemoRun = (runId = 'demo') => ({
       node_key: 'task_3',
       title: 'Run privileged security scan',
       instruction: 'Execute deep infrastructure compliance and privileged audit',
-      assigned_tool: 'executeCommand',
+      assigned_tool: 'fileManager',
       status: 'AWAITING_APPROVAL',
-      tool_input: JSON.stringify({ command: 'npx audit-ci --moderate' }, null, 2),
+      tool_input: JSON.stringify({ path: '/workspace/security/audit-report.json', action: 'verify' }, null, 2),
     },
   ],
   logs: [
@@ -165,7 +165,7 @@ const createDemoRun = (runId = 'demo') => ({
       level: 'WARN',
       source: 'SECURITY_GATE',
       created_at: new Date().toISOString(),
-      message: 'Task 3 paused: Awaiting operator manual approval for executeCommand.',
+      message: 'Task 3 paused: Awaiting operator manual approval for fileManager.',
     },
   ],
 })
@@ -228,7 +228,7 @@ const openReview = async (targetTask = null) => {
         run_id: runId,
         action_summary: awaitingTask?.instruction || 'Privileged security verification and infrastructure compliance check.',
         task_title: awaitingTask?.title || 'Security Approval Checkpoint',
-        assigned_tool: awaitingTask?.assigned_tool || 'executeCommand',
+        assigned_tool: awaitingTask?.assigned_tool || 'fileManager',
         tool_input: awaitingTask?.tool_input || 'Pending operation authorization required.',
       }
       approvalModalOpen.value = true
@@ -1154,7 +1154,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="code-box">
-              <span class="code-label">Command / Payload</span>
+              <span class="code-label">Request / Payload</span>
               <code>{{ typeof selectedApproval?.tool_input === 'string' ? selectedApproval?.tool_input : JSON.stringify(selectedApproval?.tool_input || {}, null, 2) }}</code>
             </div>
 
