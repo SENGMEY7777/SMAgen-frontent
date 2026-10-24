@@ -7,9 +7,15 @@
           <h1>Dashboard & Metrics</h1>
           <p>Overall system performance, active autonomous tasks, and operational costs.</p>
         </div>
-        <button class="secondary-btn" type="button" @click="loadData">
-          <IconClock :size="14" /> Refresh
-        </button>
+        <div class="head-actions">
+          <div class="live-pill" title="Real-time WebSocket & background polling active">
+            <span class="live-pulse"></span>
+            <span>Live Data</span>
+          </div>
+          <button class="secondary-btn" type="button" :disabled="isRefreshing" @click="manualRefresh">
+            <IconRefresh :size="14" :class="{ 'spin-icon': isRefreshing }" /> Refresh
+          </button>
+        </div>
       </div>
 
       <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
@@ -19,28 +25,34 @@
         <div class="soft-card stat-card">
           <div class="stat-header">
             <span class="stat-label">Success Rate</span>
-            <span class="stat-badge green">{{ metrics.successRate }}%</span>
+            <span class="stat-badge" :class="metrics.successBadgeColor">{{ metrics.successRate }}%</span>
           </div>
           <div class="stat-value">{{ metrics.successRate }}%</div>
-          <div class="stat-desc">Completed workflow tasks</div>
+          <div class="stat-desc">
+            {{ metrics.totalRuns > 0 ? `${metrics.completed} of ${metrics.totalRuns} tasks completed` : 'No tasks executed yet' }}
+          </div>
         </div>
 
         <div class="soft-card stat-card">
           <div class="stat-header">
             <span class="stat-label">Active Tasks</span>
-            <span class="stat-badge blue">{{ metrics.activeTasks }}</span>
+            <span class="stat-badge" :class="metrics.activeTasks > 0 ? 'blue' : 'gray'">{{ metrics.activeTasks }}</span>
           </div>
           <div class="stat-value">{{ metrics.activeTasks }}</div>
-          <div class="stat-desc">In-flight DAG executions</div>
+          <div class="stat-desc">
+            {{ metrics.activeTasks > 0 ? `${metrics.activeTasks} in-flight DAG execution${metrics.activeTasks === 1 ? '' : 's'}` : 'All autonomous DAGs idle' }}
+          </div>
         </div>
 
         <div class="soft-card stat-card">
           <div class="stat-header">
             <span class="stat-label">Pending Approvals</span>
-            <span class="stat-badge orange">{{ metrics.pendingApprovals }}</span>
+            <span class="stat-badge" :class="metrics.pendingApprovals > 0 ? 'orange' : 'green'">{{ metrics.pendingApprovals }}</span>
           </div>
           <div class="stat-value">{{ metrics.pendingApprovals }}</div>
-          <div class="stat-desc">Human-in-the-loop gates</div>
+          <div class="stat-desc">
+            {{ metrics.pendingApprovals > 0 ? `${metrics.pendingApprovals} human gate${metrics.pendingApprovals === 1 ? '' : 's'} awaiting review` : 'All operations authorized' }}
+          </div>
         </div>
 
         <div class="soft-card stat-card">
@@ -49,7 +61,7 @@
             <span class="stat-badge purple">{{ formatTokens(metrics.totalTokens) }}</span>
           </div>
           <div class="stat-value">{{ formatTokens(metrics.totalTokens) }}</div>
-          <div class="stat-desc">Est. cost {{ formatCost(metrics.totalCost) }}</div>
+          <div class="stat-desc">Est. cost {{ formatCost(metrics.totalCost) }} · {{ metrics.totalRuns }} runs</div>
         </div>
       </div>
 
@@ -60,7 +72,10 @@
             <IconMessageCircle2 :size="18" />
           </div>
           <div class="module-info">
-            <h3>AI Chat & Agent</h3>
+            <div class="module-title-row">
+              <h3>AI Chat & Agent</h3>
+              <span class="module-counter blue">{{ chatSessionsCount }} Active</span>
+            </div>
             <p>Start a conversational session with code artifacts and real-time reasoning.</p>
           </div>
           <RouterLink to="/" class="secondary-btn sm">Open Chat</RouterLink>
@@ -71,7 +86,10 @@
             <IconGitFork :size="18" />
           </div>
           <div class="module-info">
-            <h3>Workflows (DAG)</h3>
+            <div class="module-title-row">
+              <h3>Workflows (DAG)</h3>
+              <span class="module-counter purple">{{ metrics.activeTasks > 0 ? `${metrics.activeTasks} Running` : `${metrics.totalRuns} Total` }}</span>
+            </div>
             <p>Launch multi-step autonomous workflows and monitor dependency execution.</p>
           </div>
           <RouterLink to="/workflows" class="secondary-btn sm">View DAGs</RouterLink>
@@ -82,7 +100,10 @@
             <IconShieldCheck :size="18" />
           </div>
           <div class="module-info">
-            <h3>Security Approvals</h3>
+            <div class="module-title-row">
+              <h3>Security Approvals</h3>
+              <span class="module-counter" :class="metrics.pendingApprovals > 0 ? 'orange' : 'green'">{{ metrics.pendingApprovals > 0 ? `${metrics.pendingApprovals} Pending` : 'All Clear' }}</span>
+            </div>
             <p>Review and decide on privileged shell and database execution checkpoints.</p>
           </div>
           <RouterLink to="/approvals" class="secondary-btn sm">Review Queue</RouterLink>
@@ -93,7 +114,10 @@
             <IconTool :size="18" />
           </div>
           <div class="module-info">
-            <h3>Tool Integrations</h3>
+            <div class="module-title-row">
+              <h3>Tool Integrations</h3>
+              <span class="module-counter green">6 Active</span>
+            </div>
             <p>Manage active runtime tools: Shell Execution, MySQL, WebSearch, and APIs.</p>
           </div>
           <RouterLink to="/tools" class="secondary-btn sm">Manage Tools</RouterLink>
@@ -102,7 +126,10 @@
 
       <!-- Recent Active Workflow Runs Table -->
       <div class="section-subhead">
-        <h2>Active & Recent Tasks</h2>
+        <div class="subhead-left">
+          <h2>Active & Recent Tasks</h2>
+          <span class="badge-count">{{ runs.length }}</span>
+        </div>
         <RouterLink to="/history" class="view-all-link">View all history →</RouterLink>
       </div>
 
@@ -131,11 +158,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import {
-  IconClock,
+  IconRefresh,
   IconMessageCircle2,
   IconGitFork,
   IconShieldCheck,
@@ -144,24 +171,48 @@ import {
 } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
+import { createSocketClient } from '@/services/socket'
+import { useChatStore } from '@/stores/chat'
 import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
 
 const runs = ref([])
 const approvals = ref([])
 const loading = ref(true)
+const isRefreshing = ref(false)
 const errorMessage = ref('')
+
+const chatStore = useChatStore()
+const chatSessionsCount = computed(() => chatStore.sessions?.length || 0)
+
+let timer = null
+let socket = null
 
 const metrics = computed(() => {
   const totalRuns = runs.value.length
   const completed = runs.value.filter((r) => r.status === 'COMPLETED').length
+  const failed = runs.value.filter((r) => r.status === 'FAILED').length
   const successRate = totalRuns ? Math.round((completed / totalRuns) * 100) : 100
   const activeTasks = runs.value.filter((r) => ['RUNNING', 'PENDING', 'AWAITING_APPROVAL'].includes(r.status)).length
   const totalTokens = runs.value.reduce((sum, r) => sum + (r.total_tokens || 0), 0)
   const totalCost = runs.value.reduce((sum, r) => sum + Number(r.estimated_cost_usd || 0), 0)
 
+  let successBadgeColor = 'green'
+  if (totalRuns === 0) {
+    successBadgeColor = 'gray'
+  } else if (successRate >= 80) {
+    successBadgeColor = 'green'
+  } else if (successRate >= 50) {
+    successBadgeColor = 'orange'
+  } else {
+    successBadgeColor = 'red'
+  }
+
   return {
     totalRuns,
+    completed,
+    failed,
     successRate,
+    successBadgeColor,
     activeTasks,
     totalTokens,
     totalCost,
@@ -169,8 +220,10 @@ const metrics = computed(() => {
   }
 })
 
-const loadData = async () => {
-  loading.value = true
+const loadData = async (silent = false) => {
+  if (!silent) {
+    loading.value = true
+  }
   errorMessage.value = ''
   try {
     const [runsRes, approvalsRes] = await Promise.all([
@@ -180,16 +233,122 @@ const loadData = async () => {
     runs.value = runsRes?.data || []
     approvals.value = approvalsRes?.data || []
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load dashboard metrics.'
+    if (!silent) {
+      errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load dashboard metrics.'
+    }
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
+    isRefreshing.value = false
   }
 }
 
-onMounted(loadData)
+const manualRefresh = () => {
+  isRefreshing.value = true
+  loadData(false)
+}
+
+onMounted(() => {
+  loadData()
+
+  // Periodic polling every 5s for background freshness
+  timer = window.setInterval(() => {
+    loadData(true)
+  }, 5000)
+
+  // Socket client for real-time WebSocket events
+  socket = createSocketClient()
+  if (socket) {
+    const refreshEvents = [
+      'telemetry',
+      'task_started',
+      'task_completed',
+      'task_failed',
+      'approval_required',
+      'approval_resolved',
+      'workflow_completed',
+      'workflow_failed',
+      'run_status_changed',
+    ]
+    refreshEvents.forEach((evt) => {
+      socket.on(evt, () => loadData(true))
+    })
+
+    socket.on('connect_error', () => {
+      // Quietly ignore connection errors to prevent console flooding
+    })
+  }
+})
+
+onBeforeUnmount(() => {
+  if (timer) {
+    window.clearInterval(timer)
+    timer = null
+  }
+  if (socket) {
+    try {
+      socket.disconnect()
+    } catch {}
+    socket = null
+  }
+})
 </script>
 
 <style scoped>
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #15803d;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  user-select: none;
+}
+
+.live-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+.spin-icon {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -225,6 +384,8 @@ onMounted(loadData)
 .stat-badge.blue { background: #dbeafe; color: #1d4ed8; }
 .stat-badge.orange { background: #ffedd5; color: #c2410c; }
 .stat-badge.purple { background: #f3e8ff; color: #7e22ce; }
+.stat-badge.red { background: #fee2e2; color: #b91c1c; }
+.stat-badge.gray { background: #f3f4f6; color: #6b7280; }
 
 .stat-value {
   font-size: 26px;
@@ -274,12 +435,33 @@ onMounted(loadData)
   min-width: 0;
 }
 
+.module-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
 .module-info h3 {
-  margin: 0 0 3px;
+  margin: 0;
   font-size: 14px;
   font-weight: 650;
   color: #111827;
 }
+
+.module-counter {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.module-counter.blue { background: #eff6ff; color: #1d4ed8; }
+.module-counter.purple { background: #f5f3ff; color: #7c3aed; }
+.module-counter.green { background: #f0fdf4; color: #15803d; }
+.module-counter.orange { background: #fff7ed; color: #c2410c; }
 
 .module-info p {
   margin: 0;
@@ -295,11 +477,26 @@ onMounted(loadData)
   margin: 32px 0 14px;
 }
 
+.subhead-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .section-subhead h2 {
   font-size: 16px;
   font-weight: 700;
   color: #111827;
   margin: 0;
+}
+
+.badge-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .view-all-link {
