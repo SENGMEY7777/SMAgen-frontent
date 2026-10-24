@@ -980,7 +980,7 @@ const submitDecision = async (status) => {
   const runId = String(route.params.runId)
 
   try {
-    let decided = false
+    let decisionRecorded = false
     // 1. If backend approval record exists, submit decision
     if (approvalId && !String(approvalId).startsWith('virtual-') && approvalId !== 'run-approval') {
       try {
@@ -988,19 +988,20 @@ const submitDecision = async (status) => {
           status,
           ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
         })
-        decided = true
+        decisionRecorded = true
       } catch (decideErr) {
         console.warn('Decide approval warning:', decideErr?.message || decideErr)
       }
     }
 
-    // 2. Trigger run resumption only if approval wasn't already triggered by decideApproval
-    if (!decided && status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
+    // 2. Resume approved workflows even when the decision endpoint succeeds.
+    // Some deployments record the decision without resuming the paused run.
+    if (status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
       try {
         await api.resumeWorkflow(runId)
       } catch (resumeErr) {
         // 409 Conflict means the run is already in progress/running, which is expected
-        if (resumeErr?.status !== 409) {
+        if (resumeErr?.status !== 409 && !decisionRecorded) {
           console.warn('Resume workflow error:', resumeErr?.message)
         }
       }

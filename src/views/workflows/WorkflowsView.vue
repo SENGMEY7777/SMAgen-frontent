@@ -25,35 +25,41 @@
             <p>Describe your goal. The planner will generate execution nodes with tool assignments.</p>
           </div>
         </div>
-        <div class="builder-input-group">
+        <form class="builder-input-group" @submit.prevent="startDagWorkflow">
           <textarea
+            id="goal-prompt"
             v-model="goalPrompt"
             class="dag-textarea"
+            name="goalPrompt"
+            aria-label="Workflow goal"
             placeholder="e.g. Audit repository dependencies, generate unit tests, and create a security summary report..."
             rows="2"
+            maxlength="2000"
             @keydown.enter.exact.prevent="startDagWorkflow"
           ></textarea>
-          <div style="display: flex; gap: 8px;">
+          <div class="goal-input-meta">
+            <span>Press Enter to launch · Shift + Enter for a new line</span>
+            <span>{{ goalPrompt.length.toLocaleString() }} / 2,000</span>
+          </div>
+          <div class="builder-actions">
             <button
               class="primary-btn launch-btn"
-              type="button"
+              type="submit"
               :disabled="!goalPrompt.trim() || launching"
-              @click="startDagWorkflow"
             >
               <component :is="launching ? IconClock : IconPlayerPlay" :size="14" />
               <span>{{ launching ? 'Planning DAG…' : 'Execute DAG' }}</span>
             </button>
             <button
-              class="secondary-btn launch-btn"
+              class="secondary-btn launch-btn preview-btn"
               type="button"
-              style="background: rgba(147, 51, 234, 0.08); border-color: rgba(147, 51, 234, 0.3); color: #9333ea;"
               @click="router.push('/runs/demo')"
             >
               <IconGitFork :size="14" />
               <span>Preview Canvas (Demo)</span>
             </button>
           </div>
-        </div>
+        </form>
       </div>
 
       <!-- Active DAG Tasks -->
@@ -151,13 +157,24 @@ const load = async () => {
 }
 
 const startDagWorkflow = async () => {
-  if (!goalPrompt.value.trim() || launching.value) return
+  const goal = goalPrompt.value.trim()
+  if (!goal || launching.value) return
   launching.value = true
   errorMessage.value = ''
   try {
-    const response = await api.runWorkflow({ goalPrompt: goalPrompt.value.trim() })
+    const response = await api.runWorkflow({ goalPrompt: goal })
     const runId = response?.data?.runId
-    if (runId) router.push(`/runs/${runId}`)
+      || response?.data?.run_id
+      || response?.data?.id
+      || response?.runId
+      || response?.run_id
+
+    if (!runId) {
+      throw new ApiError('The workflow started but no run ID was returned. Please try again.')
+    }
+
+    goalPrompt.value = ''
+    await router.push(`/runs/${runId}`)
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to launch DAG workflow.'
   } finally {
@@ -212,25 +229,63 @@ onMounted(load)
 
 .dag-textarea {
   width: 100%;
+  min-height: 84px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 13.5px;
+  line-height: 1.55;
   color: #111827;
   background: #fbfcfd;
   resize: vertical;
   outline: none;
+  caret-color: #4f46e5;
   box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .dag-textarea:focus {
   border-color: #6366f1;
   background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.dag-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.goal-input-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  color: #9ca3af;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.builder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .launch-btn {
   align-self: flex-end;
   padding: 8px 18px;
+}
+
+.preview-btn {
+  color: #7c3aed;
+  background: #faf5ff;
+  border-color: #e9d5ff;
+}
+
+.preview-btn:hover {
+  color: #6d28d9;
+  background: #f3e8ff;
+  border-color: #d8b4fe;
 }
 
 .section-subhead {
@@ -266,5 +321,21 @@ onMounted(load)
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
+}
+
+@media (max-width: 560px) {
+  .goal-input-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .builder-actions {
+    justify-content: stretch;
+  }
+
+  .builder-actions .launch-btn {
+    flex: 1 1 100%;
+  }
 }
 </style>

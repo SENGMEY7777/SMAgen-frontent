@@ -34,122 +34,26 @@
           >
             <div class="message-content-box">
               <div v-if="message.role === 'assistant'" class="assistant-response-wrap">
-                <div v-if="message.workflow" class="workflow-antigravity-stream">
-                  <!-- Header: e.g. "Working for 16s" or "Completed in 4s" -->
-                  <div class="stream-elapsed-header">
-                    {{ getWorkflowElapsedText(message.workflow) }}
-                  </div>
-
-                  <!-- Thin divider line matching screenshot -->
-                  <hr class="stream-hairline-divider" />
-
-                  <!-- Main goal / plan statement text with code styling for paths -->
-                  <div class="stream-plan-text" v-html="renderMarkdown(getWorkflowPlanText(message.workflow))"></div>
-
-                  <!-- Current live sub-activity text (e.g. "Planning desktop folder creation with escalated permission") -->
-                  <div v-if="getCurrentWorkingText(message.workflow)" class="stream-subactivity-text">
-                    {{ getCurrentWorkingText(message.workflow) }}
-                  </div>
-
-                  <!-- Step drawer / details if steps exist -->
-                  <div v-if="message.workflow.tasks?.length" class="stream-steps-preview">
-                    <button
-                      type="button"
-                      class="stream-steps-toggle"
-                      @click="toggleStreamOpen(message.workflow)"
-                    >
-                      <span>{{ message.workflow.isStreamOpen ? 'Hide steps' : `View ${message.workflow.tasks.length} steps` }}</span>
-                      <IconChevronDown :size="12" :class="{ 'rotate-180': message.workflow.isStreamOpen }" />
-                    </button>
-
-                    <div v-if="message.workflow.isStreamOpen" class="stream-steps-list">
-                      <div
-                        v-for="(step, sIndex) in getWorkflowSteps(message.workflow)"
-                        :key="step.id || sIndex"
-                        class="stream-step-item"
-                        @click="toggleStepExpanded(message.workflow, step.id || sIndex)"
-                      >
-                        <div class="stream-step-row-head">
-                          <span class="stream-step-icon" :class="step.statusClass">
-                            <IconLoader2 v-if="step.isRunning" :size="12" class="spin-icon" />
-                            <IconCheck v-else-if="step.isCompleted" :size="12" />
-                            <IconX v-else-if="step.isFailed" :size="12" />
-                            <IconShieldCheck v-else-if="step.isApproval" :size="12" />
-                            <IconTerminal2 v-else :size="12" />
-                          </span>
-                          <span class="stream-step-title">{{ step.label }}</span>
-                          <span v-if="step.duration" class="stream-step-time">{{ step.duration }}</span>
-                        </div>
-                        <div v-if="isStepExpanded(message.workflow, step.id || sIndex)" class="stream-step-details">
-                          <pre v-if="step.toolInput"><code>{{ step.toolInput }}</code></pre>
-                          <pre v-if="step.output"><code>{{ step.output }}</code></pre>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Approval Panel if awaiting approval -->
-                  <div v-if="message.workflow.approval" class="workflow-approval-panel">
-                    <div class="workflow-approval-meta">
-                      <IconShieldCheck :size="15" />
-                      <span>{{ message.workflow.approval.taskTitle || 'Approval required before this step can continue.' }}</span>
-                    </div>
-                    <div class="workflow-command-box">
-                      <span class="workflow-command-label">{{ message.workflow.approval.assignedTool || 'workflow action' }}</span>
-                      <code>{{ stringifyWorkflowValue(message.workflow.approval.actionSummary || message.workflow.approval.toolInput, 'Approval required for this action.') }}</code>
-                    </div>
-
-                    <div class="workflow-choice-list" role="radiogroup" aria-label="Workflow approval choice">
-                      <label
-                        v-for="option in workflowApprovalOptions(message.workflow.approval.assignedTool)"
-                        :key="option.value"
-                        class="workflow-choice"
-                        :class="{ selected: message.workflow.approval.choice === option.value }"
-                      >
-                        <input
-                          v-model="message.workflow.approval.choice"
-                          type="radio"
-                          :name="`workflow-approval-${message.workflow.runId}-${index}`"
-                          :value="option.value"
-                        />
-                        <span class="workflow-choice-number">{{ option.number }}</span>
-                        <span>{{ option.label }}</span>
-                      </label>
-                    </div>
-
-                    <textarea
-                      v-if="message.workflow.approval.choice === 'reject'"
-                      v-model="message.workflow.approval.rejectionReason"
-                      class="workflow-rejection-input"
-                      rows="2"
-                      placeholder="Tell SMAgen what to do instead…"
-                    ></textarea>
-
-                    <div v-if="message.workflow.error" class="workflow-card-error">{{ message.workflow.error }}</div>
-                    <div class="workflow-approval-actions">
-                      <button class="workflow-skip-btn" type="button" :disabled="message.workflow.decisionPending" @click="skipWorkflowApproval(message)">
-                        Skip
-                      </button>
-                      <button class="workflow-submit-btn" type="button" :disabled="message.workflow.decisionPending" @click="submitWorkflowApproval(message)">
-                        <IconCheck v-if="!message.workflow.decisionPending" :size="15" />
-                        <span>{{ message.workflow.decisionPending ? 'Submitting…' : 'Submit' }}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Subtle footer link -->
-                  <div v-if="message.workflow.runId" class="workflow-subtle-footer">
-                    <button
-                      type="button"
-                      class="workflow-subtle-run-btn"
-                      @click="router.push(`/runs/${message.workflow.runId}`)"
-                    >
-                      Open full workflow run <IconArrowRight :size="12" />
-                    </button>
-                  </div>
-
-                  <div v-if="message.workflow.error && !message.workflow.approval" class="workflow-card-error">{{ message.workflow.error }}</div>
-                </div>
+                <WorkflowStream
+                  v-if="message.workflow"
+                  :workflow="message.workflow"
+                  :message-index="index"
+                  :approval-options="workflowApprovalOptions"
+                  :get-elapsed-text="getWorkflowElapsedText"
+                  :get-plan-text="getWorkflowPlanText"
+                  :get-current-working-text="getCurrentWorkingText"
+                  :get-workflow-steps="getWorkflowSteps"
+                  :is-step-expanded="isStepExpanded"
+                  :render-markdown="renderMarkdown"
+                  :stringify-value="stringifyWorkflowValue"
+                  @toggle-stream="toggleStreamOpen(message.workflow)"
+                  @toggle-step="toggleStepExpanded(message.workflow, $event)"
+                  @skip-approval="skipWorkflowApproval(message)"
+                  @submit-approval="submitWorkflowApproval(message)"
+                  @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
+                  @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
+                  @open-run="router.push(`/runs/${$event}`)"
+                />
 
                 <template v-else>
                   <div class="assistant-markdown" v-html="renderMarkdown(message.content)"></div>
@@ -280,7 +184,7 @@
 
         <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
 
-        <div class="composer">
+        <div class="composer" :class="{ 'workflow-composer': activeMode === 'workflow' }">
           <!-- Attachments (Images & Files) Previews in Composer -->
           <div v-if="attachedImages.length || attachedFiles.length" class="composer-attachments">
             <!-- Images -->
@@ -339,6 +243,9 @@
               ref="textareaRef"
               v-model="input"
               class="composer-input"
+              :class="{ 'workflow-goal-input': activeMode === 'workflow' }"
+              :aria-label="activeMode === 'workflow' ? 'Workflow goal' : 'Message'"
+              :maxlength="activeMode === 'workflow' ? 2000 : undefined"
               :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
               rows="1"
               @paste="handlePaste"
@@ -350,6 +257,7 @@
                 class="tool-btn-pill"
                 type="button"
                 :class="{ active: activeMode === 'workflow' }"
+                :aria-pressed="activeMode === 'workflow'"
                 @click="activeMode = activeMode === 'workflow' ? 'chat' : 'workflow'"
               >
                 <IconBulb :size="13" />
@@ -407,6 +315,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import WorkflowStream from '@/components/workflow/WorkflowStream.vue'
 import {
   IconCheck,
   IconCopy,
@@ -415,23 +324,23 @@ import {
   IconRefresh,
   IconPencil,
   IconChevronDown,
-  IconChevronRight,
   IconX,
   IconPlus,
   IconBulb,
   IconPlayerStop,
   IconArrowUp,
-  IconArrowRight,
-  IconShieldCheck,
-  IconTerminal2,
-  IconLoader2,
 } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
-import { createSocketClient } from '@/services/socket'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { useWorkflowRuntime } from '@/composables/useWorkflowRuntime'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatRelativeTime } from '@/utils/formatters'
+import {
+  getWorkflowTaskStatus,
+  isWorkflowRunning,
+  stringifyWorkflowValue,
+} from '@/utils/workflow'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -451,8 +360,6 @@ const attachedImages = ref([])
 const attachedFiles = ref([])
 const previewImageUrl = ref(null)
 const streamingContent = ref('')
-const workflowPollers = new Map()
-const workflowRefreshes = new Set()
 
 const currentMessages = computed(() => chatStore.messages)
 
@@ -463,53 +370,6 @@ const workflowApprovalOptions = (tool = 'this action') => [
   { number: '4', value: 'allow_always', label: `Yes, and always allow '${tool}'` },
   { number: '5', value: 'reject', label: 'No (tell SMAgen what to do instead)' },
 ]
-
-const workflowStatusClass = (workflow) => {
-  if (workflow?.approval || workflow?.status === 'AWAITING_APPROVAL') return 'awaiting-approval'
-  return String(workflow?.status || 'starting').toLowerCase().replace(/[^a-z0-9_-]/g, '-')
-}
-
-const workflowStatusLabel = (workflow) => {
-  if (workflow?.approval || workflow?.status === 'AWAITING_APPROVAL') return 'ACTION REQUIRED'
-  const status = String(workflow?.status || 'STARTING').toUpperCase()
-  if (status === 'COMPLETED' || status === 'SUCCESS') return 'COMPLETED'
-  if (status === 'FAILED' || status === 'CANCELLED') return 'FAILED'
-  if (status === 'REJECTED') return 'REJECTED'
-  if (status === 'STARTING') return 'STARTING'
-  return 'RUNNING'
-}
-
-const workflowStatusTitle = (workflow) => {
-  const status = String(workflow?.status || '').toUpperCase()
-  if (status === 'COMPLETED' || status === 'SUCCESS') return 'Workflow completed'
-  if (status === 'FAILED' || status === 'CANCELLED') return 'Workflow stopped'
-  if (status === 'REJECTED') return 'Workflow approval rejected'
-  return 'Workflow is running'
-}
-
-const workflowStatusMessage = (workflow) => {
-  const status = String(workflow?.status || '').toUpperCase()
-  if (status === 'COMPLETED' || status === 'SUCCESS') return 'All workflow steps completed successfully.'
-  if (status === 'FAILED' || status === 'CANCELLED') return 'The workflow stopped. Open the run for details.'
-  if (status === 'REJECTED') return 'The approval was rejected and the workflow will not continue.'
-  if (status === 'STARTING' || status === 'PENDING') return 'Starting the workflow and waiting for its first update…'
-  return 'The workflow is running. This card will update automatically.'
-}
-
-const stringifyWorkflowValue = (value, fallback = '') => {
-  if (value == null || value === '') return fallback
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-const isWorkflowRunning = (workflow) => {
-  const status = String(workflow?.status || '').toUpperCase()
-  return ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(status)
-}
 
 const toggleStreamOpen = (workflow) => {
   if (workflow) {
@@ -527,45 +387,26 @@ const toggleStepExpanded = (workflow, stepId) => {
   workflow.expandedSteps[stepId] = !workflow.expandedSteps[stepId]
 }
 
-const getStreamHeading = (workflow) => {
-  const tasks = workflow?.tasks || []
-  const completed = tasks.filter((t) => ['COMPLETED', 'SUCCESS'].includes(String(t.status || '').toUpperCase())).length
-  const total = tasks.length
-
-  if (isWorkflowRunning(workflow)) {
-    if (total > 0) {
-      return `Executing workflow (${completed}/${total} steps completed)`
-    }
-    return 'Initializing workflow execution…'
-  }
-
-  const status = String(workflow?.status || '').toUpperCase()
-  if (status === 'COMPLETED' || status === 'SUCCESS') {
-    return `All ${total || completed || 'workflow'} steps completed successfully`
-  }
-  if (status === 'FAILED' || status === 'CANCELLED') {
-    return 'Workflow execution stopped'
-  }
-  return 'Workflow execution steps'
-}
-
 const getWorkflowSteps = (workflow) => {
   if (!workflow) return []
   const tasks = workflow.tasks || []
   if (tasks.length > 0) {
     return tasks.map((task, idx) => {
-      const status = String(task.status || 'PENDING').toUpperCase()
+      const status = getWorkflowTaskStatus(task)
       const isRunning = status === 'RUNNING'
       const isCompleted = ['COMPLETED', 'SUCCESS'].includes(status)
       const isFailed = ['FAILED', 'CANCELLED'].includes(status)
       const isApproval = status === 'AWAITING_APPROVAL'
 
-      let label = ''
-      if (task.assigned_tool) {
-        label = `Ran ${task.assigned_tool}: ${task.title || task.instruction || 'Action'}`
-      } else {
-        label = task.title || task.instruction || `Step ${idx + 1}`
-      }
+      const taskTitle = task.title || task.instruction || `Step ${idx + 1}`
+      const tool = task.assigned_tool || task.assignedTool || ''
+      const taskPrefix = tool ? `${tool}: ` : ''
+      let label = `${taskPrefix}${taskTitle}`
+      if (isRunning) label = `Running ${label}`
+      else if (isCompleted) label = `Completed ${label}`
+      else if (isFailed) label = `Failed ${label}`
+      else if (isApproval) label = `Awaiting approval: ${label}`
+      else label = `Queued ${label}`
 
       return {
         id: task.id || `task_${idx}`,
@@ -575,9 +416,13 @@ const getWorkflowSteps = (workflow) => {
         isFailed,
         isApproval,
         statusClass: isRunning ? 'running' : (isCompleted ? 'completed' : (isFailed ? 'failed' : (isApproval ? 'approval' : 'pending'))),
-        toolInput: task.tool_input ? (typeof task.tool_input === 'string' ? task.tool_input : JSON.stringify(task.tool_input, null, 2)) : null,
-        output: task.output ? (typeof task.output === 'string' ? task.output : JSON.stringify(task.output, null, 2)) : null,
-        duration: task.duration_ms ? `${(task.duration_ms / 1000).toFixed(1)}s` : '',
+        toolInput: task.tool_input || task.toolInput
+          ? (typeof (task.tool_input || task.toolInput) === 'string' ? (task.tool_input || task.toolInput) : JSON.stringify(task.tool_input || task.toolInput, null, 2))
+          : null,
+        output: task.output || task.error || task.error_message
+          ? (typeof (task.output || task.error || task.error_message) === 'string' ? (task.output || task.error || task.error_message) : JSON.stringify(task.output || task.error || task.error_message, null, 2))
+          : null,
+        duration: task.duration_ms || task.durationMs ? `${((task.duration_ms || task.durationMs) / 1000).toFixed(1)}s` : '',
       }
     })
   }
@@ -597,36 +442,40 @@ const getWorkflowSteps = (workflow) => {
   return []
 }
 
-const timerTick = ref(0)
-let timerInterval = null
-
 const getWorkflowElapsedText = (workflow) => {
-  const _ = timerTick.value
   const status = String(workflow?.status || '').toUpperCase()
-  const started = workflow.startedAt || (workflow.createdAt ? new Date(workflow.createdAt).getTime() : null)
-  const nowMs = Date.now()
-  let seconds = workflow.elapsedSeconds || 0
 
-  if (started) {
+  // If time was locked upon completion or termination, permanently return that stopped time!
+  if (workflow?.finalSeconds) {
     if (status === 'COMPLETED' || status === 'SUCCESS') {
-      const finished = workflow.completedAt ? new Date(workflow.completedAt).getTime() : nowMs
-      seconds = Math.max(1, Math.round((finished - started) / 1000))
-    } else if (status === 'FAILED' || status === 'CANCELLED') {
-      seconds = Math.max(1, Math.round((nowMs - started) / 1000))
-    } else {
-      seconds = Math.max(1, Math.round((nowMs - started) / 1000))
-      workflow.elapsedSeconds = seconds
+      return `Completed in ${workflow.finalSeconds}s`
     }
-  } else {
-    seconds = workflow.elapsedSeconds || 1
+    return `Stopped after ${workflow.finalSeconds}s`
   }
 
+  // If status is completed or stopped, compute and freeze finalSeconds right now so it never changes
   if (status === 'COMPLETED' || status === 'SUCCESS') {
-    return `Completed in ${seconds}s`
+    const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
+    const finished = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
+    const sec = started ? Math.max(1, Math.round((finished - started) / 1000)) : (workflow?.elapsedSeconds || 1)
+    workflow.finalSeconds = sec
+    return `Completed in ${sec}s`
   }
+
   if (status === 'FAILED' || status === 'CANCELLED') {
-    return `Stopped after ${seconds}s`
+    const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
+    const finished = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
+    const sec = started ? Math.max(1, Math.round((finished - started) / 1000)) : (workflow?.elapsedSeconds || 1)
+    workflow.finalSeconds = sec
+    return `Stopped after ${sec}s`
   }
+
+  // Still actively running: tick dynamically every second
+  const _ = timerTick.value
+  const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
+  const seconds = started ? Math.max(1, Math.round((Date.now() - started) / 1000)) : (workflow?.elapsedSeconds || 1)
+  workflow.elapsedSeconds = seconds
+
   if (status === 'AWAITING_APPROVAL') {
     return `Paused for approval (${seconds}s)`
   }
@@ -658,15 +507,17 @@ const getCurrentWorkingText = (workflow) => {
   if (status === 'COMPLETED' || status === 'SUCCESS') {
     return ''
   }
-  const runningTask = (workflow?.tasks || []).find((t) => String(t.status).toUpperCase() === 'RUNNING')
+  const runningTask = (workflow?.tasks || []).find((t) => getWorkflowTaskStatus(t) === 'RUNNING')
   if (runningTask) {
-    return `Planning ${runningTask.assigned_tool ? runningTask.assigned_tool + ': ' : ''}${runningTask.title || runningTask.instruction || 'task execution'}`
+    const tool = runningTask.assigned_tool || runningTask.assignedTool
+    return `Running ${tool ? tool + ': ' : ''}${runningTask.title || runningTask.instruction || 'task execution'}`
   }
-  const pendingTask = (workflow?.tasks || []).find((t) => String(t.status).toUpperCase() === 'PENDING')
+  const pendingTask = (workflow?.tasks || []).find((t) => ['PENDING', 'QUEUED', 'WAITING'].includes(getWorkflowTaskStatus(t)))
   if (pendingTask) {
-    return `Planning ${pendingTask.assigned_tool ? pendingTask.assigned_tool + ': ' : ''}${pendingTask.title || pendingTask.instruction || 'step'}`
+    const tool = pendingTask.assigned_tool || pendingTask.assignedTool
+    return `Queued ${tool ? tool + ': ' : ''}${pendingTask.title || pendingTask.instruction || 'step'}`
   }
-  if (workflow?.approval || workflow?.status === 'AWAITING_APPROVAL') {
+  if (workflow?.approval || status === 'AWAITING_APPROVAL') {
     return 'Paused: Awaiting security authorization'
   }
   if (status === 'STARTING') {
@@ -693,6 +544,15 @@ const updateWorkflowMessage = (index, patch) => {
   return chatStore.updateMessage(index, { workflow: nextWorkflow })
 }
 
+const updateWorkflowApproval = (message, field, value) => {
+  const index = currentMessages.value.indexOf(message)
+  if (index === -1) return
+  updateWorkflowMessage(index, {
+    approval: { [field]: value },
+    error: '',
+  })
+}
+
 const formatFileSize = (bytes) => {
   if (!bytes || isNaN(bytes)) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -713,6 +573,13 @@ watch(input, () => {
   autoResizeTextarea()
 })
 
+watch(activeMode, async (mode) => {
+  await nextTick()
+  if (mode === 'workflow') {
+    textareaRef.value?.focus()
+  }
+})
+
 const handleScroll = () => {
   if (!chatThreadRef.value) return
   const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
@@ -726,6 +593,18 @@ const scrollToBottom = async () => {
     showScrollButton.value = false
   }
 }
+
+const {
+  timerTick,
+  startWorkflowPolling,
+  skipWorkflowApproval,
+  submitWorkflowApproval,
+} = useWorkflowRuntime({
+  chatStore,
+  currentMessages,
+  updateWorkflowMessage,
+  scrollToBottom,
+})
 
 watch([currentMessages, loading], () => {
   scrollToBottom()
@@ -984,178 +863,6 @@ const loadRuns = async () => {
   }
 }
 
-const isTerminalWorkflowStatus = (status) => [
-  'COMPLETED',
-  'SUCCESS',
-  'FAILED',
-  'CANCELLED',
-  'REJECTED',
-].includes(String(status || '').toUpperCase())
-
-const stopWorkflowPolling = (runId) => {
-  const poller = workflowPollers.get(String(runId))
-  if (poller) {
-    window.clearInterval(poller)
-    workflowPollers.delete(String(runId))
-  }
-}
-
-const findWorkflowApproval = async (run, task, runId, existingApproval = null) => {
-  let approval = null
-  try {
-    const response = await api.listApprovals()
-    const approvals = Array.isArray(response?.data) ? response.data : []
-    approval = approvals.find((item) => {
-      if (task?.id && (String(item.task_id) === String(task.id) || String(item.taskId) === String(task.id))) return true
-      return String(item.run_id || item.runId) === String(runId)
-    }) || null
-  } catch {
-    // The run/task state is still enough to render a local approval request.
-  }
-
-  if (approval?.id) {
-    const details = await api.getApproval(approval.id).catch(() => ({ data: approval }))
-    approval = { ...approval, ...(details?.data || {}) }
-  }
-
-  const approvalId = approval?.id || existingApproval?.id || `virtual-${runId}`
-  return {
-    id: approvalId,
-    taskId: task?.id || approval?.task_id || approval?.taskId || existingApproval?.taskId || null,
-    taskTitle: task?.title || approval?.task_title || approval?.taskTitle || existingApproval?.taskTitle || 'Approval required',
-    assignedTool: task?.assigned_tool || approval?.assigned_tool || approval?.assignedTool || existingApproval?.assignedTool || 'workflow action',
-    actionSummary: approval?.action_summary || approval?.actionSummary || task?.instruction || existingApproval?.actionSummary || run?.goal_prompt || 'Approval required for this action.',
-    toolInput: approval?.tool_input || approval?.toolInput || task?.tool_input || existingApproval?.toolInput || '',
-    choice: existingApproval?.choice || 'allow_once',
-    rejectionReason: existingApproval?.rejectionReason || '',
-  }
-}
-
-const refreshWorkflowMessage = async (index, runId) => {
-  const key = `${chatStore.activeSessionId}:${index}:${runId}`
-  if (workflowRefreshes.has(key)) return
-  workflowRefreshes.add(key)
-
-  try {
-    const response = await api.getRun(String(runId))
-    const workflowRun = response?.data || {}
-    const awaitingTask = (workflowRun.tasks || []).find((task) => task.status === 'AWAITING_APPROVAL')
-    const awaitingApproval = workflowRun.status === 'AWAITING_APPROVAL' || Boolean(awaitingTask)
-    const existingApproval = currentMessages.value[index]?.workflow?.approval || null
-
-    if (awaitingApproval) {
-      const approval = await findWorkflowApproval(workflowRun, awaitingTask, runId, existingApproval)
-      updateWorkflowMessage(index, {
-        status: 'AWAITING_APPROVAL',
-        approval,
-        tasks: workflowRun.tasks || [],
-        logs: workflowRun.logs || [],
-        error: '',
-      })
-    } else {
-      const status = String(workflowRun.status || 'RUNNING').toUpperCase()
-      updateWorkflowMessage(index, {
-        status,
-        approval: null,
-        tasks: workflowRun.tasks || [],
-        logs: workflowRun.logs || [],
-        error: '',
-      })
-      if (isTerminalWorkflowStatus(status)) stopWorkflowPolling(runId)
-    }
-  } catch (error) {
-    // Keep an already-visible approval card usable when a background refresh fails.
-    if (!currentMessages.value[index]?.workflow?.approval) {
-      updateWorkflowMessage(index, {
-        error: error instanceof ApiError ? error.message : 'Unable to refresh workflow status.',
-      })
-    }
-  } finally {
-    workflowRefreshes.delete(key)
-    scrollToBottom()
-  }
-}
-
-const startWorkflowPolling = (index, runId) => {
-  const key = String(runId)
-  if (workflowPollers.has(key)) return
-
-  refreshWorkflowMessage(index, runId)
-  const poller = window.setInterval(() => {
-    if (!currentMessages.value[index]?.workflow) {
-      stopWorkflowPolling(runId)
-      return
-    }
-    refreshWorkflowMessage(index, runId)
-  }, 2000)
-  workflowPollers.set(key, poller)
-
-  if (workflowSocket) {
-    try {
-      workflowSocket.emit('join_run', key)
-    } catch {}
-  }
-}
-
-const skipWorkflowApproval = (message) => {
-  const index = currentMessages.value.indexOf(message)
-  if (index === -1) return
-  updateWorkflowMessage(index, {
-    error: 'This approval is still pending. Select an option and press Submit when you are ready.',
-  })
-}
-
-const submitWorkflowApproval = async (message) => {
-  const index = currentMessages.value.indexOf(message)
-  const workflow = index === -1 ? null : currentMessages.value[index]?.workflow
-  const approval = workflow?.approval
-  if (!workflow || !approval || workflow.decisionPending) return
-
-  const isRejecting = approval.choice === 'reject'
-  if (isRejecting && !approval.rejectionReason?.trim()) {
-    updateWorkflowMessage(index, { error: 'Tell SMAgen what to do instead before submitting.' })
-    return
-  }
-
-  updateWorkflowMessage(index, { decisionPending: true, error: '' })
-  const approvalId = String(approval.id || '')
-  const isRealApproval = approvalId && !approvalId.startsWith('virtual-')
-  const status = isRejecting ? 'REJECTED' : 'APPROVED'
-  let backendHandled = false
-
-  try {
-    if (isRealApproval) {
-      try {
-        await api.decideApproval(approvalId, {
-          status,
-          ...(isRejecting ? { rejectionReason: approval.rejectionReason.trim() } : {}),
-        })
-        backendHandled = true
-      } catch (error) {
-        // Older deployments only resume runs directly, so preserve that fallback.
-        if (status === 'REJECTED') throw error
-      }
-    }
-
-    if (status === 'APPROVED' && !backendHandled) {
-      await api.resumeWorkflow(String(workflow.runId))
-    }
-
-    updateWorkflowMessage(index, {
-      status: status === 'APPROVED' ? 'RUNNING' : 'REJECTED',
-      approval: null,
-      decisionPending: false,
-      error: '',
-    })
-    await refreshWorkflowMessage(index, workflow.runId)
-  } catch (error) {
-    updateWorkflowMessage(index, {
-      decisionPending: false,
-      error: error instanceof ApiError ? error.message : 'Unable to submit this workflow decision.',
-    })
-  }
-}
-
 const send = async () => {
   const message = input.value.trim()
   const images = [...attachedImages.value.map((img) => img.dataUrl)]
@@ -1213,7 +920,11 @@ const send = async () => {
     scrollToBottom()
     try {
       const response = await api.runWorkflow({ goalPrompt: fullPrompt })
-      const runId = response?.data?.runId || response?.runId
+      const runId = response?.data?.runId
+        || response?.data?.run_id
+        || response?.data?.id
+        || response?.runId
+        || response?.run_id
       if (!runId) throw new ApiError('The workflow started without a run ID.')
 
       updateWorkflowMessage(workflowMessageIndex, {
@@ -1285,452 +996,21 @@ const startPrompt = (prompt) => {
   autoResizeTextarea()
 }
 
-let workflowSocket = null
-
 onMounted(() => {
   loadRuns()
   if (chatThreadRef.value) {
     chatThreadRef.value.addEventListener('scroll', handleScroll)
   }
-  currentMessages.value.forEach((message, index) => {
-    if (message.workflow?.runId && !isTerminalWorkflowStatus(message.workflow.status)) {
-      startWorkflowPolling(index, message.workflow.runId)
-    }
-  })
-
-  workflowSocket = createSocketClient()
-  if (workflowSocket) {
-    const refreshEvents = [
-      'telemetry',
-      'task_started',
-      'task_completed',
-      'task_failed',
-      'approval_required',
-      'workflow_completed',
-      'workflow_failed',
-      'run_status_changed',
-    ]
-    refreshEvents.forEach((evt) => {
-      workflowSocket.on(evt, (payload) => {
-        const runId = payload?.runId || payload?.run_id
-        if (runId) {
-          const idx = currentMessages.value.findIndex((m) => String(m.workflow?.runId) === String(runId))
-          if (idx !== -1) refreshWorkflowMessage(idx, runId)
-        } else {
-          currentMessages.value.forEach((m, idx) => {
-            if (m.workflow?.runId && isWorkflowRunning(m.workflow)) {
-              refreshWorkflowMessage(idx, m.workflow.runId)
-            }
-          })
-        }
-      })
-    })
-  }
-
-  timerInterval = window.setInterval(() => {
-    timerTick.value++
-  }, 1000)
 })
 
 onUnmounted(() => {
-  if (timerInterval) {
-    window.clearInterval(timerInterval)
-    timerInterval = null
-  }
   if (chatThreadRef.value) {
     chatThreadRef.value.removeEventListener('scroll', handleScroll)
-  }
-  workflowPollers.forEach((poller) => window.clearInterval(poller))
-  workflowPollers.clear()
-  if (workflowSocket) {
-    try {
-      workflowSocket.disconnect()
-    } catch {}
-    workflowSocket = null
   }
 })
 </script>
 
 <style scoped>
-/* Antigravity Minimal Live Stream on Body (Matching Screenshot) */
-.workflow-antigravity-stream {
-  width: 100%;
-  max-width: 760px;
-  background: transparent;
-  padding: 2px 0 8px;
-}
-
-.stream-elapsed-header {
-  font-size: 13.5px;
-  font-weight: 400;
-  color: #71717a;
-  letter-spacing: -0.01em;
-  margin-bottom: 10px;
-}
-
-.stream-hairline-divider {
-  border: none;
-  border-top: 1px solid #e4e4e7;
-  margin: 10px 0 16px;
-}
-
-.stream-plan-text {
-  font-size: 14.5px;
-  line-height: 1.55;
-  color: #18181b;
-  margin-bottom: 10px;
-  word-break: break-word;
-}
-
-.stream-plan-text :deep(p) {
-  margin: 0;
-}
-
-.stream-plan-text :deep(code) {
-  background: #f4f4f5;
-  color: #18181b;
-  padding: 2px 6px;
-  border-radius: 5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.stream-subactivity-text {
-  font-size: 13.5px;
-  font-weight: 400;
-  color: #a1a1aa;
-  line-height: 1.5;
-  margin-top: 6px;
-  margin-bottom: 8px;
-}
-
-.stream-steps-preview {
-  margin-top: 12px;
-}
-
-.stream-steps-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #71717a;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  font-weight: 500;
-  transition: color 0.15s ease;
-}
-
-.stream-steps-toggle:hover {
-  color: #18181b;
-}
-
-.stream-steps-toggle svg {
-  transition: transform 0.2s ease;
-}
-
-.stream-steps-toggle svg.rotate-180 {
-  transform: rotate(180deg);
-}
-
-.stream-steps-list {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  border-left: 2px solid #f4f4f5;
-  padding-left: 10px;
-}
-
-.stream-step-item {
-  border-radius: 6px;
-  padding: 4px 6px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-
-.stream-step-item:hover {
-  background: #f4f4f5;
-}
-
-.stream-step-row-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: #3f3f46;
-}
-
-.stream-step-icon {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  color: #71717a;
-}
-
-.stream-step-icon.running { color: #2563eb; }
-.stream-step-icon.completed { color: #16a34a; }
-.stream-step-icon.failed { color: #dc2626; }
-.stream-step-icon.approval { color: #d97706; }
-
-.stream-step-title {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stream-step-time {
-  font-size: 11px;
-  color: #a1a1aa;
-}
-
-.stream-step-details pre {
-  margin: 6px 0 2px 24px;
-  background: #18181b;
-  color: #e4e4e7;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  overflow-x: auto;
-}
-
-.workflow-approval-panel {
-  margin: 12px 0;
-  padding: 14px;
-  border: 1px solid #fed7aa;
-  border-radius: 10px;
-  background: #fffbeb;
-  color: #1f2937;
-}
-
-.workflow-approval-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #92400e;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.workflow-approval-meta svg {
-  flex: 0 0 auto;
-  color: #d97706;
-}
-
-.workflow-command-box {
-  display: grid;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  background: #fefce8;
-}
-
-.workflow-command-label {
-  color: #78350f;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.workflow-command-box code {
-  display: block;
-  max-height: 120px;
-  overflow: auto;
-  color: #451a03;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.workflow-choice-list {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.workflow-choice {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 32px;
-  padding: 5px 8px;
-  border: 1px solid #fef3c7;
-  border-radius: 8px;
-  color: #374151;
-  font-size: 12.5px;
-  line-height: 1.3;
-  cursor: pointer;
-  background: #ffffff;
-  transition: all 0.15s ease;
-}
-
-.workflow-choice:hover,
-.workflow-choice.selected {
-  border-color: #f59e0b;
-  color: #111827;
-  background: #fef3c7;
-}
-
-.workflow-choice input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: #d97706;
-}
-
-.workflow-choice-number {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 19px;
-  height: 19px;
-  border-radius: 5px;
-  color: #78350f;
-  background: #fde68a;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.workflow-rejection-input {
-  width: 100%;
-  margin-top: 9px;
-  padding: 8px 10px;
-  border: 1px solid #fed7aa;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1f2937;
-  font-size: 12.5px;
-}
-
-.workflow-approval-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.workflow-skip-btn {
-  padding: 5px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #4b5563;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.workflow-submit-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 14px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: #d97706;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.workflow-submit-btn:hover {
-  background: #b45309;
-}
-
-.workflow-submit-btn:disabled,
-.workflow-skip-btn:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-.workflow-card-error {
-  margin-top: 8px;
-  padding: 7px 10px;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 12px;
-}
-
-.workflow-subtle-footer {
-  margin-top: 10px;
-  padding: 2px 0;
-}
-
-.workflow-subtle-run-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: none;
-  color: #71717a;
-  font-size: 11.5px;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s ease;
-}
-
-.workflow-subtle-run-btn:hover {
-  color: #18181b;
-  text-decoration: underline;
-}
-
-.working-pulse-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
-  animation: pulse-dot 1.5s infinite ease-in-out;
-}
-
-.working-text {
-  font-weight: 500;
-  color: #4b5563;
-}
-
-.spin-icon {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes pulse-dot {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.4;
-    transform: scale(0.85);
-  }
-}
-
-.text-blue {
-  color: #2563eb;
-}
-
-.text-green {
-  color: #16a34a;
-}
-
 .user-message-container {
   display: flex;
   flex-direction: column;
@@ -2109,5 +1389,36 @@ onUnmounted(() => {
   color: #111827;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 560px) {
+  .workflow-approval-panel {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .workflow-approval-meta {
+    font-size: 14px;
+  }
+
+  .workflow-choice {
+    align-items: flex-start;
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .workflow-choice input {
+    margin-top: 2px;
+  }
+
+  .workflow-approval-actions {
+    justify-content: stretch;
+  }
+
+  .workflow-skip-btn,
+  .workflow-submit-btn {
+    flex: 1;
+  }
 }
 </style>

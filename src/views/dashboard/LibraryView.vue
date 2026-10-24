@@ -67,7 +67,13 @@
         <p>{{ runTarget.description || 'Give this workflow a goal and SMAgen will plan the task graph.' }}</p>
         <div class="field">
           <label for="run-goal">Goal prompt</label>
-          <textarea id="run-goal" v-model="runGoal" placeholder="What should this run accomplish?"></textarea>
+          <textarea
+            id="run-goal"
+            v-model="runGoal"
+            maxlength="2000"
+            placeholder="What should this run accomplish?"
+            @keydown.enter.exact.prevent="runWorkflow"
+          ></textarea>
         </div>
         <div class="form-actions">
           <button class="secondary-btn" type="button" @click="runTarget = null">Cancel</button>
@@ -130,7 +136,17 @@ const runWorkflow = async () => {
       workflowId: runTarget.value.id,
       goalPrompt: runGoal.value.trim(),
     })
-    if (response?.data?.runId) router.push(`/runs/${response.data.runId}`)
+    const runId = response?.data?.runId
+      || response?.data?.run_id
+      || response?.data?.id
+      || response?.runId
+      || response?.run_id
+
+    if (!runId) {
+      throw new ApiError('The workflow started but no run ID was returned. Please try again.')
+    }
+
+    await router.push(`/runs/${runId}`)
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to start workflow.'
   } finally {

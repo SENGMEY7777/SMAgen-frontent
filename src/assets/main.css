@@ -527,6 +527,16 @@
   box-shadow: 0 4px 20px rgba(99, 102, 241, 0.12);
 }
 
+.composer.workflow-composer {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 24px rgba(79, 70, 229, 0.1);
+}
+
+.composer.workflow-composer:focus-within {
+  border-color: #818cf8;
+  box-shadow: 0 6px 26px rgba(79, 70, 229, 0.16);
+}
+
 .composer-main-row {
   display: flex;
   align-items: center;
@@ -567,6 +577,15 @@
 
 .composer-input::placeholder {
   color: #9ca3af;
+}
+
+.workflow-goal-input {
+  min-width: 0;
+  caret-color: #4f46e5;
+}
+
+.workflow-goal-input::placeholder {
+  color: #7c83a1;
 }
 
 .composer-actions-right {

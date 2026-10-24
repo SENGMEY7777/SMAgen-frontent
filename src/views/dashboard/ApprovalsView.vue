@@ -118,6 +118,18 @@ const decide = async (status) => {
       status,
       ...(status === 'REJECTED' ? { rejectionReason: rejectionReason.value.trim() } : {}),
     })
+
+    // A decision can be recorded without resuming the paused workflow on
+    // some backend deployments, so explicitly resume approved runs too.
+    const runId = selected.value.run_id || selected.value.runId
+    if (status === 'APPROVED' && runId) {
+      try {
+        await api.resumeWorkflow(String(runId))
+      } catch (resumeError) {
+        if (resumeError?.status !== 409) throw resumeError
+      }
+    }
+
     selected.value = null
     rejectionReason.value = ''
     await load()
