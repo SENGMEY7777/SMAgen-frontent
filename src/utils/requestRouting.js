@@ -1,7 +1,8 @@
-const ACTION_VERBS = '(?:create|make|delete|remove|move|rename|copy|write|save|open|install|execute|run|start|build|generate|update|modify|commit|push|deploy|automate)'
-const ACTION_TARGETS = '(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\\.html)'
+const ACTION_VERBS = '(?:create|make|add|delete|remove|move|rename|copy|write|save|open|install|setup|set\\s+up|configure|enable|execute|run|start|build|generate|update|modify|commit|push|deploy|automate)'
+const DIRECT_ACTION_VERBS = '(?:create|make|delete|remove|move|rename|copy|write|save|open|install|setup|set\\s+up|configure|enable|execute|run|start|build|generate|update|modify|commit|push|deploy|automate)'
+const ACTION_TARGETS = '(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\\.html|pinia|pinai|store|state\\s+management|dependency|dependencies)'
 
-const DIRECT_ACTION_PATTERN = new RegExp(`^\\s*(?:please\\s+)?${ACTION_VERBS}\\b`, 'i')
+const DIRECT_ACTION_PATTERN = new RegExp(`^\\s*(?:please\\s+)?${DIRECT_ACTION_VERBS}\\b`, 'i')
 const REQUESTED_ACTION_PATTERN = new RegExp(
   `\\b(?:please|i need you to|i want you to|can you|could you|would you)\\b[\\s\\S]*\\b${ACTION_VERBS}\\b[\\s\\S]*\\b${ACTION_TARGETS}\\b`,
   'i',
