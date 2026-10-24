@@ -106,6 +106,16 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  const updateMessage = (index, updates) => {
+    const session = sessions.value.find((s) => s.id === activeSessionId.value)
+    const message = session?.messages?.[index]
+    if (!message || !updates || typeof updates !== 'object') return null
+
+    Object.assign(message, updates)
+    session.updatedAt = new Date().toISOString()
+    return message
+  }
+
   const renameSession = (sessionId, newTitle) => {
     const session = sessions.value.find((s) => s.id === sessionId)
     if (session && newTitle && newTitle.trim()) {
@@ -131,6 +141,7 @@ export const useChatStore = defineStore('chat', () => {
     selectSession,
     addMessage,
     editMessage,
+    updateMessage,
     renameSession,
     togglePinSession,
     deleteSession,
