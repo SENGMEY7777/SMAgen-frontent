@@ -52,6 +52,7 @@
                   @submit-approval="submitWorkflowApproval(message)"
                   @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
+                  @retry-workflow="retryWorkflowMessage(message)"
                   @open-run="router.push(`/runs/${$event}`)"
                 />
 
@@ -336,7 +337,9 @@ import { useChatStore } from '@/stores/chat'
 import { useWorkflowRuntime } from '@/composables/useWorkflowRuntime'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatRelativeTime } from '@/utils/formatters'
+import { detectRequestMode } from '@/utils/requestRouting'
 import {
+  getWorkflowRunId,
   getWorkflowTaskStatus,
   isWorkflowRunning,
   stringifyWorkflowValue,
@@ -571,6 +574,12 @@ const autoResizeTextarea = () => {
 
 watch(input, () => {
   autoResizeTextarea()
+
+  // Keep the composer mode in sync with the user's intent. Informational
+  // prompts stay in chat; direct workspace/task actions become workflows.
+  if (input.value.trim()) {
+    activeMode.value = detectRequestMode(input.value)
+  }
 })
 
 watch(activeMode, async (mode) => {
@@ -844,6 +853,51 @@ const retryUserMessage = async (index) => {
   }
 }
 
+const retryWorkflowMessage = async (message) => {
+  const workflow = message?.workflow
+  const index = currentMessages.value.indexOf(message)
+  const goalPrompt = workflow?.goalPrompt || message?.content
+  if (index === -1 || !goalPrompt || loading.value || workflow?.retrying) return
+
+  updateWorkflowMessage(index, {
+    runId: null,
+    status: 'STARTING',
+    startedAt: Date.now(),
+    completedAt: null,
+    finalSeconds: null,
+    elapsedSeconds: 0,
+    approval: null,
+    decisionPending: false,
+    tasks: [],
+    logs: [],
+    error: '',
+    retrying: true,
+  })
+
+  loading.value = true
+  try {
+    const response = await api.runWorkflow({ goalPrompt })
+    const runId = getWorkflowRunId(response)
+    if (!runId) throw new ApiError('The workflow started without a run ID.')
+
+    updateWorkflowMessage(index, {
+      runId: String(runId),
+      status: 'RUNNING',
+      retrying: false,
+    })
+    startWorkflowPolling(index, String(runId))
+  } catch (error) {
+    updateWorkflowMessage(index, {
+      status: 'FAILED',
+      retrying: false,
+      error: error instanceof ApiError ? error.message : 'Unable to run the workflow again.',
+    })
+  } finally {
+    loading.value = false
+    scrollToBottom()
+  }
+}
+
 const copyMessage = async (content, index) => {
   try {
     await navigator.clipboard.writeText(content)
@@ -871,6 +925,9 @@ const send = async () => {
   if ((!message && images.length === 0 && files.length === 0) || loading.value) return
   errorMessage.value = ''
 
+  const requestMode = message ? detectRequestMode(message) : activeMode.value
+  activeMode.value = requestMode
+
   // Format code/file contents into full prompt for AI analysis
   let fullPrompt = message
   if (files.length > 0) {
@@ -884,7 +941,7 @@ const send = async () => {
     }
   }
 
-  if (activeMode.value === 'workflow') {
+  if (requestMode === 'workflow') {
     chatStore.addMessage({
       role: 'user',
       content: message,
@@ -920,11 +977,7 @@ const send = async () => {
     scrollToBottom()
     try {
       const response = await api.runWorkflow({ goalPrompt: fullPrompt })
-      const runId = response?.data?.runId
-        || response?.data?.run_id
-        || response?.data?.id
-        || response?.runId
-        || response?.run_id
+      const runId = getWorkflowRunId(response)
       if (!runId) throw new ApiError('The workflow started without a run ID.')
 
       updateWorkflowMessage(workflowMessageIndex, {
