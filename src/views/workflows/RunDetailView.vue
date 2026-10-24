@@ -1080,14 +1080,13 @@ const submitDecision = async (status) => {
       }
     }
 
-    // 2. Resume approved workflows even when the decision endpoint succeeds.
-    // Some deployments record the decision without resuming the paused run.
-    if (status === 'APPROVED' && runId && runId.toLowerCase() !== 'demo') {
+    // 2. Resume approved workflows only if the decision endpoint did not automatically resume it.
+    if (status === 'APPROVED' && !decisionRecorded && runId && runId.toLowerCase() !== 'demo') {
       try {
         await api.resumeWorkflow(runId)
       } catch (resumeErr) {
         // 409 Conflict means the run is already in progress/running, which is expected
-        if (resumeErr?.status !== 409 && !decisionRecorded) {
+        if (resumeErr?.status !== 409) {
           console.warn('Resume workflow error:', resumeErr?.message)
         }
       }
