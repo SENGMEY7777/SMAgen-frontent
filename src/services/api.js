@@ -90,6 +90,8 @@ const extractStreamText = (value) => {
     value.text,
     value.content,
     value.message,
+    value.error?.message,
+    value.error,
     choice?.delta?.content,
     choice?.text,
   ]
@@ -157,11 +159,30 @@ const streamChat = async (message, history = [], options = {}) => {
     onText(text)
   }
 
+  const revealText = async (text) => {
+    if (!text) return
+    const chunkSize = Math.max(12, Math.ceil(text.length / 80))
+    for (let index = 0; index < text.length; index += chunkSize) {
+      if (signal?.aborted) {
+        const abortError = new Error('The response stream was stopped.')
+        abortError.name = 'AbortError'
+        throw abortError
+      }
+      emit(text.slice(index, index + chunkSize))
+      if (index + chunkSize < text.length) {
+        await new Promise((resolve) => window.setTimeout(resolve, 16))
+      }
+    }
+  }
+
   // A non-streaming server can still answer this request with the existing JSON shape.
   if (contentType.includes('application/json') || !response.body) {
     const payload = await response.json().catch(() => null)
     const text = extractStreamText(payload)
-    emit(text)
+    // Keep the chat feeling live on older deployments that return one JSON
+    // response instead of SSE/NDJSON. Native stream responses still use the
+    // network chunks below and are not delayed by this fallback.
+    await revealText(text)
     return { message: accumulated }
   }
 
