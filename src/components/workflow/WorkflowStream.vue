@@ -56,8 +56,18 @@
             {{ step.output }}
           </div>
           <div v-if="isStepExpanded(workflow, step.id || stepIndex)" class="stream-step-details">
-            <pre v-if="step.toolInput"><code>{{ step.toolInput }}</code></pre>
-            <pre v-if="step.output"><code>{{ step.output }}</code></pre>
+            <div v-if="step.toolInput" class="stream-code-block">
+              <div class="stream-code-header">
+                <span>input</span>
+              </div>
+              <pre class="stream-step-code"><code v-html="highlightCode(step.toolInput)"></code></pre>
+            </div>
+            <div v-if="step.output" class="stream-code-block">
+              <div class="stream-code-header">
+                <span>output</span>
+              </div>
+              <pre class="stream-step-code"><code v-html="highlightCode(step.output)"></code></pre>
+            </div>
           </div>
         </div>
       </div>
@@ -284,6 +294,87 @@ const getWorkflowResultItems = (workflow) => (workflow?.tasks || [])
       detail: paths.length ? paths.join(' · ') : 'Completed successfully',
     }
   })
+
+const escapeCodeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+const highlightCode = (value) => {
+  const source = String(value ?? '')
+  let html = ''
+  let index = 0
+
+  while (index < source.length) {
+    const character = source[index]
+
+    const commentMatch = source.slice(index).match(/^(?:\/\/|#|--\s)[^\n]*/)
+    if (commentMatch) {
+      html += `<span class="stream-code-comment">${escapeCodeHtml(commentMatch[0])}</span>`
+      index += commentMatch[0].length
+      continue
+    }
+
+    if (character === '"' || character === "'") {
+      const quote = character
+      let end = index + 1
+
+      while (end < source.length) {
+        if (source[end] === '\\') {
+          end += 2
+          continue
+        }
+        if (source[end] === quote) {
+          end += 1
+          break
+        }
+        end += 1
+      }
+
+      const token = source.slice(index, end)
+      const tokenClass = /^\s*:/.test(source.slice(end))
+        ? 'stream-code-key'
+        : 'stream-code-string'
+      html += `<span class="${tokenClass}">${escapeCodeHtml(token)}</span>`
+      index = end
+      continue
+    }
+
+    const keywordMatch = source.slice(index).match(/^(?:SELECT|FROM|WHERE|CREATE|TABLE|DROP|ALTER|INSERT|INTO|VALUES|UPDATE|DELETE|JOIN|ON|ORDER|BY|GROUP|LIMIT|PRIMARY|KEY|CONSTRAINT|UNIQUE|NOT|NULL|DEFAULT|IF|EXISTS|EXTENSION|AS|AND|OR)\b/i)
+    if (keywordMatch) {
+      html += `<span class="stream-code-keyword">${escapeCodeHtml(keywordMatch[0])}</span>`
+      index += keywordMatch[0].length
+      continue
+    }
+
+    const numberMatch = source.slice(index).match(/^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/)
+    if (numberMatch) {
+      html += `<span class="stream-code-number">${escapeCodeHtml(numberMatch[0])}</span>`
+      index += numberMatch[0].length
+      continue
+    }
+
+    const literalMatch = source.slice(index).match(/^(?:true|false|null|undefined)\b/)
+    if (literalMatch) {
+      html += `<span class="stream-code-literal">${literalMatch[0]}</span>`
+      index += literalMatch[0].length
+      continue
+    }
+
+    if ('{}[],:'.includes(character)) {
+      html += `<span class="stream-code-punctuation">${character}</span>`
+      index += 1
+      continue
+    }
+
+    html += escapeCodeHtml(character)
+    index += 1
+  }
+
+  return html
+}
 </script>
 
 <style scoped>
@@ -527,14 +618,84 @@ const getWorkflowResultItems = (workflow) => (workflow?.tasks || [])
   overflow-wrap: anywhere;
 }
 
-.stream-step-details pre {
+.stream-step-details {
   margin: 6px 0 2px 24px;
-  background: #18181b;
-  color: #e4e4e7;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stream-code-block {
+  overflow: hidden;
+  background: #111216;
+  color: #f8fafc;
+  border: 1px solid #232530;
+  border-radius: 9px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
+.stream-code-header {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 11px;
+  background: #181920;
+  color: #cbd5e1;
+  border-bottom: 1px solid #232530;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.stream-step-details pre.stream-step-code {
+  margin: 0;
+  background: #111216;
+  color: #e2e8f0;
+  border: none;
+  padding: 11px 12px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
   overflow-x: auto;
+}
+
+.stream-step-code code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.stream-step-code :deep(.stream-code-key) {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.stream-step-code :deep(.stream-code-string) {
+  color: #4ade80;
+}
+
+.stream-step-code :deep(.stream-code-number) {
+  color: #f472b6;
+}
+
+.stream-step-code :deep(.stream-code-literal) {
+  color: #818cf8;
+  font-weight: 600;
+}
+
+.stream-step-code :deep(.stream-code-punctuation) {
+  color: #cbd5e1;
+}
+
+.stream-step-code :deep(.stream-code-comment) {
+  color: #64748b;
+  font-style: italic;
+}
+
+.stream-step-code :deep(.stream-code-keyword) {
+  color: #818cf8;
+  font-weight: 600;
 }
 
 .workflow-subtle-footer {
