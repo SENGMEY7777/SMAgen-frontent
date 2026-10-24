@@ -40,7 +40,7 @@
             </button>
           </div>
 
-          <StatusPill v-if="run" :status="run.status" />
+          <StatusPill v-if="run" :status="runStatus" />
 
           <button
             v-if="hasPendingApproval"
@@ -52,13 +52,22 @@
             <span>Review & Approve</span>
           </button>
           <button
-            v-else-if="run?.status === 'PENDING'"
+            v-else-if="runStatus === 'PENDING'"
             class="zyn-primary-btn"
             type="button"
             @click="resume"
           >
             <IconPlayerPlay :size="14" />
             <span>Resume</span>
+          </button>
+          <button
+            v-else-if="isRunFailed"
+            class="zyn-primary-btn retry-workflow-btn"
+            type="button"
+            @click="retryWorkflow"
+          >
+            <IconRefresh :size="14" />
+            <span>{{ refreshing ? 'Retrying...' : 'Retry workflow' }}</span>
           </button>
           <button
             v-else
@@ -77,6 +86,13 @@
       </header>
 
       <div v-if="errorMessage" class="zyn-inline-error">{{ errorMessage }}</div>
+      <div v-if="run && isRunFailed && runFailureMessage" class="zyn-run-failure">
+        <div>
+          <strong>Execution failed</strong>
+          <span>{{ runFailureMessage }}</span>
+        </div>
+        <button type="button" @click="activeTab = 'logs'">View activity logs</button>
+      </div>
 
       <!-- Main Two-Column Layout -->
       <div class="zyn-editor-body">
@@ -247,7 +263,7 @@
                 <span class="log-source">{{ log.source }}</span>
                 <span class="log-time">{{ formatDate(log.created_at) }}</span>
               </div>
-              <p class="log-text">{{ formatLogMessage(log.message) }}</p>
+              <p class="log-text">{{ formatLogMessage(log.message, log.payload, log.event) }}</p>
             </div>
           </div>
 
@@ -382,9 +398,14 @@
                     </span>
                   </div>
 
+                  <div v-if="isTaskFailed(tasks[0])" class="node-error-details">
+                    <strong>Execution failed</strong>
+                    <span>{{ taskError(tasks[0]) || 'The backend reported a failure without details.' }}</span>
+                  </div>
+
                   <!-- Inline Approval Banner if awaiting approval -->
                   <div
-                    v-if="tasks[0]?.status === 'AWAITING_APPROVAL'"
+                  v-if="isTaskAwaiting(tasks[0])"
                     class="node-approval-banner"
                     @click.stop="openReview(tasks[0])"
                   >
@@ -467,9 +488,14 @@
                     </span>
                   </div>
 
+                  <div v-if="isTaskFailed(tasks[1])" class="node-error-details">
+                    <strong>Execution failed</strong>
+                    <span>{{ taskError(tasks[1]) || 'The backend reported a failure without details.' }}</span>
+                  </div>
+
                   <!-- Inline Approval Banner if awaiting approval -->
                   <div
-                    v-if="tasks[1]?.status === 'AWAITING_APPROVAL'"
+                  v-if="isTaskAwaiting(tasks[1])"
                     class="node-approval-banner"
                     @click.stop="openReview(tasks[1])"
                   >
@@ -513,8 +539,8 @@
                   v-for="(task, idx) in tasks.slice(2)"
                   :key="task.id || idx"
                   class="zyn-mini-node"
-                  :class="{ 'awaiting': task.status === 'AWAITING_APPROVAL' }"
-                  @click="task.status === 'AWAITING_APPROVAL' ? openReview(task) : null"
+                  :class="{ 'awaiting': isTaskAwaiting(task) }"
+                  @click="isTaskAwaiting(task) ? openReview(task) : null"
                 >
                   <div class="mini-node-head">
                     <span class="mini-index">{{ idx + 3 }}</span>
@@ -524,9 +550,12 @@
                   <div class="mini-node-body">
                     <small>{{ task.assigned_tool }}</small>
                     <p>{{ task.instruction }}</p>
+                    <div v-if="isTaskFailed(task)" class="mini-node-error">
+                      {{ taskError(task) || 'The backend reported a failure without details.' }}
+                    </div>
                   </div>
                   <div
-                    v-if="task.status === 'AWAITING_APPROVAL'"
+                    v-if="isTaskAwaiting(task)"
                     class="node-approval-banner mini"
                     @click.stop="openReview(task)"
                   >
@@ -674,7 +703,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import {
@@ -704,6 +733,13 @@ import { api, ApiError } from '@/services/api'
 import { createSocketClient } from '@/services/socket'
 import { formatDate } from '@/utils/formatters'
 import { ACTIVE_RUN_STATUSES } from '@/config/constants'
+import {
+  getWorkflowLogs,
+  getWorkflowRunId,
+  getWorkflowRunPayload,
+  getWorkflowTasks,
+  normalizeWorkflowLog,
+} from '@/utils/workflow'
 
 const route = useRoute()
 const router = useRouter()
@@ -740,16 +776,51 @@ const approvalError = ref('')
 let timer
 let socket
 
-const tasks = computed(() => run.value?.tasks || [])
-const logs = computed(() => run.value?.logs || [])
-const isTaskAwaiting = (task) => task?.status === 'AWAITING_APPROVAL'
-const isTaskSuccessful = (task) => ['SUCCESS', 'COMPLETED'].includes(task?.status)
-const isTaskFailed = (task) => ['FAILED', 'SKIPPED'].includes(task?.status)
+const tasks = computed(() => {
+  return getWorkflowTasks(run.value)
+})
+const logs = computed(() => {
+  return getWorkflowLogs(run.value).map(normalizeWorkflowLog)
+})
+const normalizeStatus = (value) => String(value || '').trim().toUpperCase()
+const taskStatus = (task) => normalizeStatus(task?.status || task?.task_status || task?.state)
+const runStatus = computed(() => normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state))
+const parseTaskPayload = (value) => {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+const taskError = (task) => {
+  if (!task) return ''
+  const outputPayload = parseTaskPayload(task.output_payload || task.outputPayload)
+  const error = task.error
+    || task.error_message
+    || task.errorMessage
+    || task.failure_reason
+    || task.failureReason
+    || outputPayload?.error
+    || outputPayload?.message
+    || (task.output && taskStatus(task) === 'FAILED' ? task.output : '')
+  if (!error) return ''
+  if (typeof error === 'string') return error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+const isTaskAwaiting = (task) => taskStatus(task) === 'AWAITING_APPROVAL'
+const isTaskSuccessful = (task) => ['SUCCESS', 'COMPLETED'].includes(taskStatus(task))
+const isTaskFailed = (task) => ['FAILED', 'SKIPPED', 'CANCELLED'].includes(taskStatus(task))
 const taskStatusLabel = (task) => {
   if (isTaskAwaiting(task)) return 'WAITING'
-  if (isTaskFailed(task)) return task?.status || 'FAILED'
+  if (isTaskFailed(task)) return taskStatus(task) || 'FAILED'
   if (isTaskSuccessful(task)) return 'SUCCESS'
-  return task?.status || 'PENDING'
+  return taskStatus(task) || 'PENDING'
 }
 const taskStatusIcon = (task) => {
   if (isTaskAwaiting(task)) return IconAlertTriangle
@@ -757,25 +828,38 @@ const taskStatusIcon = (task) => {
   return IconCheck
 }
 const progress = computed(() => {
-  if (!tasks.value.length) return run.value?.status === 'COMPLETED' ? 100 : 8
+  if (!tasks.value.length) return normalizeStatus(run.value?.status) === 'COMPLETED' ? 100 : 8
   const successful = tasks.value.filter((task) => isTaskSuccessful(task)).length
   return Math.round((successful / tasks.value.length) * 100)
 })
-const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(run.value?.status))
+const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state)))
+const isRunFailed = computed(() => ['FAILED', 'CANCELLED'].includes(normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state)))
 const hasPendingApproval = computed(() => {
-  return run.value?.status === 'AWAITING_APPROVAL' || tasks.value.some((t) => t.status === 'AWAITING_APPROVAL')
+  return normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state) === 'AWAITING_APPROVAL' || tasks.value.some(isTaskAwaiting)
+})
+const runFailureMessage = computed(() => {
+  const runError = run.value?.error
+    || run.value?.error_message
+    || run.value?.errorMessage
+    || run.value?.failure_reason
+    || run.value?.failureReason
+  if (runError) return typeof runError === 'string' ? runError : JSON.stringify(runError)
+
+  const failureLog = logs.value.find((log) => log.level === 'ERROR' || /(failed|error|dependency)/i.test(`${log.event || ''} ${log.message || ''}`))
+  return failureLog ? formatLogMessage(failureLog.message, failureLog.payload, failureLog.event) : ''
 })
 
 // Simulated / Measured Performance Metrics
 const responseTimeDisplay = computed(() => {
-  if (run.value?.status === 'COMPLETED') return '1.4s'
+  if (normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state) === 'COMPLETED') return '1.4s'
   if (isActive.value) return '0.8s'
   return '1.2s'
 })
 
 const accuracyDisplay = computed(() => {
-  if (run.value?.status === 'COMPLETED') return '98.5%'
-  if (run.value?.status === 'FAILED') return '64.0%'
+  const status = normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state)
+  if (status === 'COMPLETED') return '98.5%'
+  if (status === 'FAILED') return '64.0%'
   return '88.2%'
 })
 
@@ -857,18 +941,20 @@ const load = async (silent = false) => {
       return
     }
     const response = await api.getRun(String(route.params.runId))
-    run.value = response?.data || null
-    if (run.value?.goal_prompt) {
-      workflowName.value = run.value.goal_prompt.slice(0, 48) || 'Hello Lads!'
-      workflowDescription.value = run.value.goal_prompt
+    const loadedRun = getWorkflowRunPayload(response)
+    if (!loadedRun || typeof loadedRun !== 'object') {
+      throw new ApiError('The workflow run response was empty or invalid.')
+    }
+    run.value = loadedRun
+    const goalPrompt = loadedRun.goal_prompt || loadedRun.goalPrompt || ''
+    if (goalPrompt) {
+      workflowName.value = goalPrompt.slice(0, 48) || 'Hello Lads!'
+      workflowDescription.value = goalPrompt
     }
     errorMessage.value = ''
   } catch (error) {
-    // If backend is not available or run not found, provide demo workflow data for seamless testing
-    run.value = createDemoRun(String(route.params.runId))
-    workflowName.value = 'Hello Lads!'
-    workflowDescription.value = run.value.goal_prompt
-    errorMessage.value = ''
+    run.value = null
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load this workflow run.'
   } finally {
     loading.value = false
     refreshing.value = false
@@ -880,10 +966,10 @@ const openReview = async (targetTask = null) => {
   rejectionReason.value = ''
 
   // Identify target task awaiting approval
-  const awaitingTask = targetTask?.status === 'AWAITING_APPROVAL'
+  const awaitingTask = isTaskAwaiting(targetTask)
     ? targetTask
-    : tasks.value.find((t) => t.status === 'AWAITING_APPROVAL') || null
-  const runIsAwaitingApproval = run.value?.status === 'AWAITING_APPROVAL'
+    : tasks.value.find(isTaskAwaiting) || null
+  const runIsAwaitingApproval = normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state) === 'AWAITING_APPROVAL'
 
   // Do not query the pending-approval endpoint for a decision that has
   // already been completed. This also prevents the stale action buttons from
@@ -1011,7 +1097,7 @@ const submitDecision = async (status) => {
     if (run.value) {
       if (Array.isArray(run.value.tasks)) {
         const idx = run.value.tasks.findIndex(
-          (t) => (targetTaskId && String(t.id) === String(targetTaskId)) || t.status === 'AWAITING_APPROVAL'
+          (t) => (targetTaskId && String(t.id) === String(targetTaskId)) || isTaskAwaiting(t)
         )
         if (idx !== -1) {
           run.value.tasks[idx].status = status === 'APPROVED' ? 'SUCCESS' : 'SKIPPED'
@@ -1019,9 +1105,9 @@ const submitDecision = async (status) => {
       }
 
       // Check if all tasks in run are now active or completed
-      const remainingAwaiting = run.value.tasks.some((t) => t.status === 'AWAITING_APPROVAL')
+      const remainingAwaiting = run.value.tasks.some(isTaskAwaiting)
       if (!remainingAwaiting) {
-        const allCompleted = run.value.tasks.every((t) => ['SUCCESS', 'COMPLETED', 'SKIPPED'].includes(t.status))
+        const allCompleted = run.value.tasks.every((t) => ['SUCCESS', 'COMPLETED', 'SKIPPED'].includes(taskStatus(t)))
         run.value.status = allCompleted ? 'COMPLETED' : 'RUNNING'
       }
 
@@ -1059,6 +1145,28 @@ const resume = async () => {
     await load(true)
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to resume this run.'
+  }
+}
+
+const retryWorkflow = async () => {
+  const goalPrompt = run.value?.goal_prompt || run.value?.goalPrompt
+  if (!goalPrompt || refreshing.value) return
+
+  refreshing.value = true
+  errorMessage.value = ''
+  try {
+    const response = await api.runWorkflow({ goalPrompt })
+    const runId = getWorkflowRunId(response)
+
+    if (!runId) {
+      throw new ApiError('The retry started but no new workflow run ID was returned.')
+    }
+
+    await router.push(`/runs/${runId}`)
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to retry this workflow.'
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -1114,8 +1222,8 @@ const sendAiPrompt = async () => {
   }
 }
 
-const formatLogMessage = (rawMessage) => {
-  if (!rawMessage) return ''
+const formatLogMessage = (rawMessage, payload = null, eventName = '') => {
+  if (!rawMessage && !payload && !eventName) return ''
   const stringifyValue = (value) => {
     if (typeof value === 'string') return value
     try {
@@ -1125,7 +1233,7 @@ const formatLogMessage = (rawMessage) => {
     }
   }
 
-  if (typeof rawMessage !== 'string') return stringifyValue(rawMessage)
+  if (typeof rawMessage !== 'string') return stringifyValue(rawMessage || payload || eventName)
   try {
     const parsed = JSON.parse(rawMessage)
     if (parsed && typeof parsed === 'object') {
@@ -1138,52 +1246,67 @@ const formatLogMessage = (rawMessage) => {
       return JSON.stringify(parsed, null, 2)
     }
   } catch {}
-  return rawMessage
+  if (payload && typeof payload === 'object') {
+    const payloadMessage = payload.message || payload.error || payload.reason || payload.status
+    return payloadMessage ? `${rawMessage}: ${stringifyValue(payloadMessage)}` : `${rawMessage} (${stringifyValue(payload)})`
+  }
+  return rawMessage || eventName
 }
+
+const refreshEvents = [
+  'telemetry',
+  'task_started',
+  'task_completed',
+  'task_failed',
+  'approval_required',
+  'workflow_completed',
+  'workflow_failed',
+  'run_status_changed',
+]
+
+const disconnectRunSocket = (runId = route.params.runId) => {
+  if (!socket) return
+  try {
+    socket.emit('leave_run', String(runId))
+    socket.disconnect()
+  } catch {}
+  socket = null
+}
+
+const connectRunSocket = (runId) => {
+  if (String(runId).toLowerCase() === 'demo') return
+  socket = createSocketClient()
+  if (!socket) return
+
+  socket.on('connect', () => {
+    socket.emit('join_run', String(runId))
+  })
+  refreshEvents.forEach((evt) => socket.on(evt, () => load(true)))
+  socket.on('connect_error', () => {
+    // Quietly ignore connection errors to prevent console flooding
+  })
+}
+
+watch(() => route.params.runId, async (newRunId, oldRunId) => {
+  if (newRunId === oldRunId) return
+  disconnectRunSocket(oldRunId)
+  activeTab.value = 'canvas'
+  run.value = null
+  await load()
+  connectRunSocket(newRunId)
+})
 
 onMounted(async () => {
   await load()
   timer = window.setInterval(() => {
     if (isActive.value) load(true)
   }, 4500)
-
-  const runId = String(route.params.runId)
-  if (runId.toLowerCase() !== 'demo') {
-    socket = createSocketClient()
-    if (socket) {
-      socket.on('connect', () => {
-        socket.emit('join_run', runId)
-      })
-
-      const refreshEvents = [
-        'telemetry',
-        'task_started',
-        'task_completed',
-        'task_failed',
-        'approval_required',
-        'workflow_completed',
-        'workflow_failed',
-      ]
-      refreshEvents.forEach((evt) => {
-        socket.on(evt, () => load(true))
-      })
-
-      socket.on('connect_error', () => {
-        // Quietly ignore connection errors to prevent console flooding
-      })
-    }
-  }
+  connectRunSocket(route.params.runId)
 })
 
 onBeforeUnmount(() => {
   if (timer) window.clearInterval(timer)
-  if (socket) {
-    try {
-      socket.emit('leave_run', String(route.params.runId))
-      socket.disconnect()
-    } catch {}
-    socket = null
-  }
+  disconnectRunSocket()
 })
 </script>
 
@@ -1360,6 +1483,45 @@ onBeforeUnmount(() => {
   color: #dc2626;
   font-size: 12px;
   border-bottom: 1px solid #fee2e2;
+}
+
+.zyn-run-failure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 16px;
+  background: #fff7f7;
+  border-bottom: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 12px;
+}
+
+.zyn-run-failure div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.zyn-run-failure strong {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.zyn-run-failure span {
+  overflow-wrap: anywhere;
+}
+
+.zyn-run-failure button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 /* Two-Column Editor Layout */
@@ -1714,6 +1876,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
 }
 
+.retry-workflow-btn {
+  background: #dc2626;
+}
+
+.retry-workflow-btn:hover {
+  background: #b91c1c;
+}
+
 .node-purple-header {
   display: flex;
   align-items: center;
@@ -1840,6 +2010,26 @@ onBeforeUnmount(() => {
   background: #fef2f2;
   color: #b91c1c;
   border-color: #fecaca;
+}
+
+.node-error-details {
+  display: grid;
+  gap: 3px;
+  margin: 9px 0 4px;
+  padding: 8px 9px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff7f7;
+  color: #991b1b;
+  font-size: 10.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.node-error-details strong {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .node-approval-banner {
@@ -2136,6 +2326,17 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 11.5px;
   color: #334155;
+}
+
+.mini-node-error {
+  margin-top: 6px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: #fff7f7;
+  color: #b91c1c;
+  font-size: 10.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 /* Logs View */
