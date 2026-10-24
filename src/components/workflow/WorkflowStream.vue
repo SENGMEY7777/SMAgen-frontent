@@ -9,6 +9,26 @@
       {{ getCurrentWorkingText(workflow) }}
     </div>
 
+    <section
+      v-if="getLiveActivities(workflow).length"
+      class="stream-live-activity"
+      :class="{ completed: !isWorkflowLive(workflow) }"
+      aria-live="polite"
+      aria-label="Live workflow activity"
+    >
+      <div class="stream-live-activity-head">
+        <span class="stream-live-indicator" :class="{ active: isWorkflowLive(workflow) }"></span>
+        <strong>{{ isWorkflowLive(workflow) ? 'Live activity' : 'Activity summary' }}</strong>
+        <span>{{ getActivityCount(workflow) }} events</span>
+      </div>
+      <div v-for="activity in getLiveActivities(workflow)" :key="activity.id" class="stream-live-activity-row">
+        <span class="stream-activity-status" :class="activity.statusClass"></span>
+        <span class="stream-activity-source">{{ activity.source }}</span>
+        <span class="stream-activity-message">{{ activity.message }}</span>
+        <time v-if="activity.time" class="stream-activity-time">{{ activity.time }}</time>
+      </div>
+    </section>
+
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
       <button type="button" class="stream-steps-toggle" @click="$emit('toggle-stream')">
         <span>{{ workflow.isStreamOpen ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
@@ -44,6 +64,42 @@
       </div>
     </div>
 
+    <section v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-card" aria-live="polite">
+      <div class="workflow-completion-heading">
+        <span class="workflow-completion-icon"><IconCheck :size="16" /></span>
+        <div>
+          <strong>Workflow completed successfully</strong>
+          <span>{{ getElapsedText(workflow) }}</span>
+        </div>
+      </div>
+
+      <div class="workflow-completion-summary">
+        <span>{{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed</span>
+      </div>
+
+      <div v-if="getWorkflowResultItems(workflow).length" class="workflow-result-list">
+        <div v-for="result in getWorkflowResultItems(workflow)" :key="result.id" class="workflow-result-item">
+          <IconFile :size="14" />
+          <span>{{ result.label }}</span>
+          <code>{{ result.detail }}</code>
+        </div>
+      </div>
+
+      <div class="workflow-completion-actions">
+        <button type="button" @click="$emit('toggle-stream')">
+          {{ workflow.isStreamOpen ? 'Hide steps' : 'View steps' }}
+        </button>
+        <button type="button" @click="$emit('open-run', workflow.runId)">
+          Open workflow run <IconArrowRight :size="12" />
+        </button>
+        <button type="button" :disabled="workflow.retrying" @click="$emit('retry-workflow')">
+          <IconLoader2 v-if="workflow.retrying" :size="12" class="spin-icon" />
+          <IconRefresh v-else :size="12" />
+          {{ workflow.retrying ? 'Running again…' : 'Run again' }}
+        </button>
+      </div>
+    </section>
+
     <WorkflowApprovalPanel
       v-if="workflow.approval"
       :approval="workflow.approval"
@@ -76,7 +132,9 @@ import {
   IconArrowRight,
   IconCheck,
   IconChevronDown,
+  IconFile,
   IconLoader2,
+  IconRefresh,
   IconShieldCheck,
   IconTerminal2,
   IconX,
@@ -134,7 +192,123 @@ defineEmits([
   'update-approval-choice',
   'update-approval-rejection',
   'open-run',
+  'retry-workflow',
 ])
+
+const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
+
+const isWorkflowLive = (workflow) => ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(String(workflow?.status || '').toUpperCase())
+
+const getRawActivities = (workflow) => {
+  const sources = [workflow?.logs, workflow?.activity_logs, workflow?.activityLogs, workflow?.events, workflow?.telemetry]
+  for (const source of sources) {
+    if (Array.isArray(source) && source.length) return source
+    if (Array.isArray(source?.items) && source.items.length) return source.items
+    if (Array.isArray(source?.data) && source.data.length) return source.data
+  }
+  return []
+}
+
+const formatActivityName = (value) => String(value || 'Activity')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase())
+
+const formatActivityMessage = (activity) => {
+  const eventName = activity?.event || activity?.event_name || activity?.eventName || activity?.type || activity?.kind
+  const payload = activity?.payload ?? activity?.details
+  const message = activity?.message || activity?.description
+  if (typeof message === 'string' && message.trim() && message !== eventName) return message
+  if (typeof payload === 'object') {
+    const payloadMessage = payload.message || payload.error || payload.reason || payload.status
+    if (payloadMessage) return `${formatActivityName(eventName)}: ${typeof payloadMessage === 'string' ? payloadMessage : JSON.stringify(payloadMessage)}`
+  }
+  if (message && typeof message !== 'object') return String(message)
+  return formatActivityName(eventName)
+}
+
+const getLiveActivities = (workflow) => getRawActivities(workflow)
+  .map((activity, index) => {
+    const eventName = activity?.event || activity?.event_name || activity?.eventName || activity?.type || activity?.kind || ''
+    const eventText = typeof eventName === 'string' ? eventName : ''
+    const rawLevel = String(activity?.level || activity?.severity || '').toLowerCase()
+    const searchable = `${eventText} ${activity?.message || ''}`.toLowerCase()
+    const statusClass = rawLevel === 'error' || /failed|error|exception/.test(searchable)
+      ? 'error'
+      : (rawLevel === 'warn' || /approval|awaiting|warning/.test(searchable) ? 'warning' : 'success')
+    const timestamp = activity?.created_at || activity?.createdAt || activity?.timestamp || activity?.occurred_at || activity?.time
+    let time = ''
+    if (timestamp) {
+      const date = new Date(timestamp)
+      if (!Number.isNaN(date.getTime())) {
+        time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      }
+    }
+    return {
+      id: activity?.id || activity?.log_id || activity?.logId || `${eventName || 'activity'}-${index}`,
+      source: activity?.source || activity?.service || activity?.component || eventText.split('_')[0]?.toUpperCase() || 'SYSTEM',
+      message: formatActivityMessage(activity),
+      statusClass,
+      time,
+      timestamp: timestamp ? new Date(timestamp).getTime() : index,
+    }
+  })
+  .sort((left, right) => left.timestamp - right.timestamp)
+  .slice(-5)
+  .reverse()
+
+const getActivityCount = (workflow) => getRawActivities(workflow).length
+
+const completedStepCount = (workflow) => (workflow?.tasks || []).filter((task) => {
+  return ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase())
+}).length
+
+const parseValue = (value) => {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+const findResultPaths = (value, paths = []) => {
+  if (!value || paths.length >= 3) return paths
+  if (Array.isArray(value)) {
+    value.forEach((item) => findResultPaths(item, paths))
+    return paths
+  }
+  if (typeof value !== 'object') return paths
+
+  for (const key of ['path', 'file_path', 'filePath', 'location', 'folder', 'directory']) {
+    const candidate = value[key]
+    if (typeof candidate === 'string' && candidate.trim() && !paths.includes(candidate)) paths.push(candidate)
+  }
+
+  Object.values(value).forEach((child) => {
+    if (child && typeof child === 'object') findResultPaths(child, paths)
+  })
+  return paths
+}
+
+const getWorkflowResultItems = (workflow) => (workflow?.tasks || [])
+  .filter((task) => ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase()))
+  .map((task, index) => {
+    const output = parseValue(
+      task.output_data
+        || task.outputData
+        || task.output_payload
+        || task.outputPayload
+        || task.result
+        || task.output,
+    )
+    const paths = findResultPaths(output)
+    return {
+      id: task.id || `result-${index}`,
+      label: task.title || task.instruction || `Step ${index + 1}`,
+      detail: paths.length ? paths.join(' · ') : 'Completed successfully',
+    }
+  })
 </script>
 
 <style scoped>
@@ -188,6 +362,101 @@ defineEmits([
   line-height: 1.5;
   margin-top: 6px;
   margin-bottom: 8px;
+}
+
+.stream-live-activity {
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.stream-live-activity.completed {
+  border-color: #dcfce7;
+  background: #fbfffc;
+}
+
+.stream-live-activity-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #334155;
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+
+.stream-live-activity-head strong {
+  font-size: 11.5px;
+}
+
+.stream-live-activity-head > span:last-child {
+  margin-left: auto;
+  color: #94a3b8;
+}
+
+.stream-live-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.stream-live-indicator.active {
+  background: #2563eb;
+  box-shadow: 0 0 0 3px #dbeafe;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+.stream-live-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 0;
+  border-top: 1px solid #eef2f7;
+  color: #475569;
+  font-size: 11.5px;
+}
+
+.stream-activity-status {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.stream-activity-status.warning { background: #f59e0b; }
+.stream-activity-status.error { background: #ef4444; }
+
+.stream-activity-source {
+  flex: 0 0 auto;
+  min-width: 66px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stream-activity-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stream-activity-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .stream-steps-preview {
@@ -324,6 +593,117 @@ defineEmits([
   background: #fef2f2;
   color: #b91c1c;
   font-size: 12px;
+}
+
+.workflow-completion-card {
+  margin: 18px 0 10px;
+  padding: 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.workflow-completion-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workflow-completion-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.workflow-completion-heading strong {
+  font-size: 14px;
+}
+
+.workflow-completion-heading span:last-child {
+  color: #4d7c5b;
+  font-size: 12px;
+}
+
+.workflow-completion-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.workflow-completion-summary {
+  margin-top: 12px;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workflow-result-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.workflow-result-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #dcfce7;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #166534;
+  font-size: 12px;
+}
+
+.workflow-result-item span {
+  font-weight: 600;
+}
+
+.workflow-result-item code {
+  min-width: 0;
+  overflow: hidden;
+  color: #3f6212;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-completion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.workflow-completion-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #166534;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.workflow-completion-actions button:hover {
+  border-color: #86efac;
+  background: #dcfce7;
+}
+
+.workflow-completion-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .spin-icon {
