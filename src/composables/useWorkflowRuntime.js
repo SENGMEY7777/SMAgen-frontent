@@ -3,6 +3,9 @@ import { api, ApiError } from '@/services/api'
 import { createSocketClient } from '@/services/socket'
 import {
   deriveWorkflowStatus,
+  getWorkflowLogs,
+  getWorkflowRunPayload,
+  getWorkflowTasks,
   getWorkflowTaskStatus,
   isTerminalWorkflowStatus,
   isWorkflowRunning,
@@ -71,19 +74,9 @@ export function useWorkflowRuntime({
 
     try {
       const response = await api.getRun(String(runId))
-      const workflowRun = response?.data?.run
-        || response?.data?.workflow
-        || response?.data
-        || response?.run
-        || response?.workflow
-        || response
-        || {}
-      const tasks = Array.isArray(workflowRun.tasks)
-        ? workflowRun.tasks
-        : (workflowRun.tasks?.items || workflowRun.tasks?.data || [])
-      const logs = Array.isArray(workflowRun.logs)
-        ? workflowRun.logs
-        : (workflowRun.logs?.items || workflowRun.logs?.data || [])
+      const workflowRun = getWorkflowRunPayload(response) || {}
+      const tasks = getWorkflowTasks(workflowRun)
+      const logs = getWorkflowLogs(workflowRun)
       const workflowStatus = workflowRun.status || workflowRun.run_status || workflowRun.state
       const workflowErrorValue = workflowRun.error || workflowRun.error_message || workflowRun.failure_reason || ''
       const workflowError = workflowErrorValue ? stringifyWorkflowValue(workflowErrorValue) : ''

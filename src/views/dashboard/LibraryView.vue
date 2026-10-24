@@ -93,6 +93,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import { IconPlus, IconX, IconPlayerPlay } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDateShort } from '@/utils/formatters'
+import { getWorkflowRunId } from '@/utils/workflow'
 
 const router = useRouter()
 const workflows = ref([])
@@ -136,11 +137,7 @@ const runWorkflow = async () => {
       workflowId: runTarget.value.id,
       goalPrompt: runGoal.value.trim(),
     })
-    const runId = response?.data?.runId
-      || response?.data?.run_id
-      || response?.data?.id
-      || response?.runId
-      || response?.run_id
+    const runId = getWorkflowRunId(response)
 
     if (!runId) {
       throw new ApiError('The workflow started but no run ID was returned. Please try again.')

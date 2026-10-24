@@ -122,6 +122,7 @@ import { IconClock, IconGitFork, IconPlayerPlay, IconArrowRight } from '@tabler/
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate, formatTokens } from '@/utils/formatters'
+import { getWorkflowRunId } from '@/utils/workflow'
 
 const router = useRouter()
 const runs = ref([])
@@ -163,11 +164,7 @@ const startDagWorkflow = async () => {
   errorMessage.value = ''
   try {
     const response = await api.runWorkflow({ goalPrompt: goal })
-    const runId = response?.data?.runId
-      || response?.data?.run_id
-      || response?.data?.id
-      || response?.runId
-      || response?.run_id
+    const runId = getWorkflowRunId(response)
 
     if (!runId) {
       throw new ApiError('The workflow started but no run ID was returned. Please try again.')
