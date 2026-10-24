@@ -34,80 +34,77 @@
           >
             <div class="message-content-box">
               <div v-if="message.role === 'assistant'" class="assistant-response-wrap">
-                <div v-if="message.workflow" class="workflow-chat-card" :class="workflowStatusClass(message.workflow)">
-                  <div class="workflow-chat-header">
-                    <div class="workflow-chat-heading">
-                      <span class="workflow-terminal-icon"><IconTerminal2 :size="16" /></span>
-                      <div>
-                        <div class="workflow-chat-eyebrow">SMAgen workflow</div>
-                        <h3>{{ message.workflow.approval ? `Allow ${message.workflow.approval.assignedTool}?` : workflowStatusTitle(message.workflow) }}</h3>
-                      </div>
+                <div v-if="message.workflow" class="workflow-body-stream">
+                  <!-- Goal header directly on body background -->
+                  <div class="workflow-body-goal">
+                    <div class="workflow-goal-left">
+                      <span class="workflow-goal-icon"><IconTerminal2 :size="15" /></span>
+                      <span class="workflow-goal-label">Goal:</span>
+                      <span class="workflow-goal-text">{{ message.workflow.goalPrompt }}</span>
                     </div>
-                    <span class="workflow-status-pill">{{ workflowStatusLabel(message.workflow) }}</span>
+                    <span class="workflow-body-status-pill" :class="workflowStatusClass(message.workflow)">
+                      {{ workflowStatusLabel(message.workflow) }}
+                    </span>
                   </div>
 
-                  <p class="workflow-chat-prompt">{{ message.workflow.goalPrompt }}</p>
-
-                  <!-- Live Stream Activity Feed (Antigravity-style) -->
-                  <div v-if="message.workflow.tasks?.length || isWorkflowRunning(message.workflow)" class="workflow-live-stream">
+                  <!-- Live Stream Activity Feed (Antigravity-style directly on body bg) -->
+                  <div v-if="message.workflow.tasks?.length || isWorkflowRunning(message.workflow)" class="workflow-body-live-stream">
                     <!-- Stream Toggle Header -->
                     <button
                       type="button"
-                      class="stream-toggle-header"
+                      class="stream-body-header"
                       @click="toggleStreamOpen(message.workflow)"
                     >
-                      <div class="stream-toggle-title">
-                        <span class="stream-icon-sparkle">
-                          <IconLoader2 v-if="isWorkflowRunning(message.workflow)" :size="13" class="spin-icon" />
-                          <IconCheck v-else :size="13" class="text-green" />
-                        </span>
-                        <span>{{ getStreamHeading(message.workflow) }}</span>
+                      <div class="stream-body-title">
+                        <IconLoader2 v-if="isWorkflowRunning(message.workflow)" :size="14" class="spin-icon text-blue" />
+                        <IconCheck v-else :size="14" class="text-green" />
+                        <span class="stream-body-heading">{{ getStreamHeading(message.workflow) }}</span>
                       </div>
                       <IconChevronDown
-                        :size="13"
-                        class="stream-chevron"
+                        :size="14"
+                        class="stream-body-chevron"
                         :class="{ 'chevron-up': message.workflow.isStreamOpen !== false }"
                       />
                     </button>
 
-                    <!-- Stream Content Drawer -->
-                    <div v-if="message.workflow.isStreamOpen !== false" class="stream-content">
+                    <!-- Stream Steps Drawer -->
+                    <div v-if="message.workflow.isStreamOpen !== false" class="stream-body-content">
                       <div
                         v-for="(step, sIndex) in getWorkflowSteps(message.workflow)"
                         :key="step.id || sIndex"
-                        class="stream-step-row"
+                        class="stream-body-row"
                         :class="{ expanded: isStepExpanded(message.workflow, step.id || sIndex) }"
                       >
                         <div
-                          class="stream-step-header"
+                          class="stream-body-row-head"
                           @click="toggleStepExpanded(message.workflow, step.id || sIndex)"
                         >
-                          <div class="stream-step-left">
-                            <span class="stream-step-icon" :class="step.statusClass">
+                          <div class="stream-body-row-left">
+                            <span class="stream-body-row-icon" :class="step.statusClass">
                               <IconLoader2 v-if="step.isRunning" :size="12" class="spin-icon" />
                               <IconCheck v-else-if="step.isCompleted" :size="12" />
                               <IconX v-else-if="step.isFailed" :size="12" />
                               <IconShieldCheck v-else-if="step.isApproval" :size="12" />
                               <IconTerminal2 v-else :size="12" />
                             </span>
-                            <span class="stream-step-label">{{ step.label }}</span>
-                            <span v-if="step.isApproval" class="stream-shield-pill">
+                            <span class="stream-body-row-label">{{ step.label }}</span>
+                            <span v-if="step.isApproval" class="stream-body-shield-pill">
                               <IconShieldCheck :size="10" /> Protected
                             </span>
                           </div>
-                          <div class="stream-step-right">
-                            <span v-if="step.duration" class="stream-step-duration">{{ step.duration }}</span>
+                          <div class="stream-body-row-right">
+                            <span v-if="step.duration" class="stream-body-row-duration">{{ step.duration }}</span>
                             <IconChevronRight :size="12" class="step-chevron" />
                           </div>
                         </div>
 
                         <!-- Expanded details (tool input / output) -->
-                        <div v-if="isStepExpanded(message.workflow, step.id || sIndex)" class="stream-step-body">
-                          <div v-if="step.toolInput" class="stream-code-block">
+                        <div v-if="isStepExpanded(message.workflow, step.id || sIndex)" class="stream-body-row-details">
+                          <div v-if="step.toolInput" class="stream-body-code-block">
                             <div class="code-label">Input</div>
                             <pre><code>{{ step.toolInput }}</code></pre>
                           </div>
-                          <div v-if="step.output" class="stream-code-block">
+                          <div v-if="step.output" class="stream-body-code-block">
                             <div class="code-label">Output</div>
                             <pre><code>{{ step.output }}</code></pre>
                           </div>
@@ -115,13 +112,14 @@
                       </div>
 
                       <!-- Working / Live Pulsing Indicator at bottom -->
-                      <div v-if="isWorkflowRunning(message.workflow)" class="stream-working-row">
+                      <div v-if="isWorkflowRunning(message.workflow)" class="stream-body-working-row">
                         <span class="working-pulse-dot"></span>
                         <span class="working-text">{{ getCurrentWorkingText(message.workflow) }}</span>
                       </div>
                     </div>
                   </div>
 
+                  <!-- Approval Panel if awaiting approval -->
                   <div v-if="message.workflow.approval" class="workflow-approval-panel">
                     <div class="workflow-approval-meta">
                       <IconShieldCheck :size="15" />
@@ -170,17 +168,19 @@
                     </div>
                   </div>
 
-                  <div v-else class="workflow-chat-status">
-                    <span class="workflow-status-dot" :class="workflowStatusClass(message.workflow)"></span>
-                    <span>{{ workflowStatusMessage(message.workflow) }}</span>
+                  <!-- Footer / Open Run Link -->
+                  <div class="workflow-body-footer">
+                    <span class="workflow-body-status-msg">
+                      <span class="workflow-status-dot" :class="workflowStatusClass(message.workflow)"></span>
+                      <span>{{ workflowStatusMessage(message.workflow) }}</span>
+                    </span>
                     <button
                       v-if="message.workflow.runId"
                       type="button"
-                      class="workflow-open-btn"
+                      class="workflow-open-run-link"
                       @click="router.push(`/runs/${message.workflow.runId}`)"
                     >
-                      Open run
-                      <IconArrowRight :size="13" />
+                      Open run <IconArrowRight :size="12" />
                     </button>
                   </div>
 
@@ -1311,123 +1311,297 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.workflow-chat-card {
-  width: min(680px, 100%);
-  overflow: hidden;
-  border: 1px solid #303238;
-  border-radius: 16px;
-  color: #e5e7eb;
-  background: #191a1c;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+/* Workflow Stream on Body (Antigravity-style) */
+.workflow-body-stream {
+  width: min(720px, 100%);
+  background: transparent;
+  color: #1f2937;
+  padding: 4px 0 10px;
 }
 
-.workflow-chat-card.awaiting-approval {
-  border-color: #3b3d43;
-}
-
-.workflow-chat-header {
+.workflow-body-goal {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 17px 18px 0;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
-.workflow-chat-heading {
+.workflow-goal-left {
   display: flex;
-  align-items: center;
-  gap: 11px;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
   min-width: 0;
 }
 
-.workflow-terminal-icon {
+.workflow-goal-icon {
   display: grid;
-  flex: 0 0 auto;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid #44474e;
-  border-radius: 8px;
-  color: #d1d5db;
-  background: #24262a;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #4b5563;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.workflow-chat-eyebrow {
-  margin-bottom: 2px;
-  color: #9ca3af;
-  font-size: 10px;
+.workflow-goal-label {
   font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: 13.5px;
+  color: #111827;
+  flex-shrink: 0;
 }
 
-.workflow-chat-card h3 {
-  margin: 0;
-  color: #f3f4f6;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+.workflow-goal-text {
+  font-size: 13.5px;
+  color: #374151;
+  line-height: 1.45;
+  word-break: break-word;
 }
 
-.workflow-status-pill {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border: 1px solid #3f4248;
+.workflow-body-status-pill {
+  flex-shrink: 0;
+  padding: 2px 8px;
   border-radius: 999px;
-  color: #aeb4bf;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 750;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: #e0e7ff;
+  color: #3730a3;
 }
 
-.workflow-chat-card.awaiting-approval .workflow-status-pill {
-  border-color: #74501b;
-  color: #fbbf24;
-  background: rgba(120, 75, 16, 0.22);
+.workflow-body-status-pill.completed,
+.workflow-body-status-pill.success {
+  background: #dcfce7;
+  color: #15803d;
 }
 
-.workflow-chat-prompt {
-  margin: 13px 18px 0;
-  color: #b9bdc6;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.workflow-body-status-pill.failed,
+.workflow-body-status-pill.cancelled {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.workflow-body-status-pill.awaiting-approval {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.workflow-body-live-stream {
+  margin: 6px 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.stream-body-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: #374151;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.stream-body-header:hover {
+  background: #f3f4f6;
+}
+
+.stream-body-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stream-body-heading {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.stream-body-chevron {
+  color: #6b7280;
+  transition: transform 0.2s ease;
+}
+
+.stream-body-chevron.chevron-up {
+  transform: rotate(180deg);
+}
+
+.stream-body-content {
+  padding: 4px 10px 10px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.stream-body-row {
+  margin-top: 3px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.stream-body-row:hover {
+  background: #f3f4f6;
+}
+
+.stream-body-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stream-body-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.stream-body-row-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.stream-body-row-icon.running { color: #2563eb; }
+.stream-body-row-icon.completed { color: #16a34a; }
+.stream-body-row-icon.failed { color: #dc2626; }
+.stream-body-row-icon.approval { color: #d97706; }
+
+.stream-body-row-label {
+  font-size: 12.5px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-body-shield-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
+  margin-left: 4px;
+}
+
+.stream-body-row-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.stream-body-row-duration {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.stream-body-row.expanded .step-chevron {
+  transform: rotate(90deg);
+}
+
+.stream-body-row-details {
+  padding: 4px 8px 8px 26px;
+}
+
+.stream-body-code-block {
+  margin-top: 6px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.stream-body-code-block .code-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 3px 8px;
+  background: #202024;
+  border-bottom: 1px solid #27272a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stream-body-code-block pre {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #e2e8f0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.stream-body-working-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 4px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .workflow-approval-panel {
-  margin: 16px 12px 12px;
-  padding: 13px;
-  border: 1px solid #2e3035;
-  border-radius: 12px;
-  background: #202124;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #1f2937;
 }
 
 .workflow-approval-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #f3f4f6;
+  color: #92400e;
   font-size: 13px;
   font-weight: 600;
 }
 
 .workflow-approval-meta svg {
   flex: 0 0 auto;
-  color: #fbbf24;
+  color: #d97706;
 }
 
 .workflow-command-box {
   display: grid;
   gap: 7px;
-  margin-top: 12px;
-  padding: 11px 12px;
-  border: 1px solid #25272c;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
   border-radius: 8px;
-  background: #151619;
+  background: #fefce8;
 }
 
 .workflow-command-label {
-  color: #9ca3af;
+  color: #78350f;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1438,7 +1612,7 @@ onUnmounted(() => {
   display: block;
   max-height: 120px;
   overflow: auto;
-  color: #d1d5db;
+  color: #451a03;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   line-height: 1.5;
@@ -1448,37 +1622,38 @@ onUnmounted(() => {
 
 .workflow-choice-list {
   display: grid;
-  gap: 5px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .workflow-choice {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 34px;
+  min-height: 32px;
   padding: 5px 8px;
-  border: 1px solid transparent;
+  border: 1px solid #fef3c7;
   border-radius: 8px;
-  color: #c5c8ce;
+  color: #374151;
   font-size: 12.5px;
   line-height: 1.3;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  background: #ffffff;
+  transition: all 0.15s ease;
 }
 
 .workflow-choice:hover,
 .workflow-choice.selected {
-  border-color: #3b3e45;
-  color: #f3f4f6;
-  background: #292b30;
+  border-color: #f59e0b;
+  color: #111827;
+  background: #fef3c7;
 }
 
 .workflow-choice input {
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #168bd7;
+  accent-color: #d97706;
 }
 
 .workflow-choice-number {
@@ -1488,8 +1663,8 @@ onUnmounted(() => {
   width: 19px;
   height: 19px;
   border-radius: 5px;
-  color: #aeb4bf;
-  background: #303238;
+  color: #78350f;
+  background: #fde68a;
   font-size: 11px;
   font-weight: 700;
 }
@@ -1497,75 +1672,49 @@ onUnmounted(() => {
 .workflow-rejection-input {
   width: 100%;
   margin-top: 9px;
-  padding: 9px 10px;
-  border: 1px solid #3b3e45;
-  border-radius: 8px;
-  outline: none;
-  color: #e5e7eb;
-  background: #151619;
-  font: inherit;
-  font-size: 12px;
-  resize: vertical;
-  box-sizing: border-box;
-}
-
-.workflow-rejection-input:focus {
-  border-color: #168bd7;
-}
-
-.workflow-card-error {
-  margin-top: 10px;
   padding: 8px 10px;
-  border-radius: 7px;
-  color: #fecaca;
-  background: rgba(127, 29, 29, 0.28);
-  font-size: 11.5px;
-  line-height: 1.4;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 12.5px;
 }
 
 .workflow-approval-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 13px;
-}
-
-.workflow-skip-btn,
-.workflow-submit-btn,
-.workflow-open-btn {
-  border: 0;
-  cursor: pointer;
-  font: inherit;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .workflow-skip-btn {
-  padding: 7px 4px;
-  color: #9ca3af;
-  background: transparent;
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #4b5563;
   font-size: 12px;
-}
-
-.workflow-skip-btn:hover {
-  color: #f3f4f6;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 .workflow-submit-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 7px;
+  gap: 4px;
+  padding: 5px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #d97706;
   color: #ffffff;
-  background: #0788d9;
-  font-size: 12.5px;
-  font-weight: 650;
-  box-shadow: 0 3px 10px rgba(7, 136, 217, 0.24);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.workflow-submit-btn:hover:not(:disabled) {
-  background: #0a9be9;
+.workflow-submit-btn:hover {
+  background: #b45309;
 }
 
 .workflow-submit-btn:disabled,
@@ -1574,13 +1723,30 @@ onUnmounted(() => {
   opacity: 0.6;
 }
 
-.workflow-chat-status {
+.workflow-card-error {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.workflow-body-footer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin: 16px 18px 17px;
-  color: #aeb4bf;
+  padding: 6px 2px 2px;
+}
+
+.workflow-body-status-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
+  color: #6b7280;
 }
 
 .workflow-status-dot {
@@ -1588,242 +1754,53 @@ onUnmounted(() => {
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
+  background: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .workflow-status-dot.completed,
 .workflow-status-dot.success {
-  background: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
 }
 
 .workflow-status-dot.failed,
 .workflow-status-dot.rejected,
 .workflow-status-dot.cancelled {
-  background: #f87171;
-  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
 }
 
-.workflow-open-btn {
+.workflow-open-run-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
-  padding: 0;
-  color: #7ebce9;
-  background: transparent;
-  font-size: 11.5px;
-}
-
-.workflow-open-btn:hover {
-  color: #bae0fd;
-}
-
-/* Live Stream Activity Feed (Antigravity-style) */
-.workflow-live-stream {
-  margin: 14px 16px 12px;
-  border: 1px solid #2a2c32;
-  border-radius: 10px;
-  background: #141517;
-  overflow: hidden;
-}
-
-.stream-toggle-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px 13px;
-  background: transparent;
-  border: none;
-  color: #cbd5e1;
+  color: #2563eb;
   font-size: 12px;
-  font-weight: 550;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s ease;
-}
-
-.stream-toggle-header:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.stream-toggle-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.stream-icon-sparkle {
-  display: flex;
-  align-items: center;
-  color: #94a3b8;
-}
-
-.stream-chevron {
-  color: #64748b;
-  transition: transform 0.2s ease;
-}
-
-.stream-chevron.chevron-up {
-  transform: rotate(180deg);
-}
-
-.stream-content {
-  padding: 4px 10px 10px;
-  border-top: 1px solid #222429;
-}
-
-.stream-step-row {
-  margin-top: 3px;
-  border-radius: 6px;
-  transition: background 0.15s ease;
-}
-
-.stream-step-row:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.stream-step-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.stream-step-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.stream-step-icon {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  color: #94a3b8;
-  flex-shrink: 0;
-}
-
-.stream-step-icon.running {
-  color: #60a5fa;
-}
-
-.stream-step-icon.completed {
-  color: #34d399;
-}
-
-.stream-step-icon.failed {
-  color: #f87171;
-}
-
-.stream-step-icon.approval {
-  color: #fb923c;
-}
-
-.stream-step-label {
-  font-size: 12px;
-  color: #cbd5e1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stream-shield-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(251, 146, 60, 0.15);
-  color: #fb923c;
-  margin-left: 4px;
-}
-
-.stream-step-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #64748b;
-  flex-shrink: 0;
-}
-
-.stream-step-duration {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.step-chevron {
-  transition: transform 0.2s ease;
-}
-
-.stream-step-row.expanded .step-chevron {
-  transform: rotate(90deg);
-}
-
-.stream-step-body {
-  padding: 4px 8px 8px 26px;
-}
-
-.stream-code-block {
-  margin-top: 6px;
-  background: #090a0b;
-  border: 1px solid #1f2126;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.stream-code-block .code-label {
-  font-size: 10px;
   font-weight: 600;
-  color: #64748b;
-  padding: 3px 8px;
-  background: #111215;
-  border-bottom: 1px solid #1f2126;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
 }
 
-.stream-code-block pre {
-  margin: 0;
-  padding: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  color: #a5b4fc;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.stream-working-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 6px 4px;
-  color: #94a3b8;
-  font-size: 12px;
+.workflow-open-run-link:hover {
+  text-decoration: underline;
+  color: #1d4ed8;
 }
 
 .working-pulse-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #60a5fa;
-  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
+  background: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
   animation: pulse-dot 1.5s infinite ease-in-out;
 }
 
 .working-text {
   font-weight: 500;
-  color: #94a3b8;
+  color: #4b5563;
 }
 
 .spin-icon {
@@ -1846,8 +1823,12 @@ onUnmounted(() => {
   }
 }
 
+.text-blue {
+  color: #2563eb;
+}
+
 .text-green {
-  color: #34d399;
+  color: #16a34a;
 }
 
 .user-message-container {
