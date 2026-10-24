@@ -10,15 +10,14 @@
     </div>
 
     <section
-      v-if="getLiveActivities(workflow).length"
+      v-if="isWorkflowLive(workflow) && getLiveActivities(workflow).length"
       class="stream-live-activity"
-      :class="{ completed: !isWorkflowLive(workflow) }"
       aria-live="polite"
       aria-label="Live workflow activity"
     >
       <div class="stream-live-activity-head">
-        <span class="stream-live-indicator" :class="{ active: isWorkflowLive(workflow) }"></span>
-        <strong>{{ isWorkflowLive(workflow) ? 'Live activity' : 'Activity summary' }}</strong>
+        <span class="stream-live-indicator active"></span>
+        <strong>Live activity</strong>
         <span>{{ getActivityCount(workflow) }} events</span>
       </div>
       <div v-for="activity in getLiveActivities(workflow)" :key="activity.id" class="stream-live-activity-row">
@@ -64,41 +63,20 @@
       </div>
     </div>
 
-    <section v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-card" aria-live="polite">
-      <div class="workflow-completion-heading">
-        <span class="workflow-completion-icon"><IconCheck :size="16" /></span>
-        <div>
-          <strong>Workflow completed successfully</strong>
-          <span>{{ getElapsedText(workflow) }}</span>
-        </div>
-      </div>
-
-      <div class="workflow-completion-summary">
-        <span>{{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed</span>
-      </div>
-
-      <div v-if="getWorkflowResultItems(workflow).length" class="workflow-result-list">
-        <div v-for="result in getWorkflowResultItems(workflow)" :key="result.id" class="workflow-result-item">
-          <IconFile :size="14" />
-          <span>{{ result.label }}</span>
-          <code>{{ result.detail }}</code>
-        </div>
-      </div>
-
-      <div class="workflow-completion-actions">
-        <button type="button" @click="$emit('toggle-stream')">
-          {{ workflow.isStreamOpen ? 'Hide steps' : 'View steps' }}
-        </button>
-        <button type="button" @click="$emit('open-run', workflow.runId)">
-          Open workflow run <IconArrowRight :size="12" />
-        </button>
-        <button type="button" :disabled="workflow.retrying" @click="$emit('retry-workflow')">
-          <IconLoader2 v-if="workflow.retrying" :size="12" class="spin-icon" />
-          <IconRefresh v-else :size="12" />
-          {{ workflow.retrying ? 'Running again…' : 'Run again' }}
-        </button>
-      </div>
-    </section>
+    <div v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
+      <p>Done — workflow completed successfully in {{ getElapsedText(workflow).replace('Completed in ', '') }}.</p>
+      <p v-if="workflow.tasks?.length">
+        {{ completedStepCount(workflow) }} of {{ workflow.tasks.length }} steps completed.
+      </p>
+      <template v-if="getWorkflowResultItems(workflow).length">
+        <p>Breakdown:</p>
+        <ul>
+          <li v-for="result in getWorkflowResultItems(workflow)" :key="result.id">
+            <strong>{{ result.label }}</strong> — {{ result.detail }}
+          </li>
+        </ul>
+      </template>
+    </div>
 
     <WorkflowApprovalPanel
       v-if="workflow.approval"
@@ -132,9 +110,7 @@ import {
   IconArrowRight,
   IconCheck,
   IconChevronDown,
-  IconFile,
   IconLoader2,
-  IconRefresh,
   IconShieldCheck,
   IconTerminal2,
   IconX,
@@ -192,7 +168,6 @@ defineEmits([
   'update-approval-choice',
   'update-approval-rejection',
   'open-run',
-  'retry-workflow',
 ])
 
 const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
@@ -595,115 +570,24 @@ const getWorkflowResultItems = (workflow) => (workflow?.tasks || [])
   font-size: 12px;
 }
 
-.workflow-completion-card {
-  margin: 18px 0 10px;
-  padding: 16px;
-  border: 1px solid #bbf7d0;
-  border-radius: 12px;
-  background: #f0fdf4;
-  color: #14532d;
-}
-
-.workflow-completion-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.workflow-completion-heading > div {
-  display: grid;
-  gap: 2px;
-}
-
-.workflow-completion-heading strong {
+.workflow-completion-response {
+  margin: 16px 0 4px;
+  color: #27272a;
   font-size: 14px;
+  line-height: 1.6;
 }
 
-.workflow-completion-heading span:last-child {
-  color: #4d7c5b;
-  font-size: 12px;
+.workflow-completion-response p {
+  margin: 0 0 8px;
 }
 
-.workflow-completion-icon {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #22c55e;
-  color: #ffffff;
+.workflow-completion-response ul {
+  margin: 4px 0 10px 20px;
+  padding: 0;
 }
 
-.workflow-completion-summary {
-  margin-top: 12px;
-  color: #166534;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.workflow-result-list {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.workflow-result-item {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 7px 9px;
-  border: 1px solid #dcfce7;
-  border-radius: 7px;
-  background: #ffffff;
-  color: #166534;
-  font-size: 12px;
-}
-
-.workflow-result-item span {
-  font-weight: 600;
-}
-
-.workflow-result-item code {
-  min-width: 0;
-  overflow: hidden;
-  color: #3f6212;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workflow-completion-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 13px;
-}
-
-.workflow-completion-actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
-  border: 1px solid #bbf7d0;
-  border-radius: 7px;
-  background: #ffffff;
-  color: #166534;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.workflow-completion-actions button:hover {
-  border-color: #86efac;
-  background: #dcfce7;
-}
-
-.workflow-completion-actions button:disabled {
-  cursor: wait;
-  opacity: 0.7;
+.workflow-completion-response li {
+  margin: 4px 0;
 }
 
 .spin-icon {
