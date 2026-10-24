@@ -52,7 +52,6 @@
                   @submit-approval="submitWorkflowApproval(message)"
                   @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
-                  @retry-workflow="retryWorkflowMessage(message)"
                   @open-run="router.push(`/runs/${$event}`)"
                 />
 
@@ -466,6 +465,11 @@ const getWorkflowElapsedText = (workflow) => {
   }
 
   if (status === 'FAILED' || status === 'CANCELLED') {
+    // A rejected start request has no run to time. Do not show a misleading
+    // "Stopped after 1s" label when the API rejected the workflow immediately.
+    if (!workflow?.runId && workflow?.error) {
+      return 'Unable to start workflow'
+    }
     const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
     const finished = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
     const sec = started ? Math.max(1, Math.round((finished - started) / 1000)) : (workflow?.elapsedSeconds || 1)
@@ -505,10 +509,26 @@ const getWorkflowPlanText = (workflow) => {
   return text
 }
 
+const getWorkflowGoalPreview = (workflow) => {
+  let goal = String(workflow?.goalPrompt || '').replace(/\s+/g, ' ').trim()
+  if (!goal) return ''
+
+  goal = goal
+    .replace(/^(?:please\s+)?(?:can|could|would)\s+you\s+/i, '')
+    .replace(/^i['’]?ll\s+/i, '')
+    .replace(/^please\s+/i, '')
+    .trim()
+
+  return goal.length > 86 ? `${goal.slice(0, 86).trimEnd()}…` : goal
+}
+
 const getCurrentWorkingText = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
   if (status === 'COMPLETED' || status === 'SUCCESS') {
     return ''
+  }
+  if (status === 'FAILED' || status === 'CANCELLED') {
+    return workflow?.runId ? 'Workflow stopped' : 'Unable to start workflow'
   }
   const runningTask = (workflow?.tasks || []).find((t) => getWorkflowTaskStatus(t) === 'RUNNING')
   if (runningTask) {
@@ -524,9 +544,14 @@ const getCurrentWorkingText = (workflow) => {
     return 'Paused: Awaiting security authorization'
   }
   if (status === 'STARTING') {
-    return 'Planning desktop folder creation with escalated permission'
+    const goal = getWorkflowGoalPreview(workflow)
+    return goal ? `Preparing workflow: ${goal}` : 'Preparing workflow'
   }
-  return 'Working'
+  if (status === 'RUNNING') {
+    const goal = getWorkflowGoalPreview(workflow)
+    return goal ? `Executing workflow: ${goal}` : 'Executing workflow'
+  }
+  return `Workflow status: ${status || 'UNKNOWN'}`
 }
 
 const updateWorkflowMessage = (index, patch) => {
@@ -848,51 +873,6 @@ const retryUserMessage = async (index) => {
   } finally {
     commitStreamingResponse()
     activeAbortController = null
-    loading.value = false
-    scrollToBottom()
-  }
-}
-
-const retryWorkflowMessage = async (message) => {
-  const workflow = message?.workflow
-  const index = currentMessages.value.indexOf(message)
-  const goalPrompt = workflow?.goalPrompt || message?.content
-  if (index === -1 || !goalPrompt || loading.value || workflow?.retrying) return
-
-  updateWorkflowMessage(index, {
-    runId: null,
-    status: 'STARTING',
-    startedAt: Date.now(),
-    completedAt: null,
-    finalSeconds: null,
-    elapsedSeconds: 0,
-    approval: null,
-    decisionPending: false,
-    tasks: [],
-    logs: [],
-    error: '',
-    retrying: true,
-  })
-
-  loading.value = true
-  try {
-    const response = await api.runWorkflow({ goalPrompt })
-    const runId = getWorkflowRunId(response)
-    if (!runId) throw new ApiError('The workflow started without a run ID.')
-
-    updateWorkflowMessage(index, {
-      runId: String(runId),
-      status: 'RUNNING',
-      retrying: false,
-    })
-    startWorkflowPolling(index, String(runId))
-  } catch (error) {
-    updateWorkflowMessage(index, {
-      status: 'FAILED',
-      retrying: false,
-      error: error instanceof ApiError ? error.message : 'Unable to run the workflow again.',
-    })
-  } finally {
     loading.value = false
     scrollToBottom()
   }
