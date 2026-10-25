@@ -110,7 +110,7 @@
               <IconFile :size="18" />
             </div>
             <div class="completion-edit-card-copy">
-              <strong>{{ editedFilesHeading }}</strong>
+              <span class="completion-edit-card-title">{{ editedFilesHeading }}</span>
               <div class="completion-edit-stats">
                 <span class="completion-edit-added">+{{ workflowDiffStats.additions }}</span>
                 <span class="completion-edit-removed">-{{ workflowDiffStats.deletions }}</span>
@@ -158,7 +158,7 @@
               >
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
-                  <strong>{{ getFilePathParts(file).name }}</strong>
+                  <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
                 </span>
                 <span class="completion-edit-file-row-stats">
                   <span class="completion-edit-added">+{{ fileStatsById[file.id]?.additions || 0 }}</span>
@@ -653,7 +653,9 @@ const completedStepCount = (workflow) => getCompletedTasks(workflow).length
 const getWorkflowResultItems = (workflow) => {
   const completedTasks = getCompletedTasks(workflow)
   const imageTasks = completedTasks.filter(isImageResultTask)
-  const visibleTasks = completedTasks.filter((task) => !isImageResultTask(task))
+  // Keep build/test/validation tasks in the dedicated "Tests passed" section
+  // instead of presenting verification as a file change.
+  const visibleTasks = completedTasks.filter((task) => !isImageResultTask(task) && !isValidationTask(task))
   const items = visibleTasks.map((task, index) => {
     const output = parseValue(
       task.tool_output
@@ -1225,8 +1227,13 @@ const closeReview = () => {
 
 const isValidationTask = (task) => {
   const text = getTaskText(task)
-  const command = JSON.stringify(getTaskPayload(task, ['tool_input', 'toolInput', 'input']) || '')
-  const validationText = `${text} ${command}`
+  const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input'])
+  const command = typeof input?.command === 'string' ? input.command : ''
+  const action = typeof input?.action === 'string' ? input.action : ''
+  // Inspect task metadata and the executable command only. Do not scan source
+  // content inside fileManager payloads, where words such as "test" may be
+  // dependency names rather than a validation step.
+  const validationText = `${text} ${command} ${action}`
     .replace(/\b[\w.-]+\.(?:html?|css|js|mjs|cjs|ts|tsx|jsx|json|md|txt|vue)\b/gi, '')
   return /\b(?:test|tests|lint|build|verify|validation|validate|check|checks)\b/i.test(validationText)
 }
@@ -1859,8 +1866,8 @@ const highlightCode = (value) => {
 .completion-results-heading {
   margin-bottom: 7px;
   color: #18181b;
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .completion-result-list {
@@ -1881,7 +1888,7 @@ const highlightCode = (value) => {
   flex: 0 0 auto;
   margin-top: 0;
   color: #27272a;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
@@ -1892,13 +1899,13 @@ const highlightCode = (value) => {
 
 .completion-result-label {
   color: #18181b;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
 }
 
 .completion-result-copy span {
   color: #52525b;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .completion-edit-card {
@@ -1943,14 +1950,14 @@ const highlightCode = (value) => {
   min-width: 0;
 }
 
-.completion-edit-card-copy strong {
+.completion-edit-card-title {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #18181b;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.3;
 }
 
@@ -1961,7 +1968,7 @@ const highlightCode = (value) => {
   margin-top: 2px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.3;
 }
 
@@ -2029,8 +2036,8 @@ const highlightCode = (value) => {
   outline-offset: 2px;
 }
 
-.completion-edit-file-toggle:hover .completion-edit-file-path strong,
-.completion-edit-file-toggle:focus-visible .completion-edit-file-path strong {
+.completion-edit-file-toggle:hover .completion-edit-file-name,
+.completion-edit-file-toggle:focus-visible .completion-edit-file-name {
   color: #18181b;
 }
 
@@ -2081,10 +2088,10 @@ const highlightCode = (value) => {
   white-space: nowrap;
 }
 
-.completion-edit-file-path strong {
+.completion-edit-file-name {
   flex: 0 0 auto;
   color: #27272a;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .completion-edit-file-row-stats {
