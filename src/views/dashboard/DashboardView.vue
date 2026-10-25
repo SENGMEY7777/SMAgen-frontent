@@ -788,12 +788,57 @@ const requestChatReply = async (prompt, history, signal) => {
   }
 }
 
+const isWorkflowUserMessage = (index, message) => {
+  const nextMessage = currentMessages.value[index + 1]
+  return message?.requestMode === 'workflow'
+    || Boolean(nextMessage?.workflow)
+    || detectRequestMode(message?.content || '') === 'workflow'
+}
+
+const addWorkflowPlaceholder = (goalPrompt) => {
+  const workflowMessageIndex = currentMessages.value.length
+  chatStore.addMessage({
+    role: 'assistant',
+    content: '',
+    requestMode: 'workflow',
+    workflow: {
+      runId: null,
+      goalPrompt,
+      status: 'STARTING',
+      startedAt: Date.now(),
+      elapsedSeconds: 0,
+      approval: null,
+      decisionPending: false,
+      tasks: [],
+      logs: [],
+      isStreamOpen: false,
+      expandedSteps: {},
+      error: '',
+    },
+  })
+  return workflowMessageIndex
+}
+
+const startWorkflowRun = async (workflowMessageIndex, goalPrompt) => {
+  const response = await api.runWorkflow({ goalPrompt })
+  const runId = getWorkflowRunId(response)
+  if (!runId) throw new ApiError('The workflow started without a run ID.')
+
+  updateWorkflowMessage(workflowMessageIndex, {
+    runId: String(runId),
+    status: 'RUNNING',
+    error: '',
+  })
+  startWorkflowPolling(workflowMessageIndex, String(runId))
+}
+
 const submitEditUserMessage = async (index) => {
   const newText = editDraft.value.trim()
   if (!newText || loading.value) return
 
   const originalMessage = currentMessages.value[index]
   const messageFiles = originalMessage?.files || []
+  const shouldRunWorkflow = isWorkflowUserMessage(index, originalMessage)
 
   editingIndex.value = null
   editDraft.value = ''
@@ -821,6 +866,26 @@ const submitEditUserMessage = async (index) => {
   errorMessage.value = ''
   scrollToBottom()
 
+  if (shouldRunWorkflow) {
+    activeMode.value = 'workflow'
+    const workflowPrompt = formatPromptWithFiles(newText, messageFiles)
+    const workflowMessageIndex = addWorkflowPlaceholder(newText)
+
+    try {
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt)
+    } catch (error) {
+      updateWorkflowMessage(workflowMessageIndex, {
+        status: 'FAILED',
+        error: error instanceof ApiError ? error.message : 'Unable to start the workflow.',
+      })
+    } finally {
+      activeAbortController = null
+      loading.value = false
+      scrollToBottom()
+    }
+    return
+  }
+
   try {
     const fullPrompt = formatPromptWithFiles(newText, messageFiles)
     await requestChatReply(fullPrompt, history, signal)
@@ -840,8 +905,32 @@ const submitEditUserMessage = async (index) => {
 const retryUserMessage = async (index) => {
   const message = currentMessages.value[index]
   if (!message || loading.value) return
+  const shouldRunWorkflow = isWorkflowUserMessage(index, message)
+  const messageFiles = message.files || []
 
   chatStore.editMessage(index, message.content)
+
+  if (shouldRunWorkflow) {
+    activeMode.value = 'workflow'
+    loading.value = true
+    errorMessage.value = ''
+    scrollToBottom()
+
+    const workflowMessageIndex = addWorkflowPlaceholder(message.content)
+    try {
+      const workflowPrompt = formatPromptWithFiles(message.content, messageFiles)
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt)
+    } catch (error) {
+      updateWorkflowMessage(workflowMessageIndex, {
+        status: 'FAILED',
+        error: error instanceof ApiError ? error.message : 'Unable to start the workflow.',
+      })
+    } finally {
+      loading.value = false
+      scrollToBottom()
+    }
+    return
+  }
 
   const messagesSoFar = currentMessages.value.slice(0, index)
   const history = messagesSoFar
@@ -927,27 +1016,11 @@ const send = async () => {
       content: message,
       images,
       files,
+      requestMode: 'workflow',
     })
 
-    const workflowMessageIndex = currentMessages.value.length
-    chatStore.addMessage({
-      role: 'assistant',
-      content: '',
-      workflow: {
-        runId: null,
-        goalPrompt: message || (files.length ? 'Run a workflow using the uploaded file(s).' : 'Run workflow'),
-        status: 'STARTING',
-        startedAt: Date.now(),
-        elapsedSeconds: 0,
-        approval: null,
-        decisionPending: false,
-        tasks: [],
-        logs: [],
-        isStreamOpen: false,
-        expandedSteps: {},
-        error: '',
-      },
-    })
+    const goalPrompt = message || (files.length ? 'Run a workflow using the uploaded file(s).' : 'Run workflow')
+    const workflowMessageIndex = addWorkflowPlaceholder(goalPrompt)
 
     input.value = ''
     attachedImages.value = []
@@ -956,16 +1029,7 @@ const send = async () => {
     loading.value = true
     scrollToBottom()
     try {
-      const response = await api.runWorkflow({ goalPrompt: fullPrompt })
-      const runId = getWorkflowRunId(response)
-      if (!runId) throw new ApiError('The workflow started without a run ID.')
-
-      updateWorkflowMessage(workflowMessageIndex, {
-        runId: String(runId),
-        status: 'RUNNING',
-        error: '',
-      })
-      startWorkflowPolling(workflowMessageIndex, String(runId))
+      await startWorkflowRun(workflowMessageIndex, fullPrompt)
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -993,6 +1057,7 @@ const send = async () => {
     content: message,
     images,
     files,
+    requestMode: 'chat',
   })
 
   input.value = ''
