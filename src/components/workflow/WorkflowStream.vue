@@ -74,12 +74,12 @@
     </div>
 
     <div v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
-      <p>Done — workflow completed successfully in {{ getElapsedText(workflow).replace('Completed in ', '') }}.</p>
+      <p>You have completed the workflow successfully in {{ getElapsedText(workflow).replace('Completed in ', '') }}.</p>
       <p v-if="workflow.tasks?.length">
         {{ completedStepCount(workflow) }} of {{ workflow.tasks.length }} steps completed.
       </p>
       <template v-if="getWorkflowResultItems(workflow).length">
-        <p>Breakdown:</p>
+        <p>Workflow summary:</p>
         <ul>
           <li v-for="result in getWorkflowResultItems(workflow)" :key="result.id">
             <strong>{{ result.label }}</strong> — {{ result.detail }}
