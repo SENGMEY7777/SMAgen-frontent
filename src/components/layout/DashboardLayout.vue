@@ -358,22 +358,37 @@ if (typeof window !== 'undefined') {
 }
 
 const combinedRecentItems = computed(() => {
-  const chatItems = chatStore.sessions.map((s) => ({
-    id: s.id,
-    title: s.title,
-    type: 'chat',
-    pinned: Boolean(s.pinned),
-    updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
-  }))
-
   const workflowItems = props.recentItems
-    .filter((r) => !hiddenWorkflowIds.value.includes(r.id))
+    .filter((r, index, recentItems) => {
+      if (hiddenWorkflowIds.value.includes(r.id)) return false
+      return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
+    })
     .map((r) => ({
       id: r.id,
       title: r.goal_prompt || r.title || 'Workflow run',
       type: 'workflow',
       pinned: false,
       updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
+    }))
+
+  const workflowRunIds = new Set(workflowItems.map((item) => String(item.id)))
+  const chatItems = chatStore.sessions
+    // A workflow also creates a local chat session for its conversation. Once
+    // the persisted workflow run is available, show only the run entry so a
+    // refresh does not display the same task twice.
+    .filter((session) => {
+      const linkedRunIds = (session.messages || [])
+        .map((message) => message?.workflow?.runId)
+        .filter(Boolean)
+        .map((runId) => String(runId))
+      return !linkedRunIds.some((runId) => workflowRunIds.has(runId))
+    })
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      type: 'chat',
+      pinned: Boolean(s.pinned),
+      updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
     }))
 
   const merged = [...chatItems, ...workflowItems]
