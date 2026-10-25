@@ -12,7 +12,7 @@
 
       <div v-if="!currentMessages.length" class="hero">
         <div class="orb"></div>
-        <h1>Good Morning, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
+        <h1>{{ timeGreeting }}, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
         <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
         <div class="prompt-suggestions">
           <button type="button" @click="startPrompt('Help me understand this project and suggest the next best step.')">
@@ -362,6 +362,16 @@ const attachedImages = ref([])
 const attachedFiles = ref([])
 const previewImageUrl = ref(null)
 const streamingContent = ref('')
+let timeInterval = null
+const currentTime = ref(new Date())
+
+const timeGreeting = computed(() => {
+  const hour = currentTime.value.getHours()
+  if (hour >= 5 && hour < 12) return 'Good Morning'
+  if (hour >= 12 && hour < 18) return 'Good Afternoon'
+  if (hour >= 18 && hour < 22) return 'Good Evening'
+  return 'Good Night'
+})
 
 const currentMessages = computed(() => chatStore.messages)
 
@@ -1109,12 +1119,20 @@ const startPrompt = (prompt) => {
 
 onMounted(() => {
   loadRuns()
+  currentTime.value = new Date()
+  timeInterval = window.setInterval(() => {
+    currentTime.value = new Date()
+  }, 60 * 1000)
   if (chatThreadRef.value) {
     chatThreadRef.value.addEventListener('scroll', handleScroll)
   }
 })
 
 onUnmounted(() => {
+  if (timeInterval) {
+    window.clearInterval(timeInterval)
+    timeInterval = null
+  }
   if (chatThreadRef.value) {
     chatThreadRef.value.removeEventListener('scroll', handleScroll)
   }

@@ -15,7 +15,7 @@
           </div>
           <h3>Ask SMAgen</h3>
           <p>Get a clear answer with context, examples, and the next move already in view.</p>
-          <RouterLink class="feature-link" to="/">Start a chat
+          <RouterLink class="feature-link" :to="{ name: 'chat' }">Start a chat
             <IconArrowRight :size="14" />
           </RouterLink>
         </article>
@@ -25,7 +25,7 @@
           </div>
           <h3>Run a workflow</h3>
           <p>Describe a goal and let the planner break it into safe, observable task nodes.</p>
-          <RouterLink class="feature-link" to="/">Build a workflow
+          <RouterLink class="feature-link" :to="{ name: 'chat' }">Build a workflow
             <IconArrowRight :size="14" />
           </RouterLink>
         </article>
