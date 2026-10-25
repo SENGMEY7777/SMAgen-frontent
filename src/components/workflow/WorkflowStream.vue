@@ -96,7 +96,7 @@
           <li v-for="result in completionChanges" :key="result.id" class="completion-result-row">
             <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
-              <strong>{{ result.label }}</strong>
+              <span class="completion-result-label">{{ result.label }}</span>
               <span v-if="result.detail"> — {{ result.detail }}</span>
             </div>
           </li>
@@ -319,7 +319,7 @@
           <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
             <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
-              <strong>{{ result.label }}</strong>
+              <span class="completion-result-label">{{ result.label }}</span>
               <span> — Completed successfully</span>
             </div>
           </li>
@@ -1616,7 +1616,7 @@ const highlightCode = (value) => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 16px;
   color: #71717a;
   background: transparent;
   border: none;
@@ -1818,8 +1818,11 @@ const highlightCode = (value) => {
   margin: 16px 0 4px;
   padding: 0;
   color: #18181b;
-  font-size: 13.5px;
+  font-size: 16px;
   line-height: 1.55;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .completion-heading-row {
@@ -1844,7 +1847,7 @@ const highlightCode = (value) => {
 .completion-heading-copy p {
   margin: 3px 0 0;
   color: #52525b;
-  font-size: 12px;
+  font-size: inherit;
 }
 
 .completion-results {
@@ -1854,8 +1857,8 @@ const highlightCode = (value) => {
 .completion-results-heading {
   margin-bottom: 7px;
   color: #18181b;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 650;
 }
 
 .completion-result-list {
@@ -1885,15 +1888,15 @@ const highlightCode = (value) => {
   overflow-wrap: anywhere;
 }
 
-.completion-result-copy strong {
+.completion-result-label {
   color: #18181b;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 400;
 }
 
 .completion-result-copy span {
   color: #52525b;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .completion-edit-card {
