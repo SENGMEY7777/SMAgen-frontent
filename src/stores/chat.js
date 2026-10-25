@@ -3,19 +3,41 @@ import { defineStore } from 'pinia'
 import { STORAGE_KEYS } from '@/config/constants'
 
 const CHATS_STORAGE_KEY = STORAGE_KEYS.CHATS || 'kairo_chats'
+const ACTIVE_CHAT_STORAGE_KEY = `${CHATS_STORAGE_KEY}:active-session`
 
 const readStorage = () => {
   try {
     const raw = localStorage.getItem(CHATS_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    const parsed = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+
+    // Older builds could persist the same session more than once. Keep the
+    // first copy so a refresh cannot render duplicate sidebar entries.
+    const seenIds = new Set()
+    return parsed.filter((session) => {
+      if (!session?.id || seenIds.has(String(session.id))) return false
+      seenIds.add(String(session.id))
+      return true
+    })
   } catch {
     return []
   }
 }
 
+const readActiveSessionId = (storedSessions) => {
+  try {
+    const activeId = localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY)
+    return activeId && storedSessions.some((session) => String(session.id) === activeId)
+      ? activeId
+      : null
+  } catch {
+    return null
+  }
+}
+
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref(readStorage())
-  const activeSessionId = ref(null)
+  const activeSessionId = ref(readActiveSessionId(sessions.value))
 
   // Save changes to localStorage
   watch(
@@ -27,6 +49,16 @@ export const useChatStore = defineStore('chat', () => {
     },
     { deep: true }
   )
+
+  watch(activeSessionId, (value) => {
+    try {
+      if (value) {
+        localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, String(value))
+      } else {
+        localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY)
+      }
+    } catch {}
+  })
 
   const activeSession = computed(() => {
     return sessions.value.find((s) => s.id === activeSessionId.value) || null
