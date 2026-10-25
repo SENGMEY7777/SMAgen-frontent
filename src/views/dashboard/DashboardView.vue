@@ -524,6 +524,7 @@ const getWorkflowGoalPreview = (workflow) => {
 
 const getCurrentWorkingText = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
+  const phaseIndex = timerTick.value % 4
   if (status === 'COMPLETED' || status === 'SUCCESS') {
     return ''
   }
@@ -545,11 +546,23 @@ const getCurrentWorkingText = (workflow) => {
   }
   if (status === 'STARTING') {
     const goal = getWorkflowGoalPreview(workflow)
-    return goal ? `Preparing workflow: ${goal}` : 'Preparing workflow'
+    const phase = [
+      'Preparing workflow',
+      'Analyzing request',
+      'Planning execution',
+      'Connecting required tools',
+    ][phaseIndex]
+    return goal ? `${phase}: ${goal}` : phase
   }
   if (status === 'RUNNING') {
     const goal = getWorkflowGoalPreview(workflow)
-    return goal ? `Executing workflow: ${goal}` : 'Executing workflow'
+    const phase = [
+      'Executing workflow',
+      'Processing current step',
+      'Updating live progress',
+      'Checking the next action',
+    ][phaseIndex]
+    return goal ? `${phase}: ${goal}` : phase
   }
   return `Workflow status: ${status || 'UNKNOWN'}`
 }
