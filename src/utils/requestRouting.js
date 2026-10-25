@@ -1,6 +1,6 @@
 const ACTION_VERBS = '(?:create|make|add|delete|remove|move|rename|copy|write|save|open|install|setup|set\\s+up|configure|enable|execute|run|start|build|generate|update|modify|change|replace|switch|edit|adjust|customize|commit|push|deploy|automate)'
-const DIRECT_ACTION_VERBS = '(?:create|make|delete|remove|move|rename|copy|write|save|open|install|setup|set\\s+up|configure|enable|execute|run|start|build|generate|update|modify|change|replace|switch|edit|adjust|customize|commit|push|deploy|automate)'
-const ACTION_TARGETS = '(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\\.html|image|images|photo|photos|picture|pictures|visual|design|style|theme|layout|content|product|products|clothing|pinia|pinai|store|state\\s+management|dependency|dependencies)'
+const DIRECT_ACTION_VERBS = '(?:create|make|add|delete|remove|move|rename|copy|write|save|open|install|setup|set\\s+up|configure|enable|execute|run|start|build|generate|update|modify|change|replace|switch|edit|adjust|customize|commit|push|deploy|automate)'
+const ACTION_TARGETS = '(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\\.html|image|images|photo|photos|picture|pictures|visual|design|style|theme|layout|content|product|products|clothing|pinia|pinai|store|state\\s+management|dependency|dependencies|url|urls|link|links)'
 
 const DIRECT_ACTION_PATTERN = new RegExp(`^\\s*(?:please\\s+)?${DIRECT_ACTION_VERBS}\\b`, 'i')
 const REQUESTED_ACTION_PATTERN = new RegExp(
@@ -12,6 +12,7 @@ const EXPLANATION_PATTERN = /^(?:how|what|why|when|where|who|explain|describe|te
 const HOW_TO_PATTERN = /\b(?:how do i|how can i|what is|what are|explain how|tell me how)\b/i
 const CONVERSATIONAL_PROMPT_PATTERN = /^\s*(?:please\s+)?(?:print|say|tell me|show me|give me)\b/i
 const ADVISORY_REQUEST_PATTERN = /^\s*(?:please\s+)?(?:give|suggest|recommend|share|provide|list|brainstorm)\b[\s\S]*\b(?:idea|ideas|advice|suggestion|suggestions|recommendation|recommendations|options|what to build)\b/i
+const FILE_EDIT_PATTERN = /\b(?:add|insert|remove|delete|replace|update|edit|modify|change|write|create)\b[\s\S]{0,180}\b(?:in|into|inside|to)\b[\s\S]{0,100}\b[A-Za-z0-9_-]+\.(?:html?|css|js|mjs|cjs|ts|tsx|jsx|json|md|txt|vue)\b/i
 const WORKFLOW_TARGET_PATTERN = /\b(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\.html|image|images|photo|photos|picture|pictures|visual|design|style|theme|layout|content|product|products|clothing|pinia|pinai|store|state\s+management|dependency|dependencies)\b/i
 
 export const detectRequestMode = (value = '') => {
@@ -34,6 +35,12 @@ export const detectRequestMode = (value = '') => {
   // they mention a workflow, file, or command.
   if (EXPLANATION_PATTERN.test(text) || HOW_TO_PATTERN.test(text)) {
     return 'chat'
+  }
+
+  // Follow-up edits to a named source file must stay in workflow mode,
+  // including requests such as "add image using URL in testing.html".
+  if (FILE_EDIT_PATTERN.test(text)) {
+    return 'workflow'
   }
 
   // Conversational requests such as "print background ..." should stay in
