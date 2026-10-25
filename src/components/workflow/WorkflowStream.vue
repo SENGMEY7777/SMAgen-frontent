@@ -5,8 +5,17 @@
 
     <div class="stream-plan-text" v-html="renderMarkdown(getPlanText(workflow))"></div>
 
-    <div v-if="getCurrentWorkingText(workflow)" class="stream-subactivity-text">
-      {{ getCurrentWorkingText(workflow) }}
+    <div
+      v-if="getCurrentWorkingText(workflow)"
+      class="stream-subactivity-text"
+      :class="{ 'is-live': isWorkflowLive(workflow) }"
+      aria-live="polite"
+    >
+      <span class="stream-subactivity-indicator" aria-hidden="true"></span>
+      <span>{{ getCurrentWorkingText(workflow) }}</span>
+      <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
+        <span>.</span><span>.</span><span>.</span>
+      </span>
     </div>
 
     <section
@@ -422,12 +431,95 @@ const highlightCode = (value) => {
 }
 
 .stream-subactivity-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 13.5px;
   font-weight: 400;
   color: #a1a1aa;
   line-height: 1.5;
   margin-top: 6px;
   margin-bottom: 8px;
+  animation: subactivity-enter 320ms ease-out both;
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+.stream-subactivity-text.is-live {
+  color: #8f8f99;
+}
+
+.stream-subactivity-indicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #a1a1aa;
+}
+
+.stream-subactivity-text.is-live .stream-subactivity-indicator {
+  background: #2563eb;
+  box-shadow: 0 0 0 3px #dbeafe;
+  animation: subactivity-pulse 1.5s ease-in-out infinite;
+}
+
+.stream-subactivity-dots {
+  display: inline-flex;
+  min-width: 14px;
+  color: #71717a;
+  letter-spacing: 1px;
+}
+
+.stream-subactivity-dots span {
+  animation: subactivity-dot 1.2s ease-in-out infinite;
+}
+
+.stream-subactivity-dots span:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.stream-subactivity-dots span:nth-child(3) {
+  animation-delay: 320ms;
+}
+
+@keyframes subactivity-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes subactivity-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes subactivity-dot {
+  0%, 60%, 100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-subactivity-text,
+  .stream-subactivity-text.is-live .stream-subactivity-indicator,
+  .stream-subactivity-dots span {
+    animation: none;
+  }
 }
 
 .stream-live-activity {
