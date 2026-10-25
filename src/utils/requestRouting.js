@@ -10,6 +10,8 @@ const REQUESTED_ACTION_PATTERN = new RegExp(
 const ACTION_WITH_TARGET_PATTERN = new RegExp(`\\b${ACTION_VERBS}\\b[\\s\\S]*\\b${ACTION_TARGETS}\\b`, 'i')
 const EXPLANATION_PATTERN = /^(?:how|what|why|when|where|who|explain|describe|tell me about|help me understand|can you explain|could you explain|would you explain)\\b/i
 const HOW_TO_PATTERN = /\b(?:how do i|how can i|what is|what are|explain how|tell me how)\b/i
+const CONVERSATIONAL_PROMPT_PATTERN = /^\s*(?:please\s+)?(?:print|say|tell me|show me|give me)\b/i
+const WORKFLOW_TARGET_PATTERN = /\b(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\.html|pinia|pinai|store|state\s+management|dependency|dependencies)\b/i
 
 export const detectRequestMode = (value = '') => {
   const text = String(value || '').trim()
@@ -24,6 +26,12 @@ export const detectRequestMode = (value = '') => {
   // Questions about how something works are informational chat, even when
   // they mention a workflow, file, or command.
   if (EXPLANATION_PATTERN.test(text) || HOW_TO_PATTERN.test(text)) {
+    return 'chat'
+  }
+
+  // Conversational requests such as "print background ..." should stay in
+  // chat unless they also name a concrete workflow target.
+  if (CONVERSATIONAL_PROMPT_PATTERN.test(text) && !WORKFLOW_TARGET_PATTERN.test(text)) {
     return 'chat'
   }
 
