@@ -125,7 +125,30 @@
         </div>
       </div>
 
-      <section v-if="reviewOpen" class="workflow-review-panel" :class="{ collapsed: reviewPanelCollapsed }" aria-label="Workflow review">
+      <section
+        v-if="reviewOpen"
+        class="workflow-review-panel"
+        :class="{ collapsed: reviewPanelCollapsed, 'is-resizing': reviewPanelResizing }"
+        :style="reviewPanelWidth ? { '--review-panel-width': `${reviewPanelWidth}px` } : undefined"
+        aria-label="Workflow review"
+      >
+        <div
+          v-if="!reviewPanelCollapsed"
+          class="workflow-review-resize-handle"
+          role="separator"
+          aria-label="Resize review panel"
+          aria-orientation="vertical"
+          aria-controls="workflow-review-content"
+          :aria-valuenow="Math.round(getReviewPanelWidth())"
+          aria-valuemin="320"
+          :aria-valuemax="getReviewPanelMaxWidth()"
+          tabindex="0"
+          @pointerdown.prevent="startReviewResize"
+          @pointermove="resizeReviewPanel"
+          @pointerup="stopReviewResize"
+          @pointercancel="stopReviewResize"
+          @keydown="resizeReviewPanelWithKeyboard"
+        ></div>
         <!-- 1. Top Window Tab Bar -->
         <div class="workflow-review-tab-bar">
           <div class="workflow-review-tabs">
@@ -159,7 +182,7 @@
           </div>
         </div>
 
-        <div v-if="!reviewPanelCollapsed" class="workflow-review-panel-content">
+        <div v-if="!reviewPanelCollapsed" id="workflow-review-content" class="workflow-review-panel-content">
           <!-- 2. Turn Subheader Bar -->
           <div class="workflow-review-turn-bar">
             <div class="workflow-review-turn-left">
@@ -307,7 +330,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import {
   IconArrowRight,
   IconArrowBackUp,
@@ -399,9 +422,69 @@ const reaction = ref(null)
 const reviewOpen = ref(false)
 const reviewTaskId = ref(null)
 const reviewPanelCollapsed = ref(false)
+const reviewPanelWidth = ref(null)
+const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
 const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
+const REVIEW_PANEL_MIN_WIDTH = 320
+const REVIEW_PANEL_MAX_WIDTH = 1200
+
+const getReviewPanelWidth = () => reviewPanelWidth.value || (window.innerWidth <= 640 ? window.innerWidth : Math.min(840, window.innerWidth * 0.52))
+const getReviewPanelMaxWidth = () => Math.max(REVIEW_PANEL_MIN_WIDTH, Math.min(REVIEW_PANEL_MAX_WIDTH, window.innerWidth - 48))
+const updateAppWidthForReview = () => {
+  if (!reviewOpen.value || window.innerWidth <= 640) {
+    document.documentElement.style.removeProperty('--workflow-review-width')
+    return
+  }
+
+  const width = reviewPanelCollapsed.value ? 48 : getReviewPanelWidth()
+  document.documentElement.style.setProperty('--workflow-review-width', `${width}px`)
+}
+
+watch([reviewOpen, reviewPanelCollapsed, reviewPanelWidth], updateAppWidthForReview, { flush: 'sync' })
+window.addEventListener('resize', updateAppWidthForReview)
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateAppWidthForReview)
+  document.documentElement.style.removeProperty('--workflow-review-width')
+})
+
+const clampReviewPanelWidth = (width) => Math.max(
+  REVIEW_PANEL_MIN_WIDTH,
+  Math.min(getReviewPanelMaxWidth(), width),
+)
+
+const startReviewResize = (event) => {
+  if (event.button !== 0) return
+  event.currentTarget.setPointerCapture(event.pointerId)
+  reviewPanelResizing.value = true
+}
+
+const resizeReviewPanel = (event) => {
+  if (!reviewPanelResizing.value) return
+  reviewPanelWidth.value = clampReviewPanelWidth(window.innerWidth - event.clientX)
+}
+
+const stopReviewResize = (event) => {
+  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  reviewPanelResizing.value = false
+}
+
+const resizeReviewPanelWithKeyboard = (event) => {
+  const step = event.shiftKey ? 80 : 24
+  let nextWidth
+
+  if (event.key === 'ArrowLeft') nextWidth = getReviewPanelWidth() + step
+  else if (event.key === 'ArrowRight') nextWidth = getReviewPanelWidth() - step
+  else if (event.key === 'Home') nextWidth = REVIEW_PANEL_MIN_WIDTH
+  else if (event.key === 'End') nextWidth = Math.min(REVIEW_PANEL_MAX_WIDTH, window.innerWidth - 48)
+  else return
+
+  event.preventDefault()
+  reviewPanelWidth.value = clampReviewPanelWidth(nextWidth)
+}
 
 const getRawActivities = (workflow) => {
   const sources = [workflow?.logs, workflow?.activity_logs, workflow?.activityLogs, workflow?.events, workflow?.telemetry]
@@ -1830,12 +1913,35 @@ const highlightCode = (value) => {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  width: min(840px, 60vw);
+  width: var(--review-panel-width, min(840px, 52vw));
+  max-width: calc(100vw - 48px);
   background: #ffffff;
-  border-left: 1px solid #e4e4e7;
-  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.08);
+  border-left: 1px solid #dbe3ef;
+  box-shadow: none;
   animation: workflow-review-enter 180ms ease-out both;
   user-select: text;
+}
+
+.workflow-review-panel.is-resizing {
+  user-select: none;
+  transition: none;
+}
+
+.workflow-review-resize-handle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  display: grid;
+  place-items: center;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.workflow-review-resize-handle:focus-visible {
+  outline: none;
 }
 
 .workflow-review-tab-bar {
@@ -1845,8 +1951,8 @@ const highlightCode = (value) => {
   height: 38px;
   min-height: 38px;
   padding: 0 12px 0 8px;
-  border-bottom: 1px solid #e4e4e7;
-  background: #fafafa;
+  border-bottom: 1px solid #dbe3ef;
+  background: linear-gradient(105deg, #f4f7ff 0%, #fbfaff 54%, #f8fafc 100%);
 }
 
 .workflow-review-tabs {
@@ -1861,7 +1967,7 @@ const highlightCode = (value) => {
   gap: 7px;
   height: 28px;
   padding: 0 10px 0 8px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid #dbe3ef;
   border-bottom-color: #ffffff;
   border-radius: 6px 6px 0 0;
   background: #ffffff;
@@ -1873,7 +1979,7 @@ const highlightCode = (value) => {
 .tab-icon-box {
   display: grid;
   place-items: center;
-  color: #71717a;
+  color: #6366f1;
 }
 
 .tab-label {
@@ -1980,7 +2086,7 @@ const highlightCode = (value) => {
   height: 38px;
   min-height: 38px;
   padding: 0 14px;
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
 }
 
@@ -2019,7 +2125,7 @@ const highlightCode = (value) => {
 }
 
 .stat-added {
-  color: #16a34a;
+  color: #15803d;
 }
 
 .stat-removed {
@@ -2062,8 +2168,8 @@ const highlightCode = (value) => {
   height: 34px;
   min-height: 34px;
   padding: 0 14px;
-  background: #f4f4f5;
-  border-bottom: 1px solid #e4e4e7;
+  background: #f1f5f9;
+  border-bottom: 1px solid #dbe3ef;
 }
 
 .file-strip-left {
@@ -2138,8 +2244,8 @@ const highlightCode = (value) => {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #e4e4e7;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
   overflow-x: auto;
 }
 
@@ -2166,8 +2272,8 @@ const highlightCode = (value) => {
 }
 
 .review-file-pill-btn.active {
-  background: #18181b;
-  border-color: #18181b;
+  background: #4f46e5;
+  border-color: #4f46e5;
   color: #ffffff;
 }
 
@@ -2184,11 +2290,16 @@ const highlightCode = (value) => {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-color: transparent transparent;
   padding: 0;
   background: #ffffff;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.workflow-review-code-body::-webkit-scrollbar:vertical {
+  width: 0;
 }
 
 .workflow-review-unmodified-pill {
@@ -2217,22 +2328,22 @@ const highlightCode = (value) => {
 }
 
 .workflow-review-code-line.is-added {
-  background: #e6ffec;
-  border-left: 3.5px solid #008809;
+  background: #e8f8ed;
+  border-left: 3.5px solid #16a34a;
 }
 
 .workflow-review-code-line.is-added .workflow-review-line-number {
-  color: #008809;
+  color: #15803d;
   font-weight: 600;
 }
 
 .workflow-review-code-line.is-removed {
-  background: #ffeef0;
-  border-left: 3.5px dashed #d53538;
+  background: #fff0f0;
+  border-left: 3.5px dashed #dc2626;
 }
 
 .workflow-review-code-line.is-removed .workflow-review-line-number {
-  color: #d53538;
+  color: #dc2626;
   font-weight: 600;
 }
 
@@ -2251,7 +2362,7 @@ const highlightCode = (value) => {
   line-height: 1.6;
   text-align: right;
   padding-right: 14px;
-  color: #666666;
+  color: #64748b;
 }
 
 .workflow-review-code-line code {
@@ -2262,61 +2373,61 @@ const highlightCode = (value) => {
   line-height: 1.6;
 }
 
-/* Rich Colorful Syntax Tokens in Review Viewer - Exact Match to Screenshot */
-.tok-tag,
-.review-tok-tag {
-  color: #d53538;
+/* Syntax tokens are inserted with v-html, so they need deep selectors in this scoped stylesheet. */
+:deep(.tok-tag),
+:deep(.review-tok-tag) {
+  color: #c02636;
   font-weight: 500;
 }
 
-.tok-attr,
-.review-tok-attr {
-  color: #0171ea;
+:deep(.tok-attr),
+:deep(.review-tok-attr) {
+  color: #2563eb;
 }
 
-.tok-string,
-.review-tok-string {
-  color: #008809;
+:deep(.tok-string),
+:deep(.review-tok-string) {
+  color: #15803d;
 }
 
-.tok-directive,
-.review-tok-directive,
-.tok-expr,
-.review-tok-expr {
-  color: #be5800;
+:deep(.tok-directive),
+:deep(.review-tok-directive),
+:deep(.tok-expr),
+:deep(.review-tok-expr) {
+  color: #c2410c;
 }
 
-.tok-val,
-.review-tok-val {
-  color: #be5800;
+:deep(.tok-val),
+:deep(.review-tok-val) {
+  color: #c2410c;
 }
 
-.tok-num,
-.review-tok-num,
-.tok-number,
-.review-tok-number {
-  color: #0171ea;
+:deep(.tok-num),
+:deep(.review-tok-num),
+:deep(.tok-number),
+:deep(.review-tok-number) {
+  color: #2563eb;
   font-weight: 500;
 }
 
-.tok-fn,
-.review-tok-fn {
-  color: #0171ea;
+:deep(.tok-fn),
+:deep(.review-tok-fn) {
+  color: #2563eb;
 }
 
-.tok-keyword,
-.review-tok-keyword {
-  color: #d53538;
+:deep(.tok-keyword),
+:deep(.review-tok-keyword) {
+  color: #c02636;
   font-weight: 600;
 }
 
-.tok-prop,
-.review-tok-prop {
-  color: #0171ea;
+:deep(.tok-prop),
+:deep(.review-tok-prop) {
+  color: #2563eb;
 }
 
-.tok-comment,
-.review-tok-comment {
+:deep(.tok-comment),
+:deep(.review-tok-comment) {
   color: #666666;
   font-style: italic;
 }
@@ -2379,6 +2490,11 @@ const highlightCode = (value) => {
 
   .workflow-review-panel {
     width: 100vw;
+    max-width: 100vw;
+  }
+
+  .workflow-review-resize-handle {
+    display: none;
   }
 
   .workflow-review-panel.collapsed {
