@@ -85,19 +85,164 @@
     <div v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
       <div class="completion-heading-row">
         <div class="completion-heading-copy">
-          <h3>Workflow completed successfully</h3>
+          <h3>Done — workflow completed successfully.</h3>
           <p>{{ getElapsedText(workflow).replace('Completed in ', '') }} · {{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed.</p>
         </div>
       </div>
 
-      <div v-if="getWorkflowResultItems(workflow).length" class="completion-results">
-        <div class="completion-results-heading">Breakdown</div>
+      <div v-if="getCompletionChanges(workflow).length" class="completion-results">
+        <div class="completion-results-heading">Changes:</div>
         <ul class="completion-result-list">
-          <li v-for="result in getWorkflowResultItems(workflow)" :key="result.id" class="completion-result-row">
+          <li v-for="result in getCompletionChanges(workflow)" :key="result.id" class="completion-result-row">
             <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
               <strong>{{ result.label }}</strong>
-              <span> — {{ result.detail }}</span>
+              <span v-if="result.detail"> — {{ result.detail }}</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div v-if="getEditedFileItems(workflow).length" class="completion-edit-card" aria-label="Edited files">
+        <div class="completion-edit-card-summary">
+          <div class="completion-edit-file-icon" aria-hidden="true">
+            <IconFile :size="18" />
+          </div>
+          <div class="completion-edit-card-copy">
+            <strong>{{ getEditedFilesHeading(workflow) }}</strong>
+            <div class="completion-edit-stats">
+              <span class="completion-edit-added">+{{ getWorkflowDiffStats(workflow).additions }}</span>
+              <span class="completion-edit-removed">-{{ getWorkflowDiffStats(workflow).deletions }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="completion-edit-card-actions">
+          <button type="button" class="completion-edit-secondary-btn" disabled title="Undo is not available for this workflow yet">
+            <span>Undo</span>
+            <IconArrowBackUp :size="15" />
+          </button>
+          <button type="button" class="completion-edit-review-btn" @click="toggleReview(workflow)">Review</button>
+        </div>
+      </div>
+
+      <section v-if="reviewOpen" class="workflow-review-panel" :class="{ collapsed: reviewPanelCollapsed }" aria-label="Workflow review">
+        <!-- 1. Top Window Tab Bar -->
+        <div class="workflow-review-tab-bar">
+          <div class="workflow-review-tabs">
+            <div class="workflow-review-tab-item active">
+              <span class="tab-icon-box"><IconFile :size="13" /></span>
+              <span class="tab-label">Review</span>
+              <button type="button" class="tab-close-btn" title="Close review" @click="closeReview">
+                <IconX :size="12" />
+              </button>
+            </div>
+            <button type="button" class="workflow-review-tab-plus" title="New tab">
+              <IconPlus :size="13" />
+            </button>
+          </div>
+          <div class="workflow-review-window-controls">
+            <button type="button" class="win-ctrl-btn" title="Expand">
+              <IconMaximize :size="13" />
+            </button>
+            <button type="button" class="win-ctrl-btn" title="Split pane">
+              <IconColumns :size="13" />
+            </button>
+            <button
+              type="button"
+              class="win-ctrl-btn side-panel-toggle"
+              :class="{ active: !reviewPanelCollapsed }"
+              :title="reviewPanelCollapsed ? 'Expand panel' : 'Collapse panel'"
+              @click="toggleReviewPanel"
+            >
+              <IconLayoutSidebarRight :size="14" />
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!reviewPanelCollapsed" class="workflow-review-panel-content">
+          <!-- 2. Turn Subheader Bar -->
+          <div class="workflow-review-turn-bar">
+            <div class="workflow-review-turn-left">
+              <button type="button" class="turn-select-btn">
+                <span>Last Turn</span>
+                <IconChevronDown :size="13" />
+              </button>
+              <div class="turn-diff-stats">
+                <span class="stat-added">+{{ getWorkflowDiffStats(workflow).additions }}</span>
+                <span class="stat-removed">-{{ getWorkflowDiffStats(workflow).deletions }}</span>
+              </div>
+            </div>
+            <div class="workflow-review-turn-right">
+              <button type="button" class="turn-tool-btn" title="More options"><IconDots :size="14" /></button>
+              <button type="button" class="turn-tool-btn" title="Diff view"><IconSwitchHorizontal :size="14" /></button>
+              <button type="button" class="turn-tool-btn" title="Copy code" @click="copyReviewCode(workflow)"><IconCopy :size="14" /></button>
+              <button type="button" class="turn-tool-btn" title="Zoom in" :disabled="reviewZoom >= REVIEW_ZOOM_MAX" @click="zoomReviewIn"><IconZoomIn :size="14" /></button>
+              <button type="button" class="turn-tool-btn" title="Zoom out" :disabled="reviewZoom <= REVIEW_ZOOM_MIN" @click="zoomReviewOut"><IconZoomOut :size="14" /></button>
+              <button type="button" class="turn-tool-btn" title="Close" @click="closeReview"><IconX :size="14" /></button>
+            </div>
+          </div>
+
+          <!-- 3. File Section Header Strip (Gray Bar) -->
+          <div class="workflow-review-file-strip">
+            <div class="file-strip-left">
+              <span class="file-strip-caret">▼</span>
+              <span class="file-strip-path">
+                <span class="file-strip-dir">{{ getSelectedFileDir(workflow) }}</span>
+                <strong class="file-strip-name">{{ getSelectedFileName(workflow) }}</strong>
+              </span>
+              <div class="file-strip-stats">
+                <span class="stat-added">+{{ getSelectedFileStats(workflow).additions }}</span>
+                <span class="stat-removed">-{{ getSelectedFileStats(workflow).deletions }}</span>
+              </div>
+            </div>
+            <div class="file-strip-right">
+              <button type="button" class="file-strip-action-btn" title="Copy file content" @click="copyReviewCode(workflow)"><IconCopy :size="13" /></button>
+              <button type="button" class="file-strip-action-btn" title="Collapse file"><IconChevronDown :size="13" /></button>
+              <button type="button" class="file-strip-action-btn" title="Open in new window"><IconExternalLink :size="13" /></button>
+            </div>
+          </div>
+
+          <!-- 4. Multi-file tabs if workflow created multiple files -->
+          <div v-if="getEditedFileItems(workflow).length > 1" class="workflow-review-file-pills">
+            <button
+              v-for="file in getEditedFileItems(workflow)"
+              :key="file.id"
+              type="button"
+              class="review-file-pill-btn"
+              :class="{ active: String(file.taskId) === String(reviewTaskId) }"
+              @click="reviewTaskId = file.taskId"
+            >
+              <IconFile :size="12" />
+              <span>{{ file.path }}</span>
+              <span class="pill-stats">+{{ getFileStats(file, workflow).additions }} -{{ getFileStats(file, workflow).deletions }}</span>
+            </button>
+          </div>
+
+          <!-- 5. Code Diff Body -->
+          <div v-if="getReviewTask(workflow)" class="workflow-review-code-body" :style="{ fontSize: `${12 * reviewZoom / 100}px` }">
+            <template v-for="line in getReviewLines(getReviewTask(workflow), workflow)" :key="line.id">
+              <div v-if="line.isUnmodifiedBanner" class="workflow-review-unmodified-pill">
+                <IconChevronUp :size="12" />
+                <span>{{ line.text }}</span>
+              </div>
+              <div v-else class="workflow-review-code-line" :class="`is-${line.kind}`">
+                <span class="workflow-review-line-number">{{ line.number }}</span>
+                <code v-html="line.highlightedHtml"></code>
+              </div>
+            </template>
+          </div>
+          <div v-else class="workflow-review-empty">No file output is available for review.</div>
+        </div>
+      </section>
+
+      <div v-if="getValidationItems(workflow).length" class="completion-results">
+        <div class="completion-results-heading">Tests passed:</div>
+        <ul class="completion-result-list">
+          <li v-for="result in getValidationItems(workflow)" :key="result.id" class="completion-result-row">
+            <span class="completion-result-icon" aria-hidden="true">•</span>
+            <div class="completion-result-copy">
+              <strong>{{ result.label }}</strong>
+              <span> — Completed successfully</span>
             </div>
           </li>
         </ul>
@@ -130,6 +275,7 @@
           <IconThumbDown :size="14" />
           <span>Unlike</span>
         </button>
+        <span v-if="getCompletionTimeLabel(workflow)" class="completion-response-time">{{ getCompletionTimeLabel(workflow) }}</span>
       </div>
     </div>
 
@@ -164,15 +310,29 @@
 import { ref } from 'vue'
 import {
   IconArrowRight,
+  IconArrowBackUp,
   IconCheck,
   IconChevronDown,
+  IconChevronUp,
+  IconColumns,
   IconCopy,
+  IconDots,
+  IconExternalLink,
+  IconFile,
+  IconLayoutSidebarRight,
+  IconLayoutSidebarRightCollapse,
+  IconLayoutSidebarRightExpand,
   IconLoader2,
+  IconMaximize,
+  IconPlus,
   IconShieldCheck,
+  IconSwitchHorizontal,
   IconTerminal2,
   IconThumbDown,
   IconThumbUp,
   IconX,
+  IconZoomIn,
+  IconZoomOut,
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
 
@@ -234,7 +394,14 @@ const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(Strin
 const isWorkflowLive = (workflow) => ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(String(workflow?.status || '').toUpperCase())
 
 const copied = ref(false)
+const copiedCode = ref(false)
 const reaction = ref(null)
+const reviewOpen = ref(false)
+const reviewTaskId = ref(null)
+const reviewPanelCollapsed = ref(false)
+const reviewZoom = ref(100)
+const REVIEW_ZOOM_MIN = 75
+const REVIEW_ZOOM_MAX = 175
 
 const getRawActivities = (workflow) => {
   const sources = [workflow?.logs, workflow?.activity_logs, workflow?.activityLogs, workflow?.events, workflow?.telemetry]
@@ -317,7 +484,7 @@ const findResultPaths = (value, paths = []) => {
   }
   if (typeof value !== 'object') return paths
 
-  for (const key of ['path', 'file_path', 'filePath', 'location', 'folder', 'directory']) {
+  for (const key of ['path', 'file_path', 'filePath', 'file', 'fileName', 'filename', 'location', 'folder', 'directory', 'target', 'targetPath', 'relativePath']) {
     const candidate = value[key]
     if (typeof candidate === 'string' && candidate.trim() && !paths.includes(candidate)) paths.push(candidate)
   }
@@ -369,6 +536,533 @@ const getWorkflowResultItems = (workflow) => {
   return items
 }
 
+const getCompletedTasks = (workflow) => (workflow?.tasks || [])
+  .filter((task) => ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase()))
+
+const getTaskPayload = (task, keys) => parseValue(keys
+  .map((key) => task?.[key])
+  .find((value) => value !== undefined && value !== null && value !== ''))
+
+const getTaskText = (task) => `${task?.title || ''} ${task?.instruction || ''} ${task?.description || ''} ${task?.command || ''}`.trim()
+
+const getTaskResultPaths = (task) => {
+  const output = getTaskPayload(task, [
+    'tool_output',
+    'toolOutput',
+    'output_data',
+    'outputData',
+    'output_payload',
+    'outputPayload',
+    'result',
+    'output',
+  ])
+  const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input'])
+  return [...findResultPaths(output), ...findResultPaths(input)]
+    .map((path) => String(path).trim())
+    .filter((path, index, paths) => path && paths.indexOf(path) === index)
+}
+
+const isLikelyFilePath = (value) => {
+  const path = String(value || '').trim()
+  return Boolean(path && /(?:^|[\\/])[^\\/]+\.[a-z0-9]{1,12}$/i.test(path))
+}
+
+const getEditedFileItems = (workflow) => {
+  const seen = new Set()
+  const files = []
+
+  getCompletedTasks(workflow).forEach((task, index) => {
+    const paths = getTaskResultPaths(task).filter((path) => !/^local (?:desktop|downloads)$/i.test(path))
+    const filePath = paths.find(isLikelyFilePath)
+    if (!filePath || seen.has(filePath)) return
+
+    const taskText = getTaskText(task)
+    const status = /\b(?:create|created|generate|generated|add|added|write|written|scaffold)\b/i.test(taskText)
+      ? 'Created'
+      : 'Updated'
+    seen.add(filePath)
+    files.push({
+      id: `file-${index}-${filePath}`,
+      taskId: task.id || `task-${index}`,
+      path: filePath,
+      status,
+    })
+  })
+
+  return files
+}
+
+const findNumericValue = (value, keys) => {
+  if (!value || typeof value !== 'object') return null
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNumericValue(item, keys)
+      if (found !== null) return found
+    }
+    return null
+  }
+
+  for (const key of keys) {
+    const numeric = Number(value[key])
+    if (Number.isFinite(numeric) && numeric >= 0) return numeric
+  }
+
+  for (const child of Object.values(value)) {
+    const found = findNumericValue(child, keys)
+    if (found !== null) return found
+  }
+  return null
+}
+
+const extractCodeContent = (obj, targetPath = '') => {
+  if (!obj) return ''
+  if (typeof obj === 'string') {
+    const trimmed = obj.trim()
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        const extracted = extractCodeContent(parsed, targetPath)
+        if (extracted) return extracted
+      } catch {}
+    }
+    return trimmed
+  }
+  if (typeof obj !== 'object') return ''
+
+  for (const key of ['diff', 'patch', 'content', 'code', 'body', 'text', 'source', 'script', 'stdout']) {
+    if (typeof obj[key] === 'string' && obj[key].trim()) return obj[key]
+  }
+
+  if (Array.isArray(obj.files)) {
+    if (targetPath) {
+      const match = obj.files.find((f) => f && (f.path === targetPath || f.fileName === targetPath || String(f.path || '').endsWith(targetPath)))
+      if (match && typeof match.content === 'string') return match.content
+    }
+    const first = obj.files.find((f) => f && typeof f.content === 'string')
+    if (first) return first.content
+  } else if (obj.files && typeof obj.files === 'object') {
+    if (targetPath && typeof obj.files[targetPath] === 'string') return obj.files[targetPath]
+    const firstVal = Object.values(obj.files).find((v) => typeof v === 'string')
+    if (firstVal) return firstVal
+  }
+
+  return ''
+}
+
+const getReviewContent = (task, targetPath = '') => {
+  if (!task) return ''
+  const selectedPath = targetPath || ''
+
+  const rawOutput = getRawTaskValue(task, [
+    'tool_output',
+    'toolOutput',
+    'output_data',
+    'outputData',
+    'output_payload',
+    'outputPayload',
+    'result',
+    'output',
+  ])
+  const parsedOutput = parseValue(rawOutput)
+  const outputContent = extractCodeContent(parsedOutput, selectedPath)
+  if (outputContent) return outputContent
+
+  const rawInput = getRawTaskValue(task, ['tool_input', 'toolInput', 'input'])
+  const parsedInput = parseValue(rawInput)
+  const inputContent = extractCodeContent(parsedInput, selectedPath)
+  if (inputContent) return inputContent
+
+  if (typeof rawOutput === 'string' && rawOutput.trim()) return rawOutput
+  if (typeof rawInput === 'string' && rawInput.trim()) return rawInput
+
+  if (parsedOutput && typeof parsedOutput === 'object') return JSON.stringify(parsedOutput, null, 2)
+  if (parsedInput && typeof parsedInput === 'object') return JSON.stringify(parsedInput, null, 2)
+  return 'No output content was returned by this workflow step.'
+}
+
+const escapeReviewHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+const highlightVueExpr = (expr) => {
+  const pattern = /(['"])(?:(?=(\\?))\2.)*?\1|\b\d+\b|\.[a-zA-Z_$][a-zA-Z0-9_$]*|\b[A-Z][a-zA-Z0-9]+\b|\b[a-zA-Z_$][a-zA-Z0-9_$]*(?=\s*\()|\b[a-zA-Z_$][a-zA-Z0-9_$]*\b/g
+  let lastIndex = 0
+  let result = ''
+  let match
+
+  while ((match = pattern.exec(expr)) !== null) {
+    if (match.index > lastIndex) {
+      result += escapeReviewHtml(expr.slice(lastIndex, match.index))
+    }
+    const token = match[0]
+    if (token.startsWith('\'') || token.startsWith('"')) {
+      result += `<span class="tok-string">${escapeReviewHtml(token)}</span>`
+    } else if (/^\d+$/.test(token)) {
+      result += `<span class="tok-num">${escapeReviewHtml(token)}</span>`
+    } else if (token.startsWith('.')) {
+      result += `.<span class="tok-prop">${escapeReviewHtml(token.slice(1))}</span>`
+    } else if (/^[A-Z]/.test(token)) {
+      result += `<span class="tok-tag">${escapeReviewHtml(token)}</span>`
+    } else if (expr.slice(match.index + token.length).trim().startsWith('(')) {
+      result += `<span class="tok-fn">${escapeReviewHtml(token)}</span>`
+    } else if (['true', 'false', 'null', 'undefined'].includes(token)) {
+      result += `<span class="tok-directive">${escapeReviewHtml(token)}</span>`
+    } else {
+      result += `<span class="tok-expr">${escapeReviewHtml(token)}</span>`
+    }
+    lastIndex = match.index + token.length
+  }
+  if (lastIndex < expr.length) {
+    result += escapeReviewHtml(expr.slice(lastIndex))
+  }
+  return result
+}
+
+const highlightReviewLine = (rawLine, filename = '') => {
+  if (!rawLine) return '&nbsp;'
+  const ext = String(filename || '').split('.').pop().toLowerCase()
+  const isCss = ['css', 'scss', 'less'].includes(ext) || /^\s*[a-zA-Z-]+\s*:\s*[^<;]+;/.test(rawLine) || /^\s*(?:\.|\#)[a-zA-Z0-9_-]+/.test(rawLine)
+  const isHtmlVue = ['html', 'htm', 'vue', 'xml', 'svg', 'jsx', 'tsx'].includes(ext)
+    || /<[a-zA-Z0-9_:-]+/.test(rawLine)
+
+  if (/^\s*(<!--|\/\/|#|\/\*|\*)/.test(rawLine)) {
+    return `<span class="tok-comment">${escapeReviewHtml(rawLine)}</span>`
+  }
+
+  if (isHtmlVue) {
+    const vueRegex = /(\{\{[\s\S]*?\}\})|(v-[a-zA-Z0-9_:-]+)\s*=\s*(["'])([\s\S]*?)\3|([:@][a-zA-Z0-9_:-]+)\s*=\s*(["'])([\s\S]*?)\6|([a-zA-Z0-9_:-]+)\s*=\s*(["'])([\s\S]*?)\9|\b(disabled|checked|required|readonly|autofocus)\b|(<\/?)([a-zA-Z0-9_:-]+)|(\/?>)/g
+
+    let lastIndex = 0
+    let out = ''
+    let m
+
+    while ((m = vueRegex.exec(rawLine)) !== null) {
+      if (m.index > lastIndex) {
+        out += escapeReviewHtml(rawLine.slice(lastIndex, m.index))
+      }
+
+      if (m[1]) {
+        const inner = m[1].slice(2, -2)
+        out += `{{${highlightVueExpr(inner)}}}`
+      } else if (m[2]) {
+        const dir = m[2]
+        const expr = m[4]
+        out += `<span class="tok-directive">${escapeReviewHtml(dir)}</span>=&quot;${highlightVueExpr(expr)}&quot;`
+      } else if (m[5]) {
+        const attr = m[5]
+        const expr = m[7]
+        out += `<span class="tok-attr">${escapeReviewHtml(attr)}</span>=&quot;${highlightVueExpr(expr)}&quot;`
+      } else if (m[8]) {
+        const attr = m[8]
+        const val = m[10]
+        out += `<span class="tok-attr">${escapeReviewHtml(attr)}</span>=<span class="tok-string">&quot;${escapeReviewHtml(val)}&quot;</span>`
+      } else if (m[11]) {
+        out += `<span class="tok-attr">${escapeReviewHtml(m[11])}</span>`
+      } else if (m[12]) {
+        out += `<span class="tok-tag">${escapeReviewHtml(m[12] + m[13])}</span>`
+      } else if (m[14]) {
+        out += `<span class="tok-tag">${escapeReviewHtml(m[14])}</span>`
+      }
+
+      lastIndex = m.index + m[0].length
+    }
+
+    if (lastIndex < rawLine.length) {
+      out += escapeReviewHtml(rawLine.slice(lastIndex))
+    }
+    return out || '&nbsp;'
+  }
+
+  if (isCss) {
+    let line = rawLine
+    const tokens = []
+    const addToken = (html) => {
+      const id = `\uE000${tokens.length}\uE001`
+      tokens.push(html)
+      return id
+    }
+    line = line.replace(/(#[0-9a-fA-F]{3,8})\b/g, (m) => addToken(`<span class="tok-val">${escapeReviewHtml(m)}</span>`))
+    line = line.replace(/(["'])(?:(?=(\\?))\2.)*?\1/g, (m) => addToken(`<span class="tok-val">${escapeReviewHtml(m)}</span>`))
+    const propMatch = line.match(/^(\s*)([a-zA-Z-][a-zA-Z0-9-]*)\s*(:)(.*)$/)
+    if (propMatch && !propMatch[2].startsWith('http') && !propMatch[4].startsWith('//')) {
+      const space = propMatch[1]
+      const propName = propMatch[2]
+      const colon = propMatch[3]
+      let propVal = propMatch[4]
+      propVal = propVal.replace(/\b(\d+(?:\.\d+)?(?:px|rem|em|%|ms|s|fr|vw|vh)?)\b/g, (m) => addToken(`<span class="tok-val">${escapeReviewHtml(m)}</span>`))
+      propVal = propVal.replace(/\b(hidden|ellipsis|flex|center|auto|grid|pointer|transparent|inherit|none|block|inline|relative|absolute|fixed|monospace|ui-monospace|SFMono-Regular|Menlo|Monaco|Consolas|sans-serif|serif)\b/g, (m) => addToken(`<span class="tok-val">${escapeReviewHtml(m)}</span>`))
+      const propToken = addToken(`<span class="tok-prop">${escapeReviewHtml(propName)}</span>`)
+      line = space + propToken + colon + propVal
+    } else {
+      line = line.replace(/(:(?:hover|active|focus|focus-visible|disabled|enabled|not|first-child|last-child))\b/g, (m) => addToken(`<span class="tok-prop">${escapeReviewHtml(m)}</span>`))
+      line = line.replace(/(\.[a-zA-Z0-9_-]+)/g, (m) => addToken(`<span class="tok-prop">${escapeReviewHtml(m)}</span>`))
+      line = line.replace(/(#[a-zA-Z0-9_-]+)/g, (m) => addToken(`<span class="tok-prop">${escapeReviewHtml(m)}</span>`))
+      line = line.replace(/\b(div|span|button|a|ul|ol|li|p|code|pre|small|strong|body|html|section|aside|header|footer|nav|svg|path|table|th|td|tr|input|label)\b/g, (m) => addToken(`<span class="tok-tag">${escapeReviewHtml(m)}</span>`))
+    }
+    let result = escapeReviewHtml(line)
+    tokens.forEach((tokenHtml, idx) => {
+      result = result.split(`\uE000${idx}\uE001`).join(tokenHtml)
+    })
+    return result || '&nbsp;'
+  }
+
+  // JS/TS
+  let line = escapeReviewHtml(rawLine)
+  line = line.replace(/(["'`])(?:(?=(\\?))\2.)*?\1/g, (m) => `<span class="tok-string">${m}</span>`)
+  line = line.replace(/\b(\d+(?:\.\d+)?)\b/g, (m) => `<span class="tok-num">${m}</span>`)
+  line = line.replace(/\b(import|export|from|default|const|let|var|function|return|if|else|true|false|null|undefined|async|await|class|new|this|typeof|def|elif|lambda|is|not|and|or|pass|raise|public|private|protected|static|final|interface|SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\b/g, (m) => `<span class="tok-keyword">${m}</span>`)
+  line = line.replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g, (m) => `<span class="tok-fn">${m}</span>`)
+  return line || '&nbsp;'
+}
+
+const getSelectedFile = (workflow) => {
+  const files = getEditedFileItems(workflow)
+  return files.find((file) => String(file.taskId) === String(reviewTaskId.value)) || files[0] || null
+}
+
+const getSelectedFileName = (workflow) => {
+  const file = getSelectedFile(workflow)
+  if (!file) return 'file'
+  const parts = file.path.split(/[\\/]/)
+  return parts[parts.length - 1]
+}
+
+const getSelectedFileDir = (workflow) => {
+  const file = getSelectedFile(workflow)
+  if (!file) return ''
+  const parts = file.path.split(/[\\/]/)
+  if (parts.length <= 1) return ''
+  return parts.slice(0, parts.length - 1).join('/') + '/'
+}
+
+const getFileStats = (file, workflow) => {
+  if (!file) return { additions: 0, deletions: 0 }
+  const task = getCompletedTasks(workflow).find((t, i) => String(t.id || `task-${i}`) === String(file.taskId))
+  if (task) {
+    const lines = getReviewLines(task, workflow)
+    const added = lines.filter((l) => l.kind === 'added').length
+    const removed = lines.filter((l) => l.kind === 'removed').length
+    if (added > 0 || removed > 0) {
+      return { additions: added, deletions: removed }
+    }
+    if (lines.length > 0) {
+      return { additions: lines.length, deletions: 0 }
+    }
+  }
+  return { additions: 0, deletions: 0 }
+}
+
+const getSelectedFileStats = (workflow) => {
+  const file = getSelectedFile(workflow)
+  return getFileStats(file, workflow)
+}
+
+const getWorkflowDiffStats = (workflow) => {
+  const files = getEditedFileItems(workflow)
+  let totalAdded = 0
+  let totalRemoved = 0
+  let hasAny = false
+
+  files.forEach((file) => {
+    const stats = getFileStats(file, workflow)
+    totalAdded += stats.additions
+    totalRemoved += stats.deletions
+    if (stats.additions > 0 || stats.deletions > 0) hasAny = true
+  })
+
+  getCompletedTasks(workflow).forEach((task) => {
+    const output = getTaskPayload(task, ['diff', 'changeSummary', 'change_summary'])
+    const add = findNumericValue(output, ['additions', 'added', 'insertions', 'linesAdded'])
+    const del = findNumericValue(output, ['deletions', 'deleted', 'removed', 'linesRemoved'])
+    if (add !== null || del !== null) {
+      hasAny = true
+      totalAdded = Math.max(totalAdded, add || 0)
+      totalRemoved = Math.max(totalRemoved, del || 0)
+    }
+  })
+
+  return hasAny ? { additions: totalAdded, deletions: totalRemoved } : { additions: 0, deletions: 0 }
+}
+
+const getEditedFilesHeading = (workflow) => {
+  const files = getEditedFileItems(workflow)
+  if (files.length === 1) return `${files[0].status === 'Created' ? 'Created' : 'Edited'} ${files[0].path}`
+  return `Edited ${files.length} files`
+}
+
+const getRawTaskValue = (task, keys) => keys
+  .map((key) => task?.[key])
+  .find((value) => value !== undefined && value !== null && value !== '')
+
+const getReviewTask = (workflow) => {
+  const files = getEditedFileItems(workflow)
+  const selectedFile = files.find((file) => String(file.taskId) === String(reviewTaskId.value)) || files[0]
+  if (!selectedFile) return null
+
+  return getCompletedTasks(workflow).find((task, index) => String(task.id || `task-${index}`) === String(selectedFile.taskId)) || null
+}
+
+const getReviewLines = (task, workflow = null) => {
+  if (!task) return []
+  const file = workflow ? getSelectedFile(workflow) : null
+  const filename = file?.path || ''
+  const content = getReviewContent(task, filename)
+  if (!content) return []
+
+  const rawLines = content.split('\n')
+  const isDiff = rawLines.some((l) => /^(?:---|\+\+\+|@@\s*-\d+)/.test(l))
+    || (rawLines.filter((l) => /^[+-]/.test(l)).length >= 2 && rawLines.some((l) => l.startsWith('+')) && rawLines.some((l) => l.startsWith('-')))
+
+  let oldLine = 1
+  let newLine = 1
+  let inHunk = false
+  let prevNewLine = 0
+  const lines = []
+
+  rawLines.forEach((text, index) => {
+    if (isDiff && (text.startsWith('---') || text.startsWith('+++') || text.startsWith('diff --git') || text.startsWith('index '))) {
+      return
+    }
+
+    if (isDiff && text.startsWith('@@')) {
+      const match = text.match(/@@\s*-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@/)
+      if (match) {
+        const nextOld = parseInt(match[1], 10)
+        const nextNew = parseInt(match[2], 10)
+
+        if (prevNewLine > 0 && nextNew > prevNewLine + 1) {
+          const gap = nextNew - prevNewLine - 1
+          lines.push({
+            id: `gap-${index}`,
+            isUnmodifiedBanner: true,
+            text: `${gap} unmodified line${gap === 1 ? '' : 's'}`,
+          })
+        }
+
+        oldLine = nextOld
+        newLine = nextNew
+        inHunk = true
+        prevNewLine = nextNew - 1
+      }
+      return
+    }
+
+    let kind = 'context'
+    let lineNum = newLine
+    let displayText = text
+
+    if (isDiff && inHunk) {
+      if (text.startsWith('+')) {
+        kind = 'added'
+        lineNum = newLine++
+        prevNewLine = lineNum
+        displayText = text.slice(1)
+      } else if (text.startsWith('-')) {
+        kind = 'removed'
+        lineNum = oldLine++
+        displayText = text.slice(1)
+      } else {
+        kind = 'context'
+        lineNum = newLine++
+        oldLine++
+        prevNewLine = lineNum
+        displayText = text.startsWith(' ') ? text.slice(1) : text
+      }
+    } else {
+      kind = 'context'
+      lineNum = index + 1
+      displayText = text
+    }
+
+    const highlightedHtml = highlightReviewLine(displayText, filename)
+
+    lines.push({
+      id: `${task?.id || 'review'}-${index}`,
+      number: lineNum,
+      text: displayText,
+      highlightedHtml,
+      kind,
+    })
+  })
+
+  return lines
+}
+
+const copyReviewCode = async (workflow) => {
+  const task = getReviewTask(workflow)
+  const file = getSelectedFile(workflow)
+  const content = getReviewContent(task, file?.path)
+  if (!content) return
+  try {
+    await navigator.clipboard.writeText(content)
+    copiedCode.value = true
+    setTimeout(() => { copiedCode.value = false }, 1800)
+  } catch (e) {
+    console.error('Failed to copy code:', e)
+  }
+}
+
+const openReview = (workflow) => {
+  reviewTaskId.value = getEditedFileItems(workflow)[0]?.taskId || null
+  reviewPanelCollapsed.value = false
+  reviewOpen.value = true
+}
+
+const toggleReview = (workflow) => {
+  if (reviewOpen.value) {
+    closeReview()
+    return
+  }
+  openReview(workflow)
+}
+
+const toggleReviewPanel = () => {
+  reviewPanelCollapsed.value = !reviewPanelCollapsed.value
+}
+
+const zoomReviewIn = () => {
+  reviewZoom.value = Math.min(REVIEW_ZOOM_MAX, reviewZoom.value + 10)
+}
+
+const zoomReviewOut = () => {
+  reviewZoom.value = Math.max(REVIEW_ZOOM_MIN, reviewZoom.value - 10)
+}
+
+const resetReviewZoom = () => {
+  reviewZoom.value = 100
+}
+
+const closeReview = () => {
+  reviewOpen.value = false
+}
+
+const isValidationTask = (task) => {
+  const text = getTaskText(task)
+  const command = JSON.stringify(getTaskPayload(task, ['tool_input', 'toolInput', 'input']) || '')
+  const validationText = `${text} ${command}`
+    .replace(/\b[\w.-]+\.(?:html?|css|js|mjs|cjs|ts|tsx|jsx|json|md|txt|vue)\b/gi, '')
+  return /\b(?:test|tests|lint|build|verify|validation|validate|check|checks)\b/i.test(validationText)
+}
+
+const getValidationItems = (workflow) => getCompletedTasks(workflow)
+  .filter(isValidationTask)
+  .map((task, index) => ({
+    id: task.id || `validation-${index}`,
+    label: task.title || task.instruction || `Validation ${index + 1}`,
+  }))
+
+const getCompletionChanges = (workflow) => getWorkflowResultItems(workflow)
+
+const getCompletionTimeLabel = (workflow) => {
+  const timestamp = workflow?.completedAt || workflow?.createdAt
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
 const getCompletionDuration = (workflow) => {
   if (workflow?.finalSeconds) return `${workflow.finalSeconds}s`
   const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
@@ -377,12 +1071,18 @@ const getCompletionDuration = (workflow) => {
 }
 
 const getWorkflowResponseText = (workflow) => {
-  const results = getWorkflowResultItems(workflow)
+  const changes = getCompletionChanges(workflow)
+  const files = getEditedFileItems(workflow)
+  const validation = getValidationItems(workflow)
   return [
-    `Workflow completed successfully in ${getCompletionDuration(workflow)}.`,
+    `Done — workflow completed successfully in ${getCompletionDuration(workflow)}.`,
     `${completedStepCount(workflow)} of ${(workflow?.tasks || []).length} steps completed.`,
-    results.length ? 'Results:' : '',
-    ...results.map((result) => `- ${result.label} — ${result.detail}`),
+    changes.length ? 'Changes:' : '',
+    ...changes.map((result) => `- ${result.label}${result.detail ? ` — ${result.detail}` : ''}`),
+    files.length ? 'Updated files:' : '',
+    ...files.map((file) => `- ${file.path} — ${file.status}`),
+    validation.length ? 'Tests passed:' : '',
+    ...validation.map((result) => `- ${result.label} — Completed successfully`),
   ].filter(Boolean).join('\n')
 }
 
@@ -934,9 +1634,9 @@ const highlightCode = (value) => {
 .workflow-completion-response {
   margin: 16px 0 4px;
   padding: 0;
-  color: #1f2937;
-  font-size: 13px;
-  line-height: 1.5;
+  color: #18181b;
+  font-size: 13.5px;
+  line-height: 1.55;
 }
 
 .completion-heading-row {
@@ -952,14 +1652,14 @@ const highlightCode = (value) => {
 
 .completion-heading-copy h3 {
   margin: 0;
-  color: #111827;
-  font-size: 15px;
+  color: #18181b;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .completion-heading-copy p {
   margin: 3px 0 0;
-  color: #374151;
+  color: #52525b;
   font-size: 12px;
 }
 
@@ -968,9 +1668,9 @@ const highlightCode = (value) => {
 }
 
 .completion-results-heading {
-  margin-bottom: 5px;
-  color: #111827;
-  font-size: 12px;
+  margin-bottom: 7px;
+  color: #18181b;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -984,14 +1684,14 @@ const highlightCode = (value) => {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 3px 0;
+  padding: 4px 0;
 }
 
 .completion-result-icon {
   width: 10px;
   flex: 0 0 auto;
   margin-top: 0;
-  color: #111827;
+  color: #27272a;
   font-size: 16px;
   line-height: 1.4;
 }
@@ -1002,14 +1702,629 @@ const highlightCode = (value) => {
 }
 
 .completion-result-copy strong {
-  color: #111827;
+  color: #18181b;
   font-size: 13px;
   font-weight: 650;
 }
 
 .completion-result-copy span {
-  color: #374151;
+  color: #52525b;
   font-size: 13px;
+}
+
+.completion-edit-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.completion-edit-card-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.completion-edit-file-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #3f3f46;
+}
+
+.completion-edit-card-copy {
+  min-width: 0;
+}
+
+.completion-edit-card-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #18181b;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.completion-edit-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.completion-edit-added {
+  color: #16a34a;
+}
+
+.completion-edit-removed {
+  color: #dc2626;
+}
+
+.completion-edit-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.completion-edit-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid #e4e4e7;
+  border-radius: 7px;
+  color: #3f3f46;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.completion-edit-secondary-btn:disabled {
+  color: #a1a1aa;
+  background: #ffffff;
+  cursor: not-allowed;
+}
+
+.completion-edit-review-btn {
+  padding: 6px 14px;
+  border: 1px solid #e4e4e7;
+  border-radius: 7px;
+  color: #18181b;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.completion-edit-review-btn:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+}
+
+.workflow-review-panel {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(840px, 60vw);
+  background: #ffffff;
+  border-left: 1px solid #e4e4e7;
+  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.08);
+  animation: workflow-review-enter 180ms ease-out both;
+  user-select: text;
+}
+
+.workflow-review-tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px 0 8px;
+  border-bottom: 1px solid #e4e4e7;
+  background: #fafafa;
+}
+
+.workflow-review-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workflow-review-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border: 1px solid #e4e4e7;
+  border-bottom-color: #ffffff;
+  border-radius: 6px 6px 0 0;
+  background: #ffffff;
+  color: #18181b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tab-icon-box {
+  display: grid;
+  place-items: center;
+  color: #71717a;
+}
+
+.tab-label {
+  color: #18181b;
+}
+
+.tab-close-btn {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.tab-close-btn:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.workflow-review-tab-plus {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.workflow-review-tab-plus:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.workflow-review-window-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.win-ctrl-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.win-ctrl-btn:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.win-ctrl-btn.side-panel-toggle.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+}
+
+.workflow-review-panel.collapsed {
+  width: 48px;
+}
+
+.workflow-review-panel.collapsed .workflow-review-tab-bar {
+  padding: 0 6px;
+  justify-content: center;
+}
+
+.workflow-review-panel.collapsed .workflow-review-tabs,
+.workflow-review-panel.collapsed .workflow-review-panel-content {
+  display: none;
+}
+
+.workflow-review-panel-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workflow-review-turn-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e4e4e7;
+  background: #ffffff;
+}
+
+.workflow-review-turn-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.turn-select-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #18181b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.turn-select-btn:hover {
+  background: #f4f4f5;
+}
+
+.turn-diff-stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stat-added {
+  color: #16a34a;
+}
+
+.stat-removed {
+  color: #dc2626;
+}
+
+.workflow-review-turn-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.turn-tool-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.turn-tool-btn:hover:not(:disabled) {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.turn-tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.workflow-review-file-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 14px;
+  background: #f4f4f5;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.file-strip-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.file-strip-caret {
+  color: #16a34a;
+  font-size: 10px;
+  flex: 0 0 auto;
+}
+
+.file-strip-path {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-strip-dir {
+  color: #71717a;
+  font-weight: 400;
+}
+
+.file-strip-name {
+  color: #09090b;
+  font-weight: 700;
+}
+
+.file-strip-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.file-strip-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.file-strip-action-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.file-strip-action-btn:hover {
+  background: #e4e4e7;
+  color: #18181b;
+}
+
+.workflow-review-file-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #e4e4e7;
+  overflow-x: auto;
+}
+
+.review-file-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #52525b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 120ms ease;
+}
+
+.review-file-pill-btn:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+  color: #18181b;
+}
+
+.review-file-pill-btn.active {
+  background: #18181b;
+  border-color: #18181b;
+  color: #ffffff;
+}
+
+.review-file-pill-btn.active .pill-stats {
+  color: #a1a1aa;
+}
+
+.pill-stats {
+  color: #71717a;
+  font-weight: 600;
+}
+
+.workflow-review-code-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+  background: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.workflow-review-unmodified-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 14px;
+  padding: 4px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+  user-select: none;
+}
+
+.workflow-review-code-line {
+  display: grid;
+  grid-template-columns: 55px minmax(0, 1fr);
+  min-width: max-content;
+  padding: 0;
+  white-space: pre;
+  border-left: 3.5px solid transparent;
+}
+
+.workflow-review-code-line.is-added {
+  background: #e6ffec;
+  border-left: 3.5px solid #008809;
+}
+
+.workflow-review-code-line.is-added .workflow-review-line-number {
+  color: #008809;
+  font-weight: 600;
+}
+
+.workflow-review-code-line.is-removed {
+  background: #ffeef0;
+  border-left: 3.5px dashed #d53538;
+}
+
+.workflow-review-code-line.is-removed .workflow-review-line-number {
+  color: #d53538;
+  font-weight: 600;
+}
+
+.workflow-review-code-line.is-context {
+  background: #ffffff;
+  border-left: 3.5px solid transparent;
+}
+
+.workflow-review-code-line.is-context .workflow-review-line-number {
+  color: #666666;
+}
+
+.workflow-review-line-number {
+  user-select: none;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: right;
+  padding-right: 14px;
+  color: #666666;
+}
+
+.workflow-review-code-line code {
+  min-width: 0;
+  padding: 0 12px 0 4px;
+  color: #24292f;
+  font: inherit;
+  line-height: 1.6;
+}
+
+/* Rich Colorful Syntax Tokens in Review Viewer - Exact Match to Screenshot */
+.tok-tag,
+.review-tok-tag {
+  color: #d53538;
+  font-weight: 500;
+}
+
+.tok-attr,
+.review-tok-attr {
+  color: #0171ea;
+}
+
+.tok-string,
+.review-tok-string {
+  color: #008809;
+}
+
+.tok-directive,
+.review-tok-directive,
+.tok-expr,
+.review-tok-expr {
+  color: #be5800;
+}
+
+.tok-val,
+.review-tok-val {
+  color: #be5800;
+}
+
+.tok-num,
+.review-tok-num,
+.tok-number,
+.review-tok-number {
+  color: #0171ea;
+  font-weight: 500;
+}
+
+.tok-fn,
+.review-tok-fn {
+  color: #0171ea;
+}
+
+.tok-keyword,
+.review-tok-keyword {
+  color: #d53538;
+  font-weight: 600;
+}
+
+.tok-prop,
+.review-tok-prop {
+  color: #0171ea;
+}
+
+.tok-comment,
+.review-tok-comment {
+  color: #666666;
+  font-style: italic;
+}
+
+.workflow-review-empty {
+  padding: 24px 14px;
+  color: #71717a;
+  font-size: 12px;
 }
 
 .completion-actions {
@@ -1036,9 +2351,56 @@ const highlightCode = (value) => {
 
 .completion-action-btn:hover,
 .completion-action-btn.active {
-  border-color: #bbf7d0;
-  color: #15803d;
-  background: #f0fdf4;
+  border-color: #d4d4d8;
+  color: #18181b;
+  background: #f4f4f5;
+}
+
+.completion-response-time {
+  margin-left: 8px;
+  color: #a1a1aa;
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .completion-edit-card-actions {
+    width: 100%;
+  }
+
+  .completion-edit-secondary-btn,
+  .completion-edit-review-btn {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .workflow-review-panel-body {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-review-panel {
+    width: 100vw;
+  }
+
+  .workflow-review-panel.collapsed {
+    width: 58px;
+  }
+
+  .workflow-review-file-list {
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid #e4e4e7;
+  }
+}
+
+@keyframes workflow-review-enter {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .spin-icon {
