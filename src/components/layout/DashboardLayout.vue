@@ -22,7 +22,7 @@
             <IconHome :size="16" />
             <span>Dashboard</span>
           </RouterLink>
-          <RouterLink class="nav-item" to="/" exact-active-class="router-link-exact-active" @click="closeMenu">
+          <RouterLink class="nav-item" :to="{ name: 'chat' }" exact-active-class="router-link-exact-active" @click="closeMenu">
             <IconMessageCircle2 :size="16" />
             <span>AI Chat & Agent</span>
           </RouterLink>
@@ -67,7 +67,7 @@
             <template v-for="item in combinedRecentItems" :key="item.id">
               <div
                 class="recent-row"
-                :class="{ 'active-chat': chatStore.activeSessionId === item.id && route.path === '/', 'is-pinned': item.pinned }"
+                :class="{ 'active-chat': chatStore.activeSessionId === item.id && route.name === 'chat', 'is-pinned': item.pinned }"
               >
                 <!-- Bullet Circle -->
                 <span class="item-circle" :class="{ pinned: item.pinned }"></span>
@@ -272,16 +272,16 @@ const closeMenu = () => {
 const newChat = () => {
   chatStore.startNewChat()
   closeMenu()
-  if (route.path !== '/') {
-    router.push('/')
+  if (route.name !== 'chat') {
+    router.push({ name: 'chat' })
   }
 }
 
 const selectChat = (sessionId) => {
   chatStore.selectSession(sessionId)
   closeMenu()
-  if (route.path !== '/') {
-    router.push('/')
+  if (route.name !== 'chat') {
+    router.push({ name: 'chat' })
   }
 }
 
@@ -342,7 +342,7 @@ const handleDelete = (item) => {
     chatStore.deleteSession(item.id)
     if (isCurrentActive) {
       chatStore.startNewChat()
-      if (route.path !== '/') router.push('/')
+      if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
     hiddenWorkflowIds.value.push(item.id)
