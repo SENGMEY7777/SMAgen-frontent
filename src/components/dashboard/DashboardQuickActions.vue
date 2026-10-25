@@ -11,7 +11,7 @@
         </div>
         <p>Start a conversational session with code artifacts and real-time reasoning.</p>
       </div>
-      <RouterLink to="/" class="secondary-btn sm">Open Chat</RouterLink>
+      <RouterLink :to="{ name: 'chat' }" class="secondary-btn sm">Open Chat</RouterLink>
     </article>
 
     <article class="soft-card module-card">
