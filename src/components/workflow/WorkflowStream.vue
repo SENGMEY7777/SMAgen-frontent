@@ -357,20 +357,22 @@
       </div>
     </div>
 
-    <WorkflowApprovalPanel
-      v-if="workflow.approval"
-      :approval="workflow.approval"
-      :options="approvalOptions(workflow.approval.assignedTool)"
-      :run-id="workflow.runId"
-      :message-index="messageIndex"
-      :decision-pending="workflow.decisionPending"
-      :error="workflow.error"
-      :stringify-value="stringifyValue"
-      @skip="$emit('skip-approval')"
-      @submit="$emit('submit-approval')"
-      @update:choice="$emit('update-approval-choice', $event)"
-      @update:rejection-reason="$emit('update-approval-rejection', $event)"
-    />
+    <Teleport to=".composer-container">
+      <WorkflowApprovalPanel
+        v-if="workflow.approval"
+        :approval="workflow.approval"
+        :options="approvalOptions(workflow.approval.assignedTool)"
+        :run-id="workflow.runId"
+        :message-index="messageIndex"
+        :decision-pending="workflow.decisionPending"
+        :error="workflow.error"
+        :stringify-value="stringifyValue"
+        @skip="$emit('skip-approval')"
+        @submit="$emit('submit-approval')"
+        @update:choice="$emit('update-approval-choice', $event)"
+        @update:rejection-reason="$emit('update-approval-rejection', $event)"
+      />
+    </Teleport>
 
     <div v-if="workflow.runId" class="workflow-subtle-footer">
       <button type="button" class="workflow-subtle-run-btn" @click="$emit('open-run', workflow.runId)">
