@@ -86,7 +86,7 @@
       <div class="completion-heading-row">
         <div class="completion-heading-copy">
           <h3>Done — workflow completed successfully.</h3>
-          <p>{{ getElapsedText(workflow).replace('Completed in ', '') }} · {{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed.</p>
+          <p>{{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed.</p>
         </div>
       </div>
 
@@ -104,24 +104,79 @@
       </div>
 
       <div v-if="editedFiles.length" class="completion-edit-card" aria-label="Edited files">
-        <div class="completion-edit-card-summary">
-          <div class="completion-edit-file-icon" aria-hidden="true">
-            <IconFile :size="18" />
-          </div>
-          <div class="completion-edit-card-copy">
-            <strong>{{ editedFilesHeading }}</strong>
-            <div class="completion-edit-stats">
-              <span class="completion-edit-added">+{{ workflowDiffStats.additions }}</span>
-              <span class="completion-edit-removed">-{{ workflowDiffStats.deletions }}</span>
+        <div class="completion-edit-card-header">
+          <div class="completion-edit-card-summary">
+            <div class="completion-edit-file-icon" aria-hidden="true">
+              <IconFile :size="18" />
+            </div>
+            <div class="completion-edit-card-copy">
+              <strong>{{ editedFilesHeading }}</strong>
+              <div class="completion-edit-stats">
+                <span class="completion-edit-added">+{{ workflowDiffStats.additions }}</span>
+                <span class="completion-edit-removed">-{{ workflowDiffStats.deletions }}</span>
+              </div>
             </div>
           </div>
+          <div class="completion-edit-card-actions">
+            <button
+              type="button"
+              class="completion-edit-secondary-btn"
+              disabled
+              aria-disabled="true"
+              title="Undo is not available for this workflow yet"
+            >
+              <span>Undo</span>
+              <IconArrowBackUp :size="15" />
+            </button>
+            <button
+              type="button"
+              class="completion-edit-review-btn"
+              :class="{ active: reviewOpen }"
+              :aria-expanded="reviewOpen"
+              aria-controls="workflow-review-content"
+              @click="toggleReview(workflow)"
+            >
+              <span>{{ reviewOpen ? 'Close review' : 'Review' }}</span>
+            </button>
+          </div>
         </div>
-        <div class="completion-edit-card-actions">
-          <button type="button" class="completion-edit-secondary-btn" disabled title="Undo is not available for this workflow yet">
-            <span>Undo</span>
-            <IconArrowBackUp :size="15" />
+
+        <div v-if="editedFiles.length" class="completion-edit-file-list" aria-label="Changed files">
+          <div
+            v-for="file in visibleEditedFiles"
+            :key="file.id"
+            class="completion-edit-file-item"
+          >
+            <div class="completion-edit-file-row">
+              <button
+                type="button"
+                class="completion-edit-file-toggle"
+                :aria-label="`Review ${file.path}`"
+                :aria-pressed="reviewOpen && String(reviewTaskId) === String(file.taskId)"
+                :title="`Review ${file.path}`"
+                @click="openReview(workflow, file)"
+              >
+                <span class="completion-edit-file-path">
+                  <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
+                  <strong>{{ getFilePathParts(file).name }}</strong>
+                </span>
+                <span class="completion-edit-file-row-stats">
+                  <span class="completion-edit-added">+{{ fileStatsById[file.id]?.additions || 0 }}</span>
+                  <span class="completion-edit-removed">-{{ fileStatsById[file.id]?.deletions || 0 }}</span>
+                </span>
+              </button>
+            </div>
+          </div>
+          <button
+            v-if="editedFiles.length > MAX_VISIBLE_EDITED_FILES"
+            type="button"
+            class="completion-edit-file-list-toggle"
+            :aria-expanded="showAllEditedFiles"
+            @click="showAllEditedFiles = !showAllEditedFiles"
+          >
+            <span>{{ showAllEditedFiles ? 'Show fewer files' : `Show ${editedFiles.length - MAX_VISIBLE_EDITED_FILES} more files` }}</span>
+            <IconChevronDown :size="16" :class="{ 'rotate-180': showAllEditedFiles }" />
           </button>
-          <button type="button" class="completion-edit-review-btn" @click="toggleReview(workflow)">Review</button>
         </div>
       </div>
 
@@ -425,10 +480,12 @@ const reviewPanelCollapsed = ref(false)
 const reviewPanelWidth = ref(null)
 const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
+const showAllEditedFiles = ref(false)
 const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
+const MAX_VISIBLE_EDITED_FILES = 3
 
 const getReviewPanelWidth = () => reviewPanelWidth.value || (window.innerWidth <= 640 ? window.innerWidth : Math.min(840, window.innerWidth * 0.52))
 const getReviewPanelMaxWidth = () => Math.max(REVIEW_PANEL_MIN_WIDTH, Math.min(REVIEW_PANEL_MAX_WIDTH, window.innerWidth - 48))
@@ -555,21 +612,24 @@ const parseValue = (value) => {
   }
 }
 
-const findResultPaths = (value, paths = []) => {
-  if (!value || paths.length >= 3) return paths
+const findResultPaths = (value, paths = [], maxPaths = Number.POSITIVE_INFINITY) => {
+  if (!value || paths.length >= maxPaths) return paths
   if (Array.isArray(value)) {
-    value.forEach((item) => findResultPaths(item, paths))
+    value.forEach((item) => {
+      if (paths.length < maxPaths) findResultPaths(item, paths, maxPaths)
+    })
     return paths
   }
   if (typeof value !== 'object') return paths
 
   for (const key of ['path', 'file_path', 'filePath', 'file', 'fileName', 'filename', 'location', 'folder', 'directory', 'target', 'targetPath', 'relativePath']) {
     const candidate = value[key]
+    if (paths.length >= maxPaths) break
     if (typeof candidate === 'string' && candidate.trim() && !paths.includes(candidate)) paths.push(candidate)
   }
 
   Object.values(value).forEach((child) => {
-    if (child && typeof child === 'object') findResultPaths(child, paths)
+    if (paths.length < maxPaths && child && typeof child === 'object') findResultPaths(child, paths, maxPaths)
   })
   return paths
 }
@@ -603,7 +663,7 @@ const getWorkflowResultItems = (workflow) => {
         || task.result
         || task.output,
     )
-    const paths = findResultPaths(output).filter((path) => path !== 'local Desktop')
+    const paths = findResultPaths(output, [], 3).filter((path) => path !== 'local Desktop')
     return {
       id: task.id || `result-${index}`,
       label: task.title || task.instruction || `Step ${index + 1}`,
@@ -640,7 +700,7 @@ const getTaskResultPaths = (task) => {
     'output',
   ])
   const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input'])
-  return [...findResultPaths(output), ...findResultPaths(input)]
+  return [...findResultPaths(output, [], Number.POSITIVE_INFINITY), ...findResultPaths(input, [], Number.POSITIVE_INFINITY)]
     .map((path) => String(path).trim())
     .filter((path, index, paths) => path && paths.indexOf(path) === index)
 }
@@ -654,21 +714,25 @@ const getEditedFileItems = (workflow) => {
   const seen = new Set()
   const files = []
 
-  getCompletedTasks(workflow).forEach((task, index) => {
+  getCompletedTasks(workflow).forEach((task, taskIndex) => {
     const paths = getTaskResultPaths(task).filter((path) => !/^local (?:desktop|downloads)$/i.test(path))
-    const filePath = paths.find(isLikelyFilePath)
-    if (!filePath || seen.has(filePath)) return
+    const filePaths = paths.filter(isLikelyFilePath)
+    if (!filePaths.length) return
 
     const taskText = getTaskText(task)
     const status = /\b(?:create|created|generate|generated|add|added|write|written|scaffold)\b/i.test(taskText)
       ? 'Created'
       : 'Updated'
-    seen.add(filePath)
-    files.push({
-      id: `file-${index}-${filePath}`,
-      taskId: task.id || `task-${index}`,
-      path: filePath,
-      status,
+
+    filePaths.forEach((filePath, fileIndex) => {
+      if (seen.has(filePath)) return
+      seen.add(filePath)
+      files.push({
+        id: `file-${taskIndex}-${fileIndex}-${filePath}`,
+        taskId: task.id || `task-${taskIndex}`,
+        path: filePath,
+        status,
+      })
     })
   })
 
@@ -920,6 +984,15 @@ const getSelectedFileDir = (workflow, files = getEditedFileItems(workflow)) => {
   return parts.slice(0, parts.length - 1).join('/') + '/'
 }
 
+const getFilePathParts = (file) => {
+  const path = String(file?.path || '')
+  const separatorIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  return {
+    directory: separatorIndex >= 0 ? path.slice(0, separatorIndex + 1) : '',
+    name: path.slice(separatorIndex + 1),
+  }
+}
+
 const getFileStats = (file, workflow) => {
   if (!file) return { additions: 0, deletions: 0 }
   const task = getCompletedTasks(workflow).find((t, i) => String(t.id || `task-${i}`) === String(file.taskId))
@@ -1085,6 +1158,9 @@ const selectedFileStats = computed(() => getSelectedFileStats(props.workflow, ed
 const fileStatsById = computed(() => Object.fromEntries(
   editedFiles.value.map((file) => [file.id, getFileStats(file, props.workflow)]),
 ))
+const visibleEditedFiles = computed(() => (
+  showAllEditedFiles.value ? editedFiles.value : editedFiles.value.slice(0, MAX_VISIBLE_EDITED_FILES)
+))
 const reviewTask = computed(() => getReviewTask(props.workflow, editedFiles.value))
 const reviewLines = computed(() => getReviewLines(reviewTask.value, props.workflow, selectedFile.value?.path || ''))
 const completionTimeLabel = computed(() => getCompletionTimeLabel(props.workflow))
@@ -1110,9 +1186,9 @@ const copyReviewCode = async (workflow) => {
   }
 }
 
-const openReview = (workflow) => {
+const openReview = (workflow, selectedFile = null) => {
   const files = workflow === props.workflow ? editedFiles.value : getEditedFileItems(workflow)
-  reviewTaskId.value = files[0]?.taskId || null
+  reviewTaskId.value = selectedFile?.taskId || files[0]?.taskId || null
   reviewPanelCollapsed.value = false
   reviewOpen.value = true
 }
@@ -1310,7 +1386,7 @@ const highlightCode = (value) => {
 
 .stream-elapsed-header {
   font-size: 13.5px;
-  font-weight: 400;
+  font-weight: 600;
   color: #71717a;
   letter-spacing: -0.01em;
   margin-bottom: 10px;
@@ -1323,8 +1399,9 @@ const highlightCode = (value) => {
 }
 
 .stream-plan-text {
-  font-size: 14.5px;
-  line-height: 1.55;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
   color: #18181b;
   margin-bottom: 10px;
   word-break: break-word;
@@ -1759,8 +1836,9 @@ const highlightCode = (value) => {
 .completion-heading-copy h3 {
   margin: 0;
   color: #18181b;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: inherit;
+  font-weight: 400;
+  line-height: inherit;
 }
 
 .completion-heading-copy p {
@@ -1820,14 +1898,21 @@ const highlightCode = (value) => {
 
 .completion-edit-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
   margin-top: 14px;
-  padding: 12px 16px;
+  overflow: hidden;
   border: 1px solid #e4e4e7;
   border-radius: 12px;
   background: #ffffff;
+}
+
+.completion-edit-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  padding: 12px 16px;
 }
 
 .completion-edit-card-summary {
@@ -1890,13 +1975,131 @@ const highlightCode = (value) => {
   flex: 0 0 auto;
 }
 
+.completion-edit-file-list {
+  border-top: 1px solid #f1f1f3;
+  padding: 4px 12px;
+}
+
+.completion-edit-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 6px 0;
+  color: #52525b;
+  font-size: 12px;
+}
+
+.completion-edit-file-item + .completion-edit-file-item {
+  border-top: 1px solid #f4f4f5;
+}
+
+.completion-edit-file-toggle {
+  display: flex;
+  min-height: 36px;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.completion-edit-file-toggle:hover,
+.completion-edit-file-toggle[aria-pressed="true"] {
+  background: #f8fafc;
+}
+
+.completion-edit-file-toggle:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 2px;
+}
+
+.completion-edit-file-toggle:hover .completion-edit-file-path strong,
+.completion-edit-file-toggle:focus-visible .completion-edit-file-path strong {
+  color: #18181b;
+}
+
+.completion-edit-file-list-toggle {
+  display: flex;
+  width: calc(100% + 24px);
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px -12px -4px;
+  padding: 0 12px;
+  border: 0;
+  border-top: 1px solid #f4f4f5;
+  color: #27272a;
+  background: #fafafa;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.completion-edit-file-list-toggle:hover {
+  background: #f4f4f5;
+}
+
+.completion-edit-file-list-toggle :deep(svg) {
+  transition: transform 120ms ease;
+}
+
+.completion-edit-file-list-toggle :deep(svg.rotate-180) {
+  transform: rotate(180deg);
+}
+
+.completion-edit-file-path {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  min-width: 0;
+  color: #71717a;
+  font-weight: 400;
+}
+
+.completion-edit-file-directory {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.completion-edit-file-path strong {
+  flex: 0 0 auto;
+  color: #27272a;
+  font-weight: 500;
+}
+
+.completion-edit-file-row-stats {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .completion-edit-secondary-btn {
   display: inline-flex;
+  min-height: 32px;
   align-items: center;
   gap: 5px;
   padding: 6px 12px;
   border: 1px solid #e4e4e7;
-  border-radius: 7px;
+  border-radius: 8px;
   color: #3f3f46;
   background: #ffffff;
   font-size: 12px;
@@ -1907,16 +2110,22 @@ const highlightCode = (value) => {
 
 .completion-edit-secondary-btn:disabled {
   color: #a1a1aa;
-  background: #ffffff;
+  border-color: #ededf0;
+  background: #fafafa;
   cursor: not-allowed;
 }
 
 .completion-edit-review-btn {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   padding: 6px 14px;
-  border: 1px solid #e4e4e7;
-  border-radius: 7px;
-  color: #18181b;
-  background: #ffffff;
+  border: 1px solid #18181b;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #18181b;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -1924,8 +2133,18 @@ const highlightCode = (value) => {
 }
 
 .completion-edit-review-btn:hover {
+  background: #3f3f46;
+  border-color: #3f3f46;
+}
+
+.completion-edit-review-btn.active {
+  color: #18181b;
+  background: #ffffff;
+}
+
+.completion-edit-review-btn.active:hover {
   background: #f4f4f5;
-  border-color: #d4d4d8;
+  border-color: #a1a1aa;
 }
 
 .workflow-review-panel {
@@ -2497,6 +2716,13 @@ const highlightCode = (value) => {
 }
 
 @media (max-width: 640px) {
+  .completion-edit-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
   .completion-edit-card-actions {
     width: 100%;
   }
