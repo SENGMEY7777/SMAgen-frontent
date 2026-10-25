@@ -14,6 +14,7 @@ const CONVERSATIONAL_PROMPT_PATTERN = /^\s*(?:please\s+)?(?:print|say|tell me|sh
 const ADVISORY_REQUEST_PATTERN = /^\s*(?:please\s+)?(?:give|suggest|recommend|share|provide|list|brainstorm)\b[\s\S]*\b(?:idea|ideas|advice|suggestion|suggestions|recommendation|recommendations|options|what to build)\b/i
 const FILE_EDIT_PATTERN = /\b(?:add|insert|remove|delete|replace|update|edit|modify|change|write|create)\b[\s\S]{0,180}\b(?:in|into|inside|to)\b[\s\S]{0,100}\b[A-Za-z0-9_-]+\.(?:html?|css|js|mjs|cjs|ts|tsx|jsx|json|md|txt|vue)\b/i
 const WORKFLOW_TARGET_PATTERN = /\b(?:workflow|automation|task|step|file|folder|directory|desktop|workspace|project|terminal|browser|command|tool|script|job|repository|repo|website|homepage|index\.html|image|images|photo|photos|picture|pictures|visual|design|style|theme|layout|content|product|products|clothing|pinia|pinai|store|state\s+management|dependency|dependencies)\b/i
+const PROJECT_SETUP_PATTERN = /\b(?:setup|set\s*[-]?\s*up|setupt|scaffold|initialize|bootstrap)\b[\s\S]{0,120}\b(?:project|app|application|api|service|website|repository|repo)\b/i
 
 export const detectRequestMode = (value = '') => {
   const text = String(value || '').trim()
@@ -35,6 +36,14 @@ export const detectRequestMode = (value = '') => {
   // they mention a workflow, file, or command.
   if (EXPLANATION_PATTERN.test(text) || HOW_TO_PATTERN.test(text)) {
     return 'chat'
+  }
+
+  // Project setup requests are executable actions even when they use the
+  // conversational phrasing "please give me setup project ...". Keep this
+  // after the explanation checks so questions such as "how do I set up ...?"
+  // remain informational chat.
+  if (PROJECT_SETUP_PATTERN.test(text)) {
+    return 'workflow'
   }
 
   // Follow-up edits to a named source file must stay in workflow mode,
