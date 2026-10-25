@@ -256,8 +256,8 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   border: 1px solid transparent;
   border-radius: clamp(12px, 1vw, 17px);
   color: #383b40;
-  font-size: 18px;
-  line-height: 0.3!important;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
   background: #ffffff;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
