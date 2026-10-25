@@ -91,7 +91,6 @@
           <strong>Execution failed</strong>
           <span>{{ runFailureMessage }}</span>
         </div>
-        <button type="button" @click="activeTab = 'logs'">View activity logs</button>
       </div>
 
       <!-- Main Two-Column Layout -->
@@ -1510,17 +1509,6 @@ onBeforeUnmount(() => {
 
 .zyn-run-failure span {
   overflow-wrap: anywhere;
-}
-
-.zyn-run-failure button {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: #b91c1c;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: underline;
 }
 
 /* Two-Column Editor Layout */
