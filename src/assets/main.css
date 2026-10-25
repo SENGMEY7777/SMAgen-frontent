@@ -479,7 +479,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 20px 14px;
+  padding: 16px clamp(16px, 3.7vw, 60px) 14px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.88) 25%, #ffffff 100%);
   pointer-events: none;
 }
@@ -528,13 +528,15 @@
 }
 
 .composer.workflow-composer {
-  border-color: #c7d2fe;
-  box-shadow: 0 6px 24px rgba(79, 70, 229, 0.1);
+  width: min(770px, 100%);
+  border-color: #e2e4e8;
+  border-radius: 15px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
 
 .composer.workflow-composer:focus-within {
-  border-color: #818cf8;
-  box-shadow: 0 6px 26px rgba(79, 70, 229, 0.16);
+  border-color: #d1d5db;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
 .composer-main-row {
