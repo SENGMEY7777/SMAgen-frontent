@@ -83,18 +83,54 @@
     </div>
 
     <div v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
-      <p>AI agent completed the workflow successfully in {{ getElapsedText(workflow).replace('Completed in ', '') }}.</p>
-      <p v-if="workflow.tasks?.length">
-        {{ completedStepCount(workflow) }} of {{ workflow.tasks.length }} steps completed.
-      </p>
-      <template v-if="getWorkflowResultItems(workflow).length">
-        <p>AI agent summary:</p>
-        <ul>
-          <li v-for="result in getWorkflowResultItems(workflow)" :key="result.id">
-            <strong>{{ result.label }}</strong> — {{ result.detail }}
+      <div class="completion-heading-row">
+        <div class="completion-heading-copy">
+          <h3>Workflow completed successfully</h3>
+          <p>{{ getElapsedText(workflow).replace('Completed in ', '') }} · {{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed.</p>
+        </div>
+      </div>
+
+      <div v-if="getWorkflowResultItems(workflow).length" class="completion-results">
+        <div class="completion-results-heading">Breakdown</div>
+        <ul class="completion-result-list">
+          <li v-for="result in getWorkflowResultItems(workflow)" :key="result.id" class="completion-result-row">
+            <span class="completion-result-icon" aria-hidden="true">•</span>
+            <div class="completion-result-copy">
+              <strong>{{ result.label }}</strong>
+              <span> — {{ result.detail }}</span>
+            </div>
           </li>
         </ul>
-      </template>
+      </div>
+
+      <div class="completion-actions" aria-label="Workflow response actions">
+        <button type="button" class="completion-action-btn" :title="copied ? 'Copied' : 'Copy response'" @click="copyCompletionResponse(workflow)">
+          <component :is="copied ? IconCheck : IconCopy" :size="14" />
+          <span>{{ copied ? 'Copied' : 'Copy' }}</span>
+        </button>
+        <button
+          type="button"
+          class="completion-action-btn reaction-btn"
+          :class="{ active: reaction === 'like' }"
+          :aria-pressed="reaction === 'like'"
+          title="Like response"
+          @click="setReaction('like')"
+        >
+          <IconThumbUp :size="14" />
+          <span>Like</span>
+        </button>
+        <button
+          type="button"
+          class="completion-action-btn reaction-btn"
+          :class="{ active: reaction === 'unlike' }"
+          :aria-pressed="reaction === 'unlike'"
+          title="Unlike response"
+          @click="setReaction('unlike')"
+        >
+          <IconThumbDown :size="14" />
+          <span>Unlike</span>
+        </button>
+      </div>
     </div>
 
     <WorkflowApprovalPanel
@@ -125,13 +161,17 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import {
   IconArrowRight,
   IconCheck,
   IconChevronDown,
+  IconCopy,
   IconLoader2,
   IconShieldCheck,
   IconTerminal2,
+  IconThumbDown,
+  IconThumbUp,
   IconX,
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
@@ -192,6 +232,9 @@ defineEmits([
 const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
 
 const isWorkflowLive = (workflow) => ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(String(workflow?.status || '').toUpperCase())
+
+const copied = ref(false)
+const reaction = ref(null)
 
 const getRawActivities = (workflow) => {
   const sources = [workflow?.logs, workflow?.activity_logs, workflow?.activityLogs, workflow?.events, workflow?.telemetry]
@@ -285,24 +328,89 @@ const findResultPaths = (value, paths = []) => {
   return paths
 }
 
-const getWorkflowResultItems = (workflow) => (workflow?.tasks || [])
-  .filter((task) => ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase()))
-  .map((task, index) => {
+const isImageResultTask = (task) => {
+  const tool = String(task?.assigned_tool || task?.assignedTool || '').toLowerCase()
+  const title = `${task?.title || ''} ${task?.instruction || ''}`
+  return tool === 'imagegenerator' || /\b(?:generate|create)\b[\s\w-]{0,40}\b(?:image|images|photo|photos|picture|pictures)\b/i.test(title)
+}
+
+const getWorkflowResultItems = (workflow) => {
+  const completedTasks = (workflow?.tasks || [])
+    .filter((task) => ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase()))
+  const imageTasks = completedTasks.filter(isImageResultTask)
+  const visibleTasks = completedTasks.filter((task) => !isImageResultTask(task))
+  const items = visibleTasks.map((task, index) => {
     const output = parseValue(
-      task.output_data
+      task.tool_output
+        || task.toolOutput
+        || task.output_data
         || task.outputData
         || task.output_payload
         || task.outputPayload
         || task.result
         || task.output,
     )
-    const paths = findResultPaths(output)
+    const paths = findResultPaths(output).filter((path) => path !== 'local Desktop')
     return {
       id: task.id || `result-${index}`,
       label: task.title || task.instruction || `Step ${index + 1}`,
       detail: paths.length ? paths.join(' · ') : 'Completed successfully',
     }
   })
+
+  if (imageTasks.length) {
+    items.push({
+      id: 'generated-images',
+      label: `Generated ${imageTasks.length} image${imageTasks.length === 1 ? '' : 's'}`,
+      detail: 'Dynamic image URLs generated and resolved',
+    })
+  }
+
+  return items
+}
+
+const getCompletionDuration = (workflow) => {
+  if (workflow?.finalSeconds) return `${workflow.finalSeconds}s`
+  const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
+  const completed = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
+  return started ? `${Math.max(1, Math.round((completed - started) / 1000))}s` : 'a few seconds'
+}
+
+const getWorkflowResponseText = (workflow) => {
+  const results = getWorkflowResultItems(workflow)
+  return [
+    `Workflow completed successfully in ${getCompletionDuration(workflow)}.`,
+    `${completedStepCount(workflow)} of ${(workflow?.tasks || []).length} steps completed.`,
+    results.length ? 'Results:' : '',
+    ...results.map((result) => `- ${result.label} — ${result.detail}`),
+  ].filter(Boolean).join('\n')
+}
+
+const copyCompletionResponse = async (workflow) => {
+  const text = getWorkflowResponseText(workflow)
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    copied.value = true
+    window.setTimeout(() => { copied.value = false }, 1800)
+  } catch {
+    copied.value = false
+  }
+}
+
+const setReaction = (nextReaction) => {
+  reaction.value = reaction.value === nextReaction ? null : nextReaction
+}
 
 const escapeCodeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
@@ -825,22 +933,112 @@ const highlightCode = (value) => {
 
 .workflow-completion-response {
   margin: 16px 0 4px;
-  color: #27272a;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.workflow-completion-response p {
-  margin: 0 0 8px;
-}
-
-.workflow-completion-response ul {
-  margin: 4px 0 10px 20px;
   padding: 0;
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.workflow-completion-response li {
-  margin: 4px 0;
+.completion-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.completion-heading-copy {
+  min-width: 0;
+}
+
+.completion-heading-copy h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.completion-heading-copy p {
+  margin: 3px 0 0;
+  color: #374151;
+  font-size: 12px;
+}
+
+.completion-results {
+  margin-top: 12px;
+}
+
+.completion-results-heading {
+  margin-bottom: 5px;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.completion-result-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.completion-result-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 3px 0;
+}
+
+.completion-result-icon {
+  width: 10px;
+  flex: 0 0 auto;
+  margin-top: 0;
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.completion-result-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.completion-result-copy strong {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.completion-result-copy span {
+  color: #374151;
+  font-size: 13px;
+}
+
+.completion-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.completion-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #64748b;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.completion-action-btn:hover,
+.completion-action-btn.active {
+  border-color: #bbf7d0;
+  color: #15803d;
+  background: #f0fdf4;
 }
 
 .spin-icon {
