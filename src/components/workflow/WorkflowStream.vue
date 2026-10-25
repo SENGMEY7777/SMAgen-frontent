@@ -90,10 +90,10 @@
         </div>
       </div>
 
-      <div v-if="getCompletionChanges(workflow).length" class="completion-results">
+      <div v-if="completionChanges.length" class="completion-results">
         <div class="completion-results-heading">Changes:</div>
         <ul class="completion-result-list">
-          <li v-for="result in getCompletionChanges(workflow)" :key="result.id" class="completion-result-row">
+          <li v-for="result in completionChanges" :key="result.id" class="completion-result-row">
             <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
               <strong>{{ result.label }}</strong>
@@ -103,16 +103,16 @@
         </ul>
       </div>
 
-      <div v-if="getEditedFileItems(workflow).length" class="completion-edit-card" aria-label="Edited files">
+      <div v-if="editedFiles.length" class="completion-edit-card" aria-label="Edited files">
         <div class="completion-edit-card-summary">
           <div class="completion-edit-file-icon" aria-hidden="true">
             <IconFile :size="18" />
           </div>
           <div class="completion-edit-card-copy">
-            <strong>{{ getEditedFilesHeading(workflow) }}</strong>
+            <strong>{{ editedFilesHeading }}</strong>
             <div class="completion-edit-stats">
-              <span class="completion-edit-added">+{{ getWorkflowDiffStats(workflow).additions }}</span>
-              <span class="completion-edit-removed">-{{ getWorkflowDiffStats(workflow).deletions }}</span>
+              <span class="completion-edit-added">+{{ workflowDiffStats.additions }}</span>
+              <span class="completion-edit-removed">-{{ workflowDiffStats.deletions }}</span>
             </div>
           </div>
         </div>
@@ -191,8 +191,8 @@
                 <IconChevronDown :size="13" />
               </button>
               <div class="turn-diff-stats">
-                <span class="stat-added">+{{ getWorkflowDiffStats(workflow).additions }}</span>
-                <span class="stat-removed">-{{ getWorkflowDiffStats(workflow).deletions }}</span>
+                <span class="stat-added">+{{ workflowDiffStats.additions }}</span>
+                <span class="stat-removed">-{{ workflowDiffStats.deletions }}</span>
               </div>
             </div>
             <div class="workflow-review-turn-right">
@@ -210,12 +210,12 @@
             <div class="file-strip-left">
               <span class="file-strip-caret">▼</span>
               <span class="file-strip-path">
-                <span class="file-strip-dir">{{ getSelectedFileDir(workflow) }}</span>
-                <strong class="file-strip-name">{{ getSelectedFileName(workflow) }}</strong>
+                <span class="file-strip-dir">{{ selectedFileDir }}</span>
+                <strong class="file-strip-name">{{ selectedFileName }}</strong>
               </span>
               <div class="file-strip-stats">
-                <span class="stat-added">+{{ getSelectedFileStats(workflow).additions }}</span>
-                <span class="stat-removed">-{{ getSelectedFileStats(workflow).deletions }}</span>
+                <span class="stat-added">+{{ selectedFileStats.additions }}</span>
+                <span class="stat-removed">-{{ selectedFileStats.deletions }}</span>
               </div>
             </div>
             <div class="file-strip-right">
@@ -226,9 +226,9 @@
           </div>
 
           <!-- 4. Multi-file tabs if workflow created multiple files -->
-          <div v-if="getEditedFileItems(workflow).length > 1" class="workflow-review-file-pills">
+          <div v-if="editedFiles.length > 1" class="workflow-review-file-pills">
             <button
-              v-for="file in getEditedFileItems(workflow)"
+              v-for="file in editedFiles"
               :key="file.id"
               type="button"
               class="review-file-pill-btn"
@@ -237,13 +237,13 @@
             >
               <IconFile :size="12" />
               <span>{{ file.path }}</span>
-              <span class="pill-stats">+{{ getFileStats(file, workflow).additions }} -{{ getFileStats(file, workflow).deletions }}</span>
+              <span class="pill-stats">+{{ fileStatsById[file.id].additions }} -{{ fileStatsById[file.id].deletions }}</span>
             </button>
           </div>
 
           <!-- 5. Code Diff Body -->
-          <div v-if="getReviewTask(workflow)" class="workflow-review-code-body" :style="{ fontSize: `${12 * reviewZoom / 100}px` }">
-            <template v-for="line in getReviewLines(getReviewTask(workflow), workflow)" :key="line.id">
+          <div v-if="reviewTask" class="workflow-review-code-body" :style="{ fontSize: `${12 * reviewZoom / 100}px` }">
+            <template v-for="line in reviewLines" :key="line.id">
               <div v-if="line.isUnmodifiedBanner" class="workflow-review-unmodified-pill">
                 <IconChevronUp :size="12" />
                 <span>{{ line.text }}</span>
@@ -258,10 +258,10 @@
         </div>
       </section>
 
-      <div v-if="getValidationItems(workflow).length" class="completion-results">
+      <div v-if="validationItems.length" class="completion-results">
         <div class="completion-results-heading">Tests passed:</div>
         <ul class="completion-result-list">
-          <li v-for="result in getValidationItems(workflow)" :key="result.id" class="completion-result-row">
+          <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
             <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
               <strong>{{ result.label }}</strong>
@@ -298,7 +298,7 @@
           <IconThumbDown :size="14" />
           <span>Unlike</span>
         </button>
-        <span v-if="getCompletionTimeLabel(workflow)" class="completion-response-time">{{ getCompletionTimeLabel(workflow) }}</span>
+        <span v-if="completionTimeLabel" class="completion-response-time">{{ completionTimeLabel }}</span>
       </div>
     </div>
 
@@ -330,7 +330,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   IconArrowRight,
   IconArrowBackUp,
@@ -359,7 +359,7 @@ import {
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
 
-defineProps({
+const props = defineProps({
   workflow: {
     type: Object,
     required: true,
@@ -545,10 +545,6 @@ const getLiveActivities = (workflow) => getRawActivities(workflow)
 
 const getActivityCount = (workflow) => getRawActivities(workflow).length
 
-const completedStepCount = (workflow) => (workflow?.tasks || []).filter((task) => {
-  return ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase())
-}).length
-
 const parseValue = (value) => {
   if (!value) return null
   if (typeof value === 'object') return value
@@ -584,9 +580,16 @@ const isImageResultTask = (task) => {
   return tool === 'imagegenerator' || /\b(?:generate|create)\b[\s\w-]{0,40}\b(?:image|images|photo|photos|picture|pictures)\b/i.test(title)
 }
 
+const isCompletedTask = (task) => ['COMPLETED', 'SUCCESS'].includes(
+  String(task?.status || task?.task_status || task?.state || '').toUpperCase(),
+)
+
+const getCompletedTasks = (workflow) => (workflow?.tasks || []).filter(isCompletedTask)
+
+const completedStepCount = (workflow) => getCompletedTasks(workflow).length
+
 const getWorkflowResultItems = (workflow) => {
-  const completedTasks = (workflow?.tasks || [])
-    .filter((task) => ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase()))
+  const completedTasks = getCompletedTasks(workflow)
   const imageTasks = completedTasks.filter(isImageResultTask)
   const visibleTasks = completedTasks.filter((task) => !isImageResultTask(task))
   const items = visibleTasks.map((task, index) => {
@@ -618,9 +621,6 @@ const getWorkflowResultItems = (workflow) => {
 
   return items
 }
-
-const getCompletedTasks = (workflow) => (workflow?.tasks || [])
-  .filter((task) => ['COMPLETED', 'SUCCESS'].includes(String(task?.status || task?.task_status || task?.state || '').toUpperCase()))
 
 const getTaskPayload = (task, keys) => parseValue(keys
   .map((key) => task?.[key])
@@ -901,20 +901,19 @@ const highlightReviewLine = (rawLine, filename = '') => {
   return line || '&nbsp;'
 }
 
-const getSelectedFile = (workflow) => {
-  const files = getEditedFileItems(workflow)
+const getSelectedFile = (workflow, files = getEditedFileItems(workflow)) => {
   return files.find((file) => String(file.taskId) === String(reviewTaskId.value)) || files[0] || null
 }
 
-const getSelectedFileName = (workflow) => {
-  const file = getSelectedFile(workflow)
+const getSelectedFileName = (workflow, files = getEditedFileItems(workflow)) => {
+  const file = getSelectedFile(workflow, files)
   if (!file) return 'file'
   const parts = file.path.split(/[\\/]/)
   return parts[parts.length - 1]
 }
 
-const getSelectedFileDir = (workflow) => {
-  const file = getSelectedFile(workflow)
+const getSelectedFileDir = (workflow, files = getEditedFileItems(workflow)) => {
+  const file = getSelectedFile(workflow, files)
   if (!file) return ''
   const parts = file.path.split(/[\\/]/)
   if (parts.length <= 1) return ''
@@ -925,7 +924,7 @@ const getFileStats = (file, workflow) => {
   if (!file) return { additions: 0, deletions: 0 }
   const task = getCompletedTasks(workflow).find((t, i) => String(t.id || `task-${i}`) === String(file.taskId))
   if (task) {
-    const lines = getReviewLines(task, workflow)
+    const lines = getReviewLines(task, workflow, file.path)
     const added = lines.filter((l) => l.kind === 'added').length
     const removed = lines.filter((l) => l.kind === 'removed').length
     if (added > 0 || removed > 0) {
@@ -938,13 +937,12 @@ const getFileStats = (file, workflow) => {
   return { additions: 0, deletions: 0 }
 }
 
-const getSelectedFileStats = (workflow) => {
-  const file = getSelectedFile(workflow)
+const getSelectedFileStats = (workflow, files = getEditedFileItems(workflow)) => {
+  const file = getSelectedFile(workflow, files)
   return getFileStats(file, workflow)
 }
 
-const getWorkflowDiffStats = (workflow) => {
-  const files = getEditedFileItems(workflow)
+const getWorkflowDiffStats = (workflow, files = getEditedFileItems(workflow)) => {
   let totalAdded = 0
   let totalRemoved = 0
   let hasAny = false
@@ -970,8 +968,7 @@ const getWorkflowDiffStats = (workflow) => {
   return hasAny ? { additions: totalAdded, deletions: totalRemoved } : { additions: 0, deletions: 0 }
 }
 
-const getEditedFilesHeading = (workflow) => {
-  const files = getEditedFileItems(workflow)
+const getEditedFilesHeading = (workflow, files = getEditedFileItems(workflow)) => {
   if (files.length === 1) return `${files[0].status === 'Created' ? 'Created' : 'Edited'} ${files[0].path}`
   return `Edited ${files.length} files`
 }
@@ -980,18 +977,17 @@ const getRawTaskValue = (task, keys) => keys
   .map((key) => task?.[key])
   .find((value) => value !== undefined && value !== null && value !== '')
 
-const getReviewTask = (workflow) => {
-  const files = getEditedFileItems(workflow)
+const getReviewTask = (workflow, files = getEditedFileItems(workflow)) => {
   const selectedFile = files.find((file) => String(file.taskId) === String(reviewTaskId.value)) || files[0]
   if (!selectedFile) return null
 
   return getCompletedTasks(workflow).find((task, index) => String(task.id || `task-${index}`) === String(selectedFile.taskId)) || null
 }
 
-const getReviewLines = (task, workflow = null) => {
+const getReviewLines = (task, workflow = null, targetPath = '') => {
   if (!task) return []
   const file = workflow ? getSelectedFile(workflow) : null
-  const filename = file?.path || ''
+  const filename = targetPath || file?.path || ''
   const content = getReviewContent(task, filename)
   if (!content) return []
 
@@ -1074,9 +1070,35 @@ const getReviewLines = (task, workflow = null) => {
   return lines
 }
 
+// Keep derived workflow data in one reactive snapshot. The template renders the
+// same values in several places, so caching them avoids reparsing task payloads
+// and rebuilding highlighted code on every template expression.
+const editedFiles = computed(() => getEditedFileItems(props.workflow))
+const completionChanges = computed(() => getCompletionChanges(props.workflow))
+const validationItems = computed(() => getValidationItems(props.workflow))
+const workflowDiffStats = computed(() => getWorkflowDiffStats(props.workflow, editedFiles.value))
+const editedFilesHeading = computed(() => getEditedFilesHeading(props.workflow, editedFiles.value))
+const selectedFile = computed(() => getSelectedFile(props.workflow, editedFiles.value))
+const selectedFileName = computed(() => getSelectedFileName(props.workflow, editedFiles.value))
+const selectedFileDir = computed(() => getSelectedFileDir(props.workflow, editedFiles.value))
+const selectedFileStats = computed(() => getSelectedFileStats(props.workflow, editedFiles.value))
+const fileStatsById = computed(() => Object.fromEntries(
+  editedFiles.value.map((file) => [file.id, getFileStats(file, props.workflow)]),
+))
+const reviewTask = computed(() => getReviewTask(props.workflow, editedFiles.value))
+const reviewLines = computed(() => getReviewLines(reviewTask.value, props.workflow, selectedFile.value?.path || ''))
+const completionTimeLabel = computed(() => getCompletionTimeLabel(props.workflow))
+
+watch(editedFiles, (files) => {
+  if (!files.some((file) => String(file.taskId) === String(reviewTaskId.value))) {
+    reviewTaskId.value = files[0]?.taskId || null
+  }
+})
+
 const copyReviewCode = async (workflow) => {
-  const task = getReviewTask(workflow)
-  const file = getSelectedFile(workflow)
+  const files = workflow === props.workflow ? editedFiles.value : getEditedFileItems(workflow)
+  const task = getReviewTask(workflow, files)
+  const file = getSelectedFile(workflow, files)
   const content = getReviewContent(task, file?.path)
   if (!content) return
   try {
@@ -1089,7 +1111,8 @@ const copyReviewCode = async (workflow) => {
 }
 
 const openReview = (workflow) => {
-  reviewTaskId.value = getEditedFileItems(workflow)[0]?.taskId || null
+  const files = workflow === props.workflow ? editedFiles.value : getEditedFileItems(workflow)
+  reviewTaskId.value = files[0]?.taskId || null
   reviewPanelCollapsed.value = false
   reviewOpen.value = true
 }
