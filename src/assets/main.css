@@ -7,7 +7,7 @@
 /* Full-width Standard Layout Shell */
 .app-shell {
   display: flex;
-  width: 100vw;
+  width: calc(100vw - var(--workflow-review-width, 0px));
   height: 100vh;
   margin: 0;
   padding: 0;
@@ -704,6 +704,7 @@
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
   padding-bottom: 160px;
 }
 
@@ -716,20 +717,7 @@
 }
 
 .chat-thread::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chat-thread::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.chat-thread::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 999px;
-}
-
-.chat-thread::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  display: none;
 }
 
 .message-row {
