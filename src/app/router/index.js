@@ -32,9 +32,13 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      redirect: { name: 'chat' },
+    },
+    {
+      path: '/chat',
       name: 'chat',
       component: views.chat,
-      meta: { ...dashboardMeta, title: 'Chat' },
+      meta: { ...dashboardMeta, title: 'AI Chat & Agent' },
     },
     {
       path: '/overview',
