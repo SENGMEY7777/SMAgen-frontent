@@ -754,6 +754,73 @@ const formatPromptWithFiles = (text, files = []) => {
     : `I have uploaded the following file(s). Please review, inspect, and analyze:\n\n${filesContentPrompt}`
 }
 
+const normalizeLocalFolderName = (value) => {
+  const folder = String(value || '')
+    .trim()
+    .replace(/^['“”`]|['“”`]$/g, '')
+    .replace(/[.,;!?]+$/, '')
+    .trim()
+
+  if (!folder || folder === '.' || folder === '..' || folder.includes('..')) return ''
+  if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{0,79}$/.test(folder)) return ''
+  return folder
+}
+
+const extractLocalDestination = (text) => {
+  const value = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!value || !/\b(?:desktop|downloads?|local\s+computer|local\s+folder)\b/i.test(value)) return ''
+
+  const pathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
+  if (pathMatch) {
+    const path = pathMatch[2].replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
+    return path ? `${/^downloads?$/i.test(pathMatch[1]) ? 'Downloads' : 'Desktop'}/${path}` : ''
+  }
+
+  const quotedFolder = value.match(/\b(?:folder|directory|project)\s+(?:name(?:\s+is)?|named|called)\s*["“']([^"”']+)["”']/i)
+  const unquotedFolder = value.match(/\b(?:folder|directory|project)\s+(?:name(?:\s+is)?|named|called)\s+([A-Za-z0-9][A-Za-z0-9_-]{0,79})(?=\s|[.,;!?]|$)/i)
+  const folder = normalizeLocalFolderName(quotedFolder?.[1] || unquotedFolder?.[1])
+  if (!folder) return ''
+
+  return `${/\bdownloads?\b/i.test(value) ? 'Downloads' : 'Desktop'}/${folder}`
+}
+
+const extractWorkflowDestination = (message) => {
+  const tasks = Array.isArray(message?.workflow?.tasks) ? message.workflow.tasks : []
+
+  for (let index = tasks.length - 1; index >= 0; index -= 1) {
+    const task = tasks[index]
+    const input = task?.toolInput || task?.tool_input || {}
+    const action = String(input.action || '').toLowerCase().replace(/[_-]/g, '')
+    const path = String(input.path || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    if (!path || path.includes('..') || path.startsWith('~')) continue
+
+    if (action === 'createdesktopdirectory' || action === 'exportworkspacetodesktop') {
+      return `Desktop/${path}`
+    }
+    if (action === 'exportworkspacetodownloads') {
+      return `Downloads/${path}`
+    }
+  }
+
+  return ''
+}
+
+const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
+  const directDestination = extractLocalDestination(goalPrompt)
+  if (directDestination) return directDestination
+
+  for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
+    const message = contextMessages[index]
+    const workflowDestination = extractWorkflowDestination(message)
+    if (workflowDestination) return workflowDestination
+    if (message?.role !== 'user') continue
+    const destination = extractLocalDestination(message.content)
+    if (destination) return destination
+  }
+
+  return ''
+}
+
 const startEditUserMessage = (index, content) => {
   editingIndex.value = index
   editDraft.value = content
@@ -842,8 +909,12 @@ const addWorkflowPlaceholder = (goalPrompt) => {
   return workflowMessageIndex
 }
 
-const startWorkflowRun = async (workflowMessageIndex, goalPrompt) => {
-  const response = await api.runWorkflow({ goalPrompt })
+const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = []) => {
+  const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
+  const response = await api.runWorkflow({
+    goalPrompt,
+    ...(localDestination ? { localDestination } : {}),
+  })
   const runId = getWorkflowRunId(response)
   if (!runId) throw new ApiError('The workflow started without a run ID.')
 
@@ -895,7 +966,7 @@ const submitEditUserMessage = async (index) => {
     const workflowMessageIndex = addWorkflowPlaceholder(newText)
 
     try {
-      await startWorkflowRun(workflowMessageIndex, workflowPrompt)
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -942,7 +1013,7 @@ const retryUserMessage = async (index) => {
     const workflowMessageIndex = addWorkflowPlaceholder(message.content)
     try {
       const workflowPrompt = formatPromptWithFiles(message.content, messageFiles)
-      await startWorkflowRun(workflowMessageIndex, workflowPrompt)
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1052,7 +1123,9 @@ const send = async () => {
     loading.value = true
     scrollToBottom()
     try {
-      await startWorkflowRun(workflowMessageIndex, fullPrompt)
+      // The current user message and the workflow placeholder are both already
+      // in the store; only earlier messages should provide follow-up context.
+      await startWorkflowRun(workflowMessageIndex, fullPrompt, currentMessages.value.slice(0, -2))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
