@@ -74,7 +74,12 @@ export const normalizeWorkflowLog = (entry, index = 0) => {
 
   return {
     ...entry,
-    id: entry?.id ?? entry?.log_id ?? entry?.logId ?? `${eventName || 'activity'}-${index}`,
+    id: entry?.id
+      ?? entry?.telemetryId
+      ?? entry?.telemetry_id
+      ?? entry?.log_id
+      ?? entry?.logId
+      ?? `${eventName || 'activity'}-${index}`,
     level,
     source: entry?.source || entry?.service || entry?.component || eventText.split('_')[0]?.toUpperCase() || 'SYSTEM',
     created_at: entry?.created_at || entry?.createdAt || entry?.timestamp || entry?.occurred_at || entry?.time,
@@ -159,7 +164,7 @@ export const explainWorkflowError = (value) => {
     explanation = {
       title: 'The workflow planner took too long',
       message: 'The AI planner did not finish creating an execution plan within the allowed time.',
-      nextStep: 'Try again. If it keeps happening, check the Gemini model, API key, and internet connection.',
+      nextStep: 'Try again in a moment. If it keeps happening, check the Gemini model, API key, network connection, and server timeout setting.',
     }
   } else if (code === 'LLM_UNAVAILABLE' || /gemini request|llm service|generativelanguage/.test(fingerprint)) {
     explanation = {
