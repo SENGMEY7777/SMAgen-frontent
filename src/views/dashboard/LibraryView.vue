@@ -93,7 +93,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import { IconPlus, IconX, IconPlayerPlay } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDateShort } from '@/utils/formatters'
-import { getWorkflowRunId } from '@/utils/workflow'
+import { formatWorkflowError, getWorkflowRunId } from '@/utils/workflow'
 
 const router = useRouter()
 const workflows = ref([])
@@ -145,7 +145,7 @@ const runWorkflow = async () => {
 
     await router.push(`/runs/${runId}`)
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to start workflow.'
+    errorMessage.value = formatWorkflowError(error)
   } finally {
     loading.value = false
   }
