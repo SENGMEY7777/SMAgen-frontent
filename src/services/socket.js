@@ -18,7 +18,7 @@ export function createSocketClient() {
   return io(socketUrl, {
     path: '/socket.io',
     auth: { token },
-    transports: ['websocket'],
+    transports: ['websocket', 'polling'],
     reconnectionAttempts: 2,
     timeout: 6000,
   })
