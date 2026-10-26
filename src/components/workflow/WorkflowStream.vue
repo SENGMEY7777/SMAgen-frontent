@@ -91,10 +91,9 @@
       </div>
 
       <div v-if="completionChanges.length" class="completion-results">
-        <div class="completion-results-heading">Changes:</div>
+        <div class="completion-results-heading"><span class="change-style">Changes:</span></div>
         <ul class="completion-result-list">
           <li v-for="result in completionChanges" :key="result.id" class="completion-result-row">
-            <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
               <span class="completion-result-label">{{ result.label }}</span>
               <span v-if="result.detail"> — {{ result.detail }}</span>
@@ -103,11 +102,29 @@
         </ul>
       </div>
 
-      <div v-if="editedFiles.length" class="completion-edit-card" aria-label="Edited files">
+      <div v-if="editedFiles.length" class="completion-results completion-file-results">
+        <div class="completion-results-heading"><span class="change-style">Updated:</span></div>
+        <ul class="completion-result-list">
+          <li v-for="file in editedFiles" :key="`summary-${file.id}`" class="completion-result-row">
+            <div class="completion-result-copy">
+              <button
+                type="button"
+                class="completion-file-link"
+                :aria-label="`Review ${file.path}`"
+                @click="openReview(workflow, file)"
+              >
+                {{ file.path }}
+              </button>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div v-if="editedFiles.length" class="completion-edit-card" aria-label="Updated files">
         <div class="completion-edit-card-header">
           <div class="completion-edit-card-summary">
             <div class="completion-edit-file-icon" aria-hidden="true">
-              <IconFile :size="18" />
+              <IconFileDiff :size="22" />
             </div>
             <div class="completion-edit-card-copy">
               <span class="completion-edit-card-title">{{ editedFilesHeading }}</span>
@@ -317,7 +334,6 @@
         <div class="completion-results-heading">Tests passed:</div>
         <ul class="completion-result-list">
           <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
-            <span class="completion-result-icon" aria-hidden="true">•</span>
             <div class="completion-result-copy">
               <span class="completion-result-label">{{ result.label }}</span>
               <span> — Completed successfully</span>
@@ -380,8 +396,24 @@
       </button>
     </div>
 
-    <div v-if="workflow.error && !workflow.approval" class="workflow-card-error">
-      {{ workflow.error }}
+    <div v-if="workflowErrorExplanation && !workflow.approval" class="workflow-card-error" role="alert">
+      <div class="workflow-card-error-content">
+        <div class="workflow-card-error-heading">Breakdown</div>
+        <ul class="workflow-card-error-list">
+          <li>
+            <strong>{{ workflowErrorExplanation.title }}</strong>
+            <span> — {{ workflowErrorExplanation.message }}</span>
+          </li>
+          <li>
+            <strong>Next step</strong>
+            <span> — {{ workflowErrorExplanation.nextStep }}</span>
+          </li>
+        </ul>
+        <details v-if="workflowErrorExplanation.technicalDetail" class="workflow-card-error-details">
+          <summary>Technical details</summary>
+          <code>{{ workflowErrorExplanation.technicalDetail }}</code>
+        </details>
+      </div>
     </div>
   </div>
 </template>
@@ -398,10 +430,8 @@ import {
   IconCopy,
   IconDots,
   IconExternalLink,
-  IconFile,
+  IconFileDiff,
   IconLayoutSidebarRight,
-  IconLayoutSidebarRightCollapse,
-  IconLayoutSidebarRightExpand,
   IconLoader2,
   IconMaximize,
   IconPlus,
@@ -415,6 +445,7 @@ import {
   IconZoomOut,
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
+import { explainWorkflowError } from '@/utils/workflow'
 
 const props = defineProps({
   workflow: {
@@ -1046,8 +1077,11 @@ const getWorkflowDiffStats = (workflow, files = getEditedFileItems(workflow)) =>
 }
 
 const getEditedFilesHeading = (workflow, files = getEditedFileItems(workflow)) => {
-  if (files.length === 1) return `${files[0].status === 'Created' ? 'Created' : 'Edited'} ${files[0].path}`
-  return `Edited ${files.length} files`
+  if (files.length === 1) return `${files[0].status} ${files[0].path}`
+  const statuses = new Set(files.map((file) => file.status))
+  if (statuses.size === 1 && statuses.has('Created')) return `Created ${files.length} files`
+  if (statuses.size === 1 && statuses.has('Updated')) return `Updated ${files.length} files`
+  return `Updated ${files.length} files`
 }
 
 const getRawTaskValue = (task, keys) => keys
@@ -1153,6 +1187,7 @@ const getReviewLines = (task, workflow = null, targetPath = '') => {
 const editedFiles = computed(() => getEditedFileItems(props.workflow))
 const completionChanges = computed(() => getCompletionChanges(props.workflow))
 const validationItems = computed(() => getValidationItems(props.workflow))
+const workflowErrorExplanation = computed(() => explainWorkflowError(props.workflow?.error))
 const workflowDiffStats = computed(() => getWorkflowDiffStats(props.workflow, editedFiles.value))
 const editedFilesHeading = computed(() => getEditedFilesHeading(props.workflow, editedFiles.value))
 const selectedFile = computed(() => getSelectedFile(props.workflow, editedFiles.value))
@@ -1386,6 +1421,11 @@ const highlightCode = (value) => {
 </script>
 
 <style scoped>
+
+.change-style {
+  font-size: 16px !important;
+  font-weight: 500 !important;
+}
 .workflow-antigravity-stream {
   width: 100%;
   max-width: 760px;
@@ -1823,6 +1863,52 @@ const highlightCode = (value) => {
   font-size: 12px;
 }
 
+.workflow-card-error-content {
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-card-error-heading {
+  color: #991b1b;
+  font-weight: 650;
+}
+
+.workflow-card-error-list {
+  margin: 0 0 2px 18px;
+  padding: 0;
+  color: #b91c1c;
+  line-height: 1.45;
+  list-style: disc;
+}
+
+.workflow-card-error-list li {
+  margin-bottom: 4px;
+  padding-left: 2px;
+}
+
+.workflow-card-error-list strong {
+  font-weight: 650;
+}
+
+.workflow-card-error-details {
+  margin-top: 2px;
+  color: #7f1d1d;
+}
+
+.workflow-card-error-details summary {
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.workflow-card-error-details code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .workflow-completion-response {
   margin: 16px 0 4px;
   padding: 0;
@@ -1871,25 +1957,17 @@ const highlightCode = (value) => {
 }
 
 .completion-result-list {
-  margin: 0;
+  margin: 8px 0 16px 20px;
   padding: 0;
-  list-style: none;
+  line-height: 1.8;
+  color: #000000;
+  list-style: disc;
 }
 
 .completion-result-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 4px 0;
-}
-
-.completion-result-icon {
-  width: 10px;
-  flex: 0 0 auto;
-  margin-top: 0;
-  color: #27272a;
-  font-size: 14px;
-  line-height: 1.4;
+  display: list-item;
+  margin-bottom: 5px;
+  padding: 0;
 }
 
 .completion-result-copy {
@@ -1898,14 +1976,22 @@ const highlightCode = (value) => {
 }
 
 .completion-result-label {
-  color: #18181b;
-  font-size: 14px;
+  color: #000000;
+  font-size: 16px;
   font-weight: 400;
 }
 
 .completion-result-copy span {
-  color: #52525b;
-  font-size: 14px;
+  color: #000000;
+  font-size: 16px;
+}
+
+.completion-file-link {
+  padding: 0;
+  color: #2f80d7;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .completion-edit-card {
@@ -1956,7 +2042,7 @@ const highlightCode = (value) => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #18181b;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.3;
 }
@@ -2000,7 +2086,7 @@ const highlightCode = (value) => {
   min-width: 0;
   padding: 6px 0;
   color: #52525b;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .completion-edit-file-item + .completion-edit-file-item {
@@ -2086,6 +2172,7 @@ const highlightCode = (value) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 15px !important;
 }
 
 .completion-edit-file-name {
