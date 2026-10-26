@@ -1,9 +1,12 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { STORAGE_KEYS } from '@/config/constants'
+import { useProjectsStore } from '@/stores/projects'
 
 const CHATS_STORAGE_KEY = STORAGE_KEYS.CHATS || 'kairo_chats'
 const ACTIVE_CHAT_STORAGE_KEY = `${CHATS_STORAGE_KEY}:active-session`
+const LEGACY_PROJECT_MIGRATION_KEY = 'kairo_chat_project_migration_v1'
+const PROJECT_LINKING_CLEANUP_KEY = 'kairo_chat_project_linking_cleanup_v2'
 
 const createMessageId = () => `message_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
@@ -38,7 +41,33 @@ const readActiveSessionId = (storedSessions) => {
 }
 
 export const useChatStore = defineStore('chat', () => {
-  const sessions = ref(readStorage())
+  const projectsStore = useProjectsStore()
+  const storedSessions = readStorage()
+
+  // An older build automatically attached every existing chat to the active
+  // project. Remove only those stale UI associations once; chat messages stay.
+  if (
+    localStorage.getItem(LEGACY_PROJECT_MIGRATION_KEY) &&
+    !localStorage.getItem(PROJECT_LINKING_CLEANUP_KEY)
+  ) {
+    storedSessions.forEach((session) => {
+      delete session.projectId
+    })
+
+    projectsStore.projects.forEach((project) => {
+      if (Array.isArray(project.linkedItems) && project.linkedItems.length) {
+        project.linkedItems = []
+        project.updatedAt = new Date().toISOString()
+      }
+    })
+
+    try {
+      localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(storedSessions))
+    } catch {}
+    localStorage.setItem(PROJECT_LINKING_CLEANUP_KEY, '1')
+  }
+
+  const sessions = ref(storedSessions)
   const activeSessionId = ref(readActiveSessionId(sessions.value))
 
   // Save changes to localStorage
@@ -100,6 +129,7 @@ export const useChatStore = defineStore('chat', () => {
         id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         title,
         type: 'chat',
+        projectId: projectsStore.activeProjectId || null,
         messages: [message],
         createdAt: timestamp,
         updatedAt: timestamp,
