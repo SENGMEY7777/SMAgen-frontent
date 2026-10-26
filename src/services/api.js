@@ -1,11 +1,30 @@
 
 
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
-const API_BASE_URL = (
-  /^(?:https?:\/\/|\/)/i.test(configuredApiBaseUrl)
-    ? configuredApiBaseUrl
-    : '/api/v1'
-).replace(/\/$/, '')
+
+const normalizeApiBaseUrl = (value) => {
+  if (!value || !/^(?:https?:\/\/|\/)/i.test(value)) return '/api/v1'
+  if (value.startsWith('/')) return value.replace(/\/+$/, '') || '/api/v1'
+
+  try {
+    const parsed = new URL(value)
+    const path = parsed.pathname.replace(/\/+$/, '')
+
+    // Accept a production origin such as https://api.example.com while still
+    // sending requests to the backend's actual API namespace.
+    if (!path || path === '/') parsed.pathname = '/api/v1'
+    else if (path === '/api') parsed.pathname = '/api/v1'
+    else parsed.pathname = path
+
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return '/api/v1'
+  }
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(configuredApiBaseUrl)
 
 export class ApiError extends Error {
   constructor(message, status = 0, code = 'API_ERROR', details = null, retryAfter = null) {
