@@ -65,7 +65,7 @@
             <div class="project-header-right">
               <span v-if="projectsStore.activeProjectId === proj.id" class="active-badge">Active</span>
               <div class="project-actions" @click.stop>
-                <button type="button" class="icon-action-btn danger" title="Delete project" @click="deleteProject(proj.id)">
+                <button type="button" class="icon-action-btn danger" title="Delete project" @click="requestDeleteProject(proj)">
                   <IconTrash :size="14" />
                 </button>
               </div>
@@ -106,6 +106,13 @@
         <span>Use the + button beside Projects to upload a local project folder.</span>
       </div>
     </section>
+    <ConfirmDialog
+      :open="Boolean(projectToDelete)"
+      title="Delete project?"
+      :message="deleteProjectMessage"
+      @confirm="confirmDeleteProject"
+      @cancel="cancelDeleteProject"
+    />
   </DashboardLayout>
 </template>
 
@@ -122,6 +129,7 @@ import {
   IconMessageCircle2,
 } from '@tabler/icons-vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useProjectsStore } from '@/stores/projects'
 import { useChatStore } from '@/stores/chat'
 const router = useRouter()
@@ -129,6 +137,7 @@ const projectsStore = useProjectsStore()
 const chatStore = useChatStore()
 
 const searchQuery = ref('')
+const projectToDelete = ref(null)
 
 const activeProjectName = computed(() => {
   return projectsStore.activeProject?.name || 'SMAgen'
@@ -151,10 +160,24 @@ const filteredProjects = computed(() => {
   })
 })
 
-const deleteProject = (id) => {
-  if (window.confirm('Are you sure you want to delete this project?')) {
-    projectsStore.deleteProject(id)
-  }
+const deleteProjectMessage = computed(() => {
+  return projectToDelete.value
+    ? `Are you sure you want to delete "${projectToDelete.value.name}"? This action cannot be undone.`
+    : ''
+})
+
+const requestDeleteProject = (project) => {
+  projectToDelete.value = project
+}
+
+const cancelDeleteProject = () => {
+  projectToDelete.value = null
+}
+
+const confirmDeleteProject = () => {
+  if (!projectToDelete.value) return
+  projectsStore.deleteProject(projectToDelete.value.id)
+  projectToDelete.value = null
 }
 
 const selectProject = (id) => {
