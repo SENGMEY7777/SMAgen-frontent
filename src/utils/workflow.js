@@ -171,7 +171,19 @@ export const explainWorkflowError = (value) => {
     explanation = {
       title: 'SMAgen could not connect to the server',
       message: 'The workflow request did not reach the SMAgen backend.',
-      nextStep: 'Make sure the backend is running on port 8082, then try again.',
+      nextStep: 'Start the supported Node.js or Docker backend and confirm its /health endpoint is reachable, then try again.',
+    }
+  } else if (/server file access is read-only|server file access/.test(fingerprint)) {
+    explanation = {
+      title: 'The server is in read-only mode',
+      message: 'The workflow can read server files, but it is not allowed to create or update files.',
+      nextStep: 'Set SERVER_FILE_ACCESS=read-write on the Node.js server, restart it, and approve the requested file changes.',
+    }
+  } else if (/proposed tool input is unchanged|self-healing stopped/.test(fingerprint)) {
+    explanation = {
+      title: 'Automatic repair could not find a safe change',
+      message: 'The repair engine returned the same task input, so KAIRO stopped instead of repeating the same failure.',
+      nextStep: 'Review the failed step details, correct the underlying command or file path, and run the workflow again.',
     }
   } else if (/workspace symlink|symlinks cannot be exported/.test(fingerprint)) {
     explanation = {
@@ -184,6 +196,24 @@ export const explainWorkflowError = (value) => {
       title: 'A command was blocked for safety',
       message: 'The workflow tried to run a command that is not allowed by the execution safety rules.',
       nextStep: 'Ask for the commands to run as separate safe steps instead of one chained command.',
+    }
+  } else if (/execution safety policy blocked|self-healing skipped.*policy/.test(fingerprint)) {
+    explanation = {
+      title: 'The command was blocked for safety',
+      message: 'KAIRO stopped before retrying because the server safety policy rejected the command.',
+      nextStep: 'Use an allowed command as a separate workflow step and try again.',
+    }
+  } else if (/remote server returned an internal error|remote server itself|internal server error/.test(fingerprint)) {
+    explanation = {
+      title: 'The remote server has an internal error',
+      message: 'KAIRO cannot repair code running on a remote server using a request retry alone.',
+      nextStep: 'Open the remote server logs or provide its source code, fix the server there, and run the request again.',
+    }
+  } else if (/maximum self-healing retries exceeded|maximum.*retries/.test(fingerprint)) {
+    explanation = {
+      title: 'Automatic repair attempts were exhausted',
+      message: 'KAIRO tried the configured number of safe repairs, but the task still failed.',
+      nextStep: 'Open the failed step details, correct the underlying issue, and retry the workflow.',
     }
   } else if ([401, 403].includes(status) || /unauthorized|forbidden|api key/.test(fingerprint)) {
     explanation = {
