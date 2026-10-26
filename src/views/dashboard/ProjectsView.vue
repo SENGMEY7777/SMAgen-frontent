@@ -41,7 +41,6 @@
         </div>
       </div>
 
-      <!-- Search & Filters -->
       <div class="filter-bar">
         <label class="search-input-wrap">
           <IconSearch :size="15" />
