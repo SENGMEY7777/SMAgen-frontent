@@ -1,6 +1,11 @@
 
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+const API_BASE_URL = (
+  /^(?:https?:\/\/|\/)/i.test(configuredApiBaseUrl)
+    ? configuredApiBaseUrl
+    : '/api/v1'
+).replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(message, status = 0, code = 'API_ERROR', details = null, retryAfter = null) {
