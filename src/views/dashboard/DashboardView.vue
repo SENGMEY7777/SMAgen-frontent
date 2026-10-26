@@ -28,7 +28,7 @@
         <div class="chat-thread-inner">
           <div
             v-for="(message, index) in currentMessages"
-            :key="`${message.role}-${index}`"
+            :key="message.id || `${message.role}-${index}`"
             class="message-row"
             :class="message.role"
           >
@@ -1088,7 +1088,12 @@ const send = async () => {
   if ((!message && images.length === 0 && files.length === 0) || loading.value) return
   errorMessage.value = ''
 
-  const requestMode = message ? detectRequestMode(message) : activeMode.value
+  // Respect an explicit Workflow toggle. Otherwise classify the prompt so
+  // action requests such as "please fix this URL" reach the workflow runner
+  // instead of being answered as ordinary chat.
+  const requestMode = activeMode.value === 'workflow' || detectRequestMode(message) === 'workflow'
+    ? 'workflow'
+    : 'chat'
   activeMode.value = requestMode
 
   // Format code/file contents into full prompt for AI analysis
