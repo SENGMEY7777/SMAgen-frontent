@@ -55,6 +55,7 @@
               <IconLoader2 v-if="step.isRunning" :size="12" class="spin-icon" />
               <IconCheck v-else-if="step.isCompleted" :size="12" />
               <IconX v-else-if="step.isFailed" :size="12" />
+              <IconMinus v-else-if="step.isSkipped" :size="12" />
               <IconShieldCheck v-else-if="step.isApproval" :size="12" />
               <IconTerminal2 v-else :size="12" />
             </span>
@@ -434,6 +435,7 @@ import {
   IconLayoutSidebarRight,
   IconLoader2,
   IconMaximize,
+  IconMinus,
   IconPlus,
   IconShieldCheck,
   IconSwitchHorizontal,
@@ -1727,6 +1729,7 @@ const highlightCode = (value) => {
 .stream-step-icon.running { color: #2563eb; }
 .stream-step-icon.completed { color: #16a34a; }
 .stream-step-icon.failed { color: #dc2626; }
+.stream-step-icon.skipped { color: #94a3b8; }
 .stream-step-icon.approval { color: #d97706; }
 
 .stream-step-title {
