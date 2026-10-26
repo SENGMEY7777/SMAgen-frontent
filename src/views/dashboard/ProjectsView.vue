@@ -152,7 +152,7 @@ const filteredProjects = computed(() => {
 })
 
 const deleteProject = (id) => {
-  if (confirm('Are you sure you want to delete this project?')) {
+  if (window.confirm('Are you sure you want to delete this project?')) {
     projectsStore.deleteProject(id)
   }
 }
