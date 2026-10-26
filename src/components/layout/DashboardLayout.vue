@@ -94,53 +94,86 @@
                   :class="{ active: projectsStore.activeProjectId === project.id }"
                   type="button"
                   :title="project.workspacePath"
-                  @click="selectProject(project.id)"
+                  @click="toggleProject(project.id)"
                 >
-                  <IconFolder :size="17" />
+                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="17" />
+                  <IconFolder v-else :size="17" />
                   <span>{{ project.name }}</span>
                 </button>
-                <button
-                  class="project-history-toggle"
-                  type="button"
-                  :aria-label="`${isProjectExpanded(project.id) ? 'Hide' : 'Show'} history for ${project.name}`"
-                  :aria-expanded="isProjectExpanded(project.id)"
-                  :title="`${isProjectExpanded(project.id) ? 'Hide' : 'Show'} chat history`"
-                  @click.stop="toggleProjectHistory(project.id)"
-                >
-                  <IconChevronDown v-if="isProjectExpanded(project.id)" :size="14" />
-                  <IconChevronRight v-else :size="14" />
+                <div class="project-sidebar-actions" :class="{ active: activeProjectMenuId === project.id }">
+                  <button
+                    class="project-action-btn"
+                    :class="{ active: activeProjectMenuId === project.id }"
+                    type="button"
+                    aria-label="Project options"
+                    title="Project options"
+                    @click.stop="toggleProjectMenu(project.id, $event)"
+                  >
+                    <IconDotsVertical :size="15" />
+                  </button>
+                  <button
+                    class="project-action-btn"
+                    type="button"
+                    aria-label="New chat in project"
+                    title="New chat in project"
+                    @click.stop="startProjectChat(project.id)"
+                  >
+                    <IconPlus :size="16" />
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" @click.stop>
+                <button class="project-dropdown-item" type="button" @click.stop="copyProjectName(project)">
+                  <IconCopy :size="16" />
+                  <span>Copy Project Name</span>
+                </button>
+                <button class="project-dropdown-item" type="button" @click.stop="openProjectSettings(project)">
+                  <IconSettings :size="16" />
+                  <span>Project Settings</span>
+                </button>
+                <button class="project-dropdown-item" type="button" @click.stop="copyProjectPath(project)">
+                  <IconBrandFinder :size="16" />
+                  <span>Copy Workspace Path</span>
+                </button>
+                <div class="project-dropdown-divider"></div>
+                <button class="project-dropdown-item danger" type="button" @click.stop="deleteProject(project)">
+                  <IconTrash :size="16" />
+                  <span>Delete Project</span>
                 </button>
               </div>
 
-              <div v-if="isProjectExpanded(project.id) && projectItemsById[project.id]?.length" class="project-sidebar-items">
-                <div
-                  v-for="item in projectItemsById[project.id]"
-                  :key="`${project.id}-${item.type}-${item.id}`"
-                  class="project-sidebar-item"
-                  :class="{ active: item.type === 'chat' && chatStore.activeSessionId === item.id && route.name === 'chat' }"
-                >
-                  <button
-                    v-if="item.type === 'chat'"
-                    class="project-sidebar-item-link"
-                    type="button"
-                    :title="item.title"
-                    @click="selectChat(item.id)"
+              <Transition name="project-history">
+                <div v-if="isProjectExpanded(project.id) && projectItemsById[project.id]?.length" class="project-sidebar-items">
+                  <div
+                    v-for="item in projectItemsById[project.id]"
+                    :key="`${project.id}-${item.type}-${item.id}`"
+                    class="project-sidebar-item"
+                    :class="{ active: item.type === 'chat' && chatStore.activeSessionId === item.id && route.name === 'chat' }"
                   >
-                    <span class="project-sidebar-item-title">{{ item.title }}</span>
-                    <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
-                  </button>
-                  <RouterLink
-                    v-else
-                    class="project-sidebar-item-link"
-                    :to="`/runs/${item.id}`"
-                    :title="item.title"
-                    @click="closeMenu"
-                  >
-                    <span class="project-sidebar-item-title">{{ item.title }}</span>
-                    <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
-                  </RouterLink>
+                    <button
+                      v-if="item.type === 'chat'"
+                      class="project-sidebar-item-link"
+                      type="button"
+                      :title="item.title"
+                      @click="selectChat(item.id)"
+                    >
+                      <span class="project-sidebar-item-title">{{ item.title }}</span>
+                      <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
+                    </button>
+                    <RouterLink
+                      v-else
+                      class="project-sidebar-item-link"
+                      :to="`/runs/${item.id}`"
+                      :title="item.title"
+                      @click="closeMenu"
+                    >
+                      <span class="project-sidebar-item-title">{{ item.title }}</span>
+                      <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
+                    </RouterLink>
+                  </div>
                 </div>
-              </div>
+              </Transition>
             </div>
           </div>
         </div>
@@ -306,10 +339,13 @@ import {
   IconFolderPlus,
   IconGitFork,
   IconFolder,
+  IconFolderOpen,
+  IconBrandFinder,
   IconShieldCheck,
   IconChartBar,
   IconTool,
   IconBook,
+  IconCopy,
   IconDotsVertical,
   IconPin,
   IconPencil,
@@ -368,6 +404,19 @@ const toggleProjectHistory = (projectId) => {
   collapsedProjectIds.value = next
 }
 
+const toggleProject = (projectId) => {
+  projectsStore.activeProjectId = projectId
+  toggleProjectHistory(projectId)
+}
+
+const startProjectChat = (projectId) => {
+  projectsStore.activeProjectId = projectId
+  activeProjectMenuId.value = null
+  chatStore.startNewChat()
+  closeMenu()
+  if (route.name !== 'chat') router.push({ name: 'chat' })
+}
+
 const projectUploadInput = ref(null)
 
 const openProjectUpload = () => {
@@ -422,20 +471,6 @@ const selectChat = (sessionId) => {
   }
 }
 
-const selectProject = (projectId) => {
-  projectsStore.activeProjectId = projectId
-
-  const projectHistory = projectItemsById.value[projectId] || []
-  const latestChat = projectHistory.find((item) => item.type === 'chat')
-  if (latestChat) {
-    chatStore.selectSession(latestChat.id)
-  } else {
-    chatStore.startNewChat()
-  }
-  closeMenu()
-  if (route.name !== 'chat') router.push({ name: 'chat' })
-}
-
 const formatRecentTime = (timestamp) => {
   if (!timestamp) return ''
   const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000))
@@ -449,8 +484,40 @@ const formatRecentTime = (timestamp) => {
 }
 
 const activeMenuId = ref(null)
+const activeProjectMenuId = ref(null)
 const renamingId = ref(null)
 const renameDraft = ref('')
+
+const toggleProjectMenu = (projectId, event) => {
+  event?.stopPropagation()
+  activeProjectMenuId.value = activeProjectMenuId.value === projectId ? null : projectId
+}
+
+const copyProjectName = async (project) => {
+  try {
+    await navigator.clipboard.writeText(project.name)
+  } catch {}
+  activeProjectMenuId.value = null
+}
+
+const copyProjectPath = async (project) => {
+  try {
+    await navigator.clipboard.writeText(project.workspacePath)
+  } catch {}
+  activeProjectMenuId.value = null
+}
+
+const openProjectSettings = (project) => {
+  projectsStore.activeProjectId = project.id
+  activeProjectMenuId.value = null
+  router.push({ name: 'projects' })
+}
+
+const deleteProject = (project) => {
+  if (!window.confirm(`Delete project "${project.name}"?`)) return
+  projectsStore.deleteProject(project.id)
+  activeProjectMenuId.value = null
+}
 
 const toggleMenu = (id, event) => {
   event?.stopPropagation()
@@ -459,6 +526,7 @@ const toggleMenu = (id, event) => {
 
 const closeAllMenus = () => {
   activeMenuId.value = null
+  activeProjectMenuId.value = null
 }
 
 const handlePin = (item) => {
@@ -699,6 +767,7 @@ const unassignedItems = computed(() => {
 }
 
 .project-sidebar-group {
+  position: relative;
   min-width: 0;
 }
 
@@ -706,6 +775,41 @@ const unassignedItems = computed(() => {
   display: flex;
   align-items: center;
   min-width: 0;
+}
+
+.project-sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.project-sidebar-group:hover .project-sidebar-actions,
+.project-sidebar-actions:focus-within,
+.project-sidebar-actions.active {
+  opacity: 1;
+}
+
+.project-action-btn {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.project-action-btn:hover,
+.project-action-btn.active {
+  background: #e4e4e7;
+  color: #18181b;
 }
 
 .project-sidebar-project {
@@ -744,33 +848,73 @@ const unassignedItems = computed(() => {
   white-space: nowrap;
 }
 
-.project-history-toggle {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 26px;
-  height: 28px;
-  margin-left: 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+.project-dropdown-menu {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 500;
+  min-width: 214px;
+  padding: 5px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  animation: menuIn 0.12s ease-out;
 }
 
-.project-history-toggle:hover,
-.project-history-toggle:focus-visible {
+.project-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #18181b;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-dropdown-item:hover {
+  background: #f4f4f5;
+}
+
+.project-dropdown-item.danger {
+  color: #b91c1c;
+}
+
+.project-dropdown-item.danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.project-dropdown-divider {
+  height: 1px;
+  margin: 4px 6px;
   background: #f3f4f6;
-  color: #111827;
-  outline: none;
 }
 
 .project-sidebar-items {
   margin: 0 0 5px 14px;
   padding: 2px 0 2px 7px;
   border-left: 1px solid #e5e7eb;
+}
+
+.project-history-enter-active,
+.project-history-leave-active {
+  max-height: 600px;
+  overflow: hidden;
+  transition: max-height 0.2s ease, opacity 0.16s ease, transform 0.2s ease;
+}
+
+.project-history-enter-from,
+.project-history-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .project-sidebar-item {
