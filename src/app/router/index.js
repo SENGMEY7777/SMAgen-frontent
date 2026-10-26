@@ -13,6 +13,7 @@ const dashboardMeta = {
 const views = {
   chat: () => import('@/views/dashboard/DashboardView.vue'),
   overview: () => import('@/views/dashboard/DashboardOverviewView.vue'),
+  projects: () => import('@/views/dashboard/ProjectsView.vue'),
   workflows: () => import('@/views/workflows/WorkflowsView.vue'),
   runDetail: () => import('@/views/workflows/RunDetailView.vue'),
   artifacts: () => import('@/views/dashboard/ArtifactsView.vue'),
@@ -49,6 +50,12 @@ const router = createRouter({
     {
       path: '/dashboard',
       redirect: { name: 'overview' },
+    },
+    {
+      path: '/projects',
+      name: 'projects',
+      component: views.projects,
+      meta: { ...dashboardMeta, title: 'Projects' },
     },
     {
       path: '/workflows',
