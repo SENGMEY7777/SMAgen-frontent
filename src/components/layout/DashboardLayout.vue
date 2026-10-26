@@ -59,12 +59,98 @@
           </RouterLink>
         </nav>
 
-        <div class="side-section">
+        <div class="project-sidebar-section">
+          <div class="project-sidebar-header">
+            <RouterLink class="project-sidebar-title" to="/projects" @click="closeMenu">
+              <span>Projects</span>
+            </RouterLink>
+            <button
+              class="project-upload-btn"
+              type="button"
+              title="Upload local project"
+              aria-label="Upload local project"
+              @click="openProjectUpload"
+            >
+              <IconFolderPlus :size="17" />
+            </button>
+            <input
+              ref="projectUploadInput"
+              class="project-upload-input"
+              type="file"
+              webkitdirectory
+              directory
+              multiple
+              aria-hidden="true"
+              tabindex="-1"
+              @change="handleProjectUpload"
+            />
+          </div>
+
+          <div class="project-sidebar-list">
+            <div v-for="project in projectsStore.projects" :key="project.id" class="project-sidebar-group">
+              <div class="project-sidebar-project-row">
+                <button
+                  class="project-sidebar-project"
+                  :class="{ active: projectsStore.activeProjectId === project.id }"
+                  type="button"
+                  :title="project.workspacePath"
+                  @click="selectProject(project.id)"
+                >
+                  <IconFolder :size="17" />
+                  <span>{{ project.name }}</span>
+                </button>
+                <button
+                  class="project-history-toggle"
+                  type="button"
+                  :aria-label="`${isProjectExpanded(project.id) ? 'Hide' : 'Show'} history for ${project.name}`"
+                  :aria-expanded="isProjectExpanded(project.id)"
+                  :title="`${isProjectExpanded(project.id) ? 'Hide' : 'Show'} chat history`"
+                  @click.stop="toggleProjectHistory(project.id)"
+                >
+                  <IconChevronDown v-if="isProjectExpanded(project.id)" :size="14" />
+                  <IconChevronRight v-else :size="14" />
+                </button>
+              </div>
+
+              <div v-if="isProjectExpanded(project.id) && projectItemsById[project.id]?.length" class="project-sidebar-items">
+                <div
+                  v-for="item in projectItemsById[project.id]"
+                  :key="`${project.id}-${item.type}-${item.id}`"
+                  class="project-sidebar-item"
+                  :class="{ active: item.type === 'chat' && chatStore.activeSessionId === item.id && route.name === 'chat' }"
+                >
+                  <button
+                    v-if="item.type === 'chat'"
+                    class="project-sidebar-item-link"
+                    type="button"
+                    :title="item.title"
+                    @click="selectChat(item.id)"
+                  >
+                    <span class="project-sidebar-item-title">{{ item.title }}</span>
+                    <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
+                  </button>
+                  <RouterLink
+                    v-else
+                    class="project-sidebar-item-link"
+                    :to="`/runs/${item.id}`"
+                    :title="item.title"
+                    @click="closeMenu"
+                  >
+                    <span class="project-sidebar-item-title">{{ item.title }}</span>
+                    <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
+                  </RouterLink>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="unassignedItems.length" class="side-section">
           <div class="side-label-row">
             <span class="side-label">Chats and tasks</span>
           </div>
           <div class="recent-list">
-            <template v-for="item in combinedRecentItems" :key="item.id">
+            <template v-for="item in unassignedItems" :key="item.id">
               <div
                 class="recent-row"
                 :class="{ 'active-chat': chatStore.activeSessionId === item.id && route.name === 'chat', 'is-pinned': item.pinned }"
@@ -150,7 +236,7 @@
               </div>
             </template>
 
-            <span v-if="!combinedRecentItems.length" class="recent-empty">No recent activity</span>
+            <span v-if="!unassignedItems.length" class="recent-empty">No unassigned activity</span>
           </div>
         </div>
       </div>
@@ -217,6 +303,7 @@ import {
   IconSearch,
   IconHome,
   IconMessageCircle2,
+  IconFolderPlus,
   IconGitFork,
   IconFolder,
   IconShieldCheck,
@@ -238,6 +325,7 @@ import {
 import BrandMark from '@/components/branding/BrandMark.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { useProjectsStore } from '@/stores/projects'
 
 import { api } from '@/services/api'
 
@@ -249,8 +337,10 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const chatStore = useChatStore()
+const projectsStore = useProjectsStore()
 const mobileOpen = ref(false)
 const pendingApprovalsCount = ref(0)
+const collapsedProjectIds = ref(new Set())
 
 const fetchApprovalsCount = async () => {
   if (auth.isPrivileged) {
@@ -269,6 +359,53 @@ const closeMenu = () => {
   mobileOpen.value = false
 }
 
+const isProjectExpanded = (projectId) => !collapsedProjectIds.value.has(projectId)
+
+const toggleProjectHistory = (projectId) => {
+  const next = new Set(collapsedProjectIds.value)
+  if (next.has(projectId)) next.delete(projectId)
+  else next.add(projectId)
+  collapsedProjectIds.value = next
+}
+
+const projectUploadInput = ref(null)
+
+const openProjectUpload = () => {
+  closeMenu()
+  projectUploadInput.value?.click()
+}
+
+const handleProjectUpload = (event) => {
+  const files = Array.from(event.target.files || [])
+  const firstRelativePath = files[0]?.webkitRelativePath || ''
+  const projectName = firstRelativePath.split('/')[0] || files[0]?.name || ''
+
+  if (!projectName) {
+    event.target.value = ''
+    return
+  }
+
+  const workspacePath = `local://${projectName}`
+  const existingProject = projectsStore.projects.find(
+    (project) => project.name === projectName && project.workspacePath === workspacePath,
+  )
+
+  if (existingProject) {
+    projectsStore.activeProjectId = existingProject.id
+  } else {
+    projectsStore.createProject({
+      name: projectName,
+      description: `Imported from your local computer (${files.length} file${files.length === 1 ? '' : 's'}).`,
+      workspacePath,
+      tags: ['Local', 'Imported'],
+    })
+  }
+
+  event.target.value = ''
+  chatStore.startNewChat()
+  router.push({ name: 'chat' })
+}
+
 const newChat = () => {
   chatStore.startNewChat()
   closeMenu()
@@ -283,6 +420,32 @@ const selectChat = (sessionId) => {
   if (route.name !== 'chat') {
     router.push({ name: 'chat' })
   }
+}
+
+const selectProject = (projectId) => {
+  projectsStore.activeProjectId = projectId
+
+  const projectHistory = projectItemsById.value[projectId] || []
+  const latestChat = projectHistory.find((item) => item.type === 'chat')
+  if (latestChat) {
+    chatStore.selectSession(latestChat.id)
+  } else {
+    chatStore.startNewChat()
+  }
+  closeMenu()
+  if (route.name !== 'chat') router.push({ name: 'chat' })
+}
+
+const formatRecentTime = (timestamp) => {
+  if (!timestamp) return ''
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000))
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d`
+  return `${Math.floor(days / 30)}mo`
 }
 
 const activeMenuId = ref(null)
@@ -327,6 +490,9 @@ const cancelRename = () => {
 }
 
 const handleAddToProject = (item) => {
+  if (projectsStore.activeProjectId) {
+    projectsStore.assignItemToProject(item.id, projectsStore.activeProjectId)
+  }
   closeAllMenus()
 }
 
@@ -358,11 +524,20 @@ if (typeof window !== 'undefined') {
 }
 
 const combinedRecentItems = computed(() => {
+  // A workflow prompt is also persisted as a chat session. Prefer the chat
+  // entry in the sidebar so clicking the conversation opens Chat, not Canvas.
+  const chatLinkedRunIds = new Set(
+    chatStore.sessions
+      .flatMap((session) => (session.messages || []).map((message) => message?.workflow?.runId).filter(Boolean))
+      .map((runId) => String(runId)),
+  )
+
   const workflowItems = props.recentItems
     .filter((r, index, recentItems) => {
       if (hiddenWorkflowIds.value.includes(r.id)) return false
       return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
     })
+    .filter((r) => !chatLinkedRunIds.has(String(r.id)))
     .map((r) => ({
       id: r.id,
       title: r.goal_prompt || r.title || 'Workflow run',
@@ -371,18 +546,7 @@ const combinedRecentItems = computed(() => {
       updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
     }))
 
-  const workflowRunIds = new Set(workflowItems.map((item) => String(item.id)))
   const chatItems = chatStore.sessions
-    // A workflow also creates a local chat session for its conversation. Once
-    // the persisted workflow run is available, show only the run entry so a
-    // refresh does not display the same task twice.
-    .filter((session) => {
-      const linkedRunIds = (session.messages || [])
-        .map((message) => message?.workflow?.runId)
-        .filter(Boolean)
-        .map((runId) => String(runId))
-      return !linkedRunIds.some((runId) => workflowRunIds.has(runId))
-    })
     .map((s) => ({
       id: s.id,
       title: s.title,
@@ -398,6 +562,35 @@ const combinedRecentItems = computed(() => {
     return b.updatedAt - a.updatedAt
   })
   return merged
+})
+
+const getProjectIdForItem = (item) => {
+  const explicitlyLinkedProject = projectsStore.projects.find((project) =>
+    project.linkedItems?.some((linkedItemId) => String(linkedItemId) === String(item.id)),
+  )
+  if (explicitlyLinkedProject) return explicitlyLinkedProject.id
+
+  if (item.type === 'chat') {
+    return chatStore.sessions.find((session) => String(session.id) === String(item.id))?.projectId || null
+  }
+
+  const linkedSession = chatStore.sessions.find((session) =>
+    session.messages?.some((message) => String(message?.workflow?.runId) === String(item.id)),
+  )
+  return linkedSession?.projectId || null
+}
+
+const projectItemsById = computed(() => {
+  const groups = Object.fromEntries(projectsStore.projects.map((project) => [project.id, []]))
+  combinedRecentItems.value.forEach((item) => {
+    const projectId = getProjectIdForItem(item)
+    if (projectId && groups[projectId]) groups[projectId].push(item)
+  })
+  return groups
+})
+
+const unassignedItems = computed(() => {
+  return combinedRecentItems.value.filter((item) => !getProjectIdForItem(item))
 })
 </script>
 
@@ -452,6 +645,183 @@ const combinedRecentItems = computed(() => {
   font-weight: 600;
   letter-spacing: -0.01em;
   text-transform: none;
+}
+
+.project-sidebar-section {
+  margin-top: 16px;
+  padding: 0 6px 8px 4px;
+}
+
+.project-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 8px 6px;
+}
+
+.project-sidebar-title {
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.project-sidebar-title:hover {
+  color: #111827;
+}
+
+.project-upload-btn {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.project-upload-btn:hover,
+.project-upload-btn:focus-visible {
+  background: #e5e7eb;
+  color: #111827;
+  outline: none;
+}
+
+.project-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-sidebar-group {
+  min-width: 0;
+}
+
+.project-sidebar-project-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.project-sidebar-project {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.project-sidebar-project:hover,
+.project-sidebar-project.active {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.project-sidebar-project svg {
+  flex: 0 0 auto;
+}
+
+.project-sidebar-project span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-history-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 28px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.project-history-toggle:hover,
+.project-history-toggle:focus-visible {
+  background: #f3f4f6;
+  color: #111827;
+  outline: none;
+}
+
+.project-sidebar-items {
+  margin: 0 0 5px 14px;
+  padding: 2px 0 2px 7px;
+  border-left: 1px solid #e5e7eb;
+}
+
+.project-sidebar-item {
+  min-width: 0;
+  border-radius: 7px;
+}
+
+.project-sidebar-item:hover,
+.project-sidebar-item.active {
+  background: #ececee;
+}
+
+.project-sidebar-item-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 6px 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.project-sidebar-item-link:hover,
+.project-sidebar-item.active .project-sidebar-item-link {
+  color: #111827;
+}
+
+.project-sidebar-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.project-sidebar-item-time {
+  flex: 0 0 auto;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.project-upload-input {
+  display: none;
 }
 
 .recent-row {
