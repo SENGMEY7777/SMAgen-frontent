@@ -160,7 +160,13 @@ export const explainWorkflowError = (value) => {
     nextStep: 'Try again. If the problem continues, open the activity logs and share the technical details.',
   }
 
-  if (code === 'LLM_TIMEOUT' || /timed out|timeout/.test(fingerprint)) {
+  if (/self-healing reflection failed|reflection.*gemini|gemini service is temporarily unavailable/.test(fingerprint)) {
+    explanation = {
+      title: 'Automatic repair service is unavailable',
+      message: 'The workflow task failed, and KAIRO could not ask Gemini for a safe correction because the Gemini service was temporarily unavailable.',
+      nextStep: 'Try the workflow again when the Gemini service is available. The failed task and any dependent tasks were stopped safely.',
+    }
+  } else if (code === 'LLM_TIMEOUT' || /timed out|timeout/.test(fingerprint)) {
     explanation = {
       title: 'The workflow planner took too long',
       message: 'The AI planner did not finish creating an execution plan within the allowed time.',
@@ -183,6 +189,12 @@ export const explainWorkflowError = (value) => {
       title: 'The server is in read-only mode',
       message: 'The workflow can read server files, but it is not allowed to create or update files.',
       nextStep: 'Set SERVER_FILE_ACCESS=read-write on the Node.js server, restart it, and approve the requested file changes.',
+    }
+  } else if (/file already exists|eexist|overwrite.*not permitted|already exists.*overwrite/.test(fingerprint)) {
+    explanation = {
+      title: 'The requested target already exists',
+      message: 'KAIRO stopped because this task tried to create a file or folder that is already on the Desktop. It did not overwrite the existing item automatically.',
+      nextStep: 'For removal, run the request again after the updated removal workflow is active. For changes, explicitly ask to update or overwrite the existing file.',
     }
   } else if (/proposed tool input is unchanged|self-healing stopped/.test(fingerprint)) {
     explanation = {
