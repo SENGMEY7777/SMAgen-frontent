@@ -91,7 +91,7 @@
               <div class="project-sidebar-project-row">
                 <button
                   class="project-sidebar-project"
-                  :class="{ active: projectsStore.activeProjectId === project.id }"
+                  :class="{ active: isProjectActive(project.id) }"
                   type="button"
                   :title="project.workspacePath"
                   @click="toggleProject(project.id)"
@@ -149,7 +149,7 @@
                     v-for="item in projectItemsById[project.id]"
                     :key="`${project.id}-${item.type}-${item.id}`"
                     class="project-sidebar-item"
-                    :class="{ active: item.type === 'chat' && chatStore.activeSessionId === item.id && route.name === 'chat' }"
+                    :class="{ active: isItemActive(item) }"
                   >
                     <button
                       v-if="item.type === 'chat'"
@@ -186,7 +186,7 @@
             <template v-for="item in unassignedItems" :key="item.id">
               <div
                 class="recent-row"
-                :class="{ 'active-chat': chatStore.activeSessionId === item.id && route.name === 'chat', 'is-pinned': item.pinned }"
+                :class="{ 'active-chat': isItemActive(item), 'is-pinned': item.pinned }"
               >
                 <!-- Bullet Circle -->
                 <span class="item-circle" :class="{ pinned: item.pinned }"></span>
@@ -326,6 +326,13 @@
         <slot />
       </main>
     </section>
+    <ConfirmDialog
+      :open="Boolean(projectToDelete)"
+      title="Delete project?"
+      :message="deleteProjectMessage"
+      @confirm="confirmDeleteProject"
+      @cancel="cancelDeleteProject"
+    />
   </div>
 </template>
 
@@ -359,6 +366,7 @@ import {
   IconPlus,
 } from '@tabler/icons-vue'
 import BrandMark from '@/components/branding/BrandMark.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useProjectsStore } from '@/stores/projects'
@@ -395,6 +403,20 @@ const closeMenu = () => {
   mobileOpen.value = false
 }
 
+const isProjectActive = (projectId) => {
+  return route.name === 'projects' && projectsStore.activeProjectId === projectId
+}
+
+const isItemActive = (item) => {
+  if (item.type === 'chat') {
+    return chatStore.activeSessionId === item.id && route.name === 'chat'
+  }
+  if (item.type === 'workflow') {
+    return route.name === 'run-detail' && String(route.params.runId) === String(item.id)
+  }
+  return false
+}
+
 const isProjectExpanded = (projectId) => !collapsedProjectIds.value.has(projectId)
 
 const toggleProjectHistory = (projectId) => {
@@ -405,7 +427,6 @@ const toggleProjectHistory = (projectId) => {
 }
 
 const toggleProject = (projectId) => {
-  projectsStore.activeProjectId = projectId
   toggleProjectHistory(projectId)
 }
 
@@ -455,7 +476,24 @@ const handleProjectUpload = (event) => {
   router.push({ name: 'chat' })
 }
 
+const getProjectIdForItem = (item) => {
+  const explicitlyLinkedProject = projectsStore.projects.find((project) =>
+    project.linkedItems?.some((linkedItemId) => String(linkedItemId) === String(item.id)),
+  )
+  if (explicitlyLinkedProject) return explicitlyLinkedProject.id
+
+  if (item.type === 'chat') {
+    return chatStore.sessions.find((session) => String(session.id) === String(item.id))?.projectId || null
+  }
+
+  const linkedSession = chatStore.sessions.find((session) =>
+    session.messages?.some((message) => String(message?.workflow?.runId) === String(item.id)),
+  )
+  return linkedSession?.projectId || null
+}
+
 const newChat = () => {
+  projectsStore.activeProjectId = null
   chatStore.startNewChat()
   closeMenu()
   if (route.name !== 'chat') {
@@ -465,6 +503,11 @@ const newChat = () => {
 
 const selectChat = (sessionId) => {
   chatStore.selectSession(sessionId)
+  const projId = getProjectIdForItem({ id: sessionId, type: 'chat' })
+  projectsStore.activeProjectId = projId || null
+  if (projId && collapsedProjectIds.value.has(projId)) {
+    toggleProjectHistory(projId)
+  }
   closeMenu()
   if (route.name !== 'chat') {
     router.push({ name: 'chat' })
@@ -485,8 +528,15 @@ const formatRecentTime = (timestamp) => {
 
 const activeMenuId = ref(null)
 const activeProjectMenuId = ref(null)
+const projectToDelete = ref(null)
 const renamingId = ref(null)
 const renameDraft = ref('')
+
+const deleteProjectMessage = computed(() => {
+  return projectToDelete.value
+    ? `Are you sure you want to delete "${projectToDelete.value.name}"? This action cannot be undone.`
+    : ''
+})
 
 const toggleProjectMenu = (projectId, event) => {
   event?.stopPropagation()
@@ -513,10 +563,23 @@ const openProjectSettings = (project) => {
   router.push({ name: 'projects' })
 }
 
-const deleteProject = (project) => {
-  if (!window.confirm(`Delete project "${project.name}"?`)) return
-  projectsStore.deleteProject(project.id)
+const requestDeleteProject = (project) => {
   activeProjectMenuId.value = null
+  projectToDelete.value = project
+}
+
+const cancelDeleteProject = () => {
+  projectToDelete.value = null
+}
+
+const confirmDeleteProject = () => {
+  if (!projectToDelete.value) return
+  projectsStore.deleteProject(projectToDelete.value.id)
+  projectToDelete.value = null
+}
+
+const deleteProject = (project) => {
+  requestDeleteProject(project)
 }
 
 const toggleMenu = (id, event) => {
@@ -631,22 +694,6 @@ const combinedRecentItems = computed(() => {
   })
   return merged
 })
-
-const getProjectIdForItem = (item) => {
-  const explicitlyLinkedProject = projectsStore.projects.find((project) =>
-    project.linkedItems?.some((linkedItemId) => String(linkedItemId) === String(item.id)),
-  )
-  if (explicitlyLinkedProject) return explicitlyLinkedProject.id
-
-  if (item.type === 'chat') {
-    return chatStore.sessions.find((session) => String(session.id) === String(item.id))?.projectId || null
-  }
-
-  const linkedSession = chatStore.sessions.find((session) =>
-    session.messages?.some((message) => String(message?.workflow?.runId) === String(item.id)),
-  )
-  return linkedSession?.projectId || null
-}
 
 const projectItemsById = computed(() => {
   const groups = Object.fromEntries(projectsStore.projects.map((project) => [project.id, []]))
