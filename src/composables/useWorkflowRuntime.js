@@ -238,6 +238,9 @@ export function useWorkflowRuntime({
       nextWorkflow.approval = getEventApproval(data, workflow.approval, runId)
       nextWorkflow.error = ''
     }
+    if (event === 'node_failed' && !workflow.error) {
+      nextWorkflow.error = data?.error || data?.message || data?.reason || 'A workflow task failed.'
+    }
     if (event === 'workflow_failed' || (event === 'run_finished' && nextStatus === 'FAILED')) {
       nextWorkflow.error = data?.error || data?.message || data?.reason || workflow.error || 'Workflow failed.'
     }
