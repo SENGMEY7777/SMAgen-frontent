@@ -408,6 +408,7 @@ const getWorkflowSteps = (workflow) => {
       const isRunning = status === 'RUNNING'
       const isCompleted = ['COMPLETED', 'SUCCESS'].includes(status)
       const isFailed = ['FAILED', 'CANCELLED'].includes(status)
+      const isSkipped = status === 'SKIPPED'
       const isApproval = status === 'AWAITING_APPROVAL'
 
       const taskTitle = task.title || task.instruction || `Step ${idx + 1}`
@@ -417,6 +418,7 @@ const getWorkflowSteps = (workflow) => {
       if (isRunning) label = `Running ${label}`
       else if (isCompleted) label = `Completed ${label}`
       else if (isFailed) label = `Failed ${label}`
+      else if (isSkipped) label = `Skipped ${label}`
       else if (isApproval) label = `Awaiting approval: ${label}`
       else label = `Queued ${label}`
 
@@ -426,8 +428,9 @@ const getWorkflowSteps = (workflow) => {
         isRunning,
         isCompleted,
         isFailed,
+        isSkipped,
         isApproval,
-        statusClass: isRunning ? 'running' : (isCompleted ? 'completed' : (isFailed ? 'failed' : (isApproval ? 'approval' : 'pending'))),
+        statusClass: isRunning ? 'running' : (isCompleted ? 'completed' : (isFailed ? 'failed' : (isSkipped ? 'skipped' : (isApproval ? 'approval' : 'pending')))),
         toolInput: task.tool_input || task.toolInput
           ? (typeof (task.tool_input || task.toolInput) === 'string' ? (task.tool_input || task.toolInput) : JSON.stringify(task.tool_input || task.toolInput, null, 2))
           : null,
