@@ -88,7 +88,7 @@
 
           <div class="project-sidebar-list">
             <div v-for="project in projectsStore.projects" :key="project.id" class="project-sidebar-group">
-              <div class="project-sidebar-project-row">
+              <div class="project-sidebar-project-row" :class="{ active: isProjectActive(project.id) }">
                 <button
                   class="project-sidebar-project"
                   :class="{ active: isProjectActive(project.id) }"
@@ -751,13 +751,22 @@ const unassignedItems = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 6px 8px;
+  padding: 0 4px 8px 6px;
+}
+
+.side-section .side-label {
+  padding: 0;
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 .side-label {
   color: #6b7280;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.01em;
   text-transform: none;
 }
@@ -822,6 +831,14 @@ const unassignedItems = computed(() => {
   display: flex;
   align-items: center;
   min-width: 0;
+  border-radius: 7px;
+  transition: background 0.12s ease;
+}
+
+.project-sidebar-project-row:hover,
+.project-sidebar-project-row:focus-within,
+.project-sidebar-project-row.active {
+  background: #f3f4f6;
 }
 
 .project-sidebar-actions {
@@ -833,7 +850,7 @@ const unassignedItems = computed(() => {
   transition: opacity 0.12s ease;
 }
 
-.project-sidebar-group:hover .project-sidebar-actions,
+.project-sidebar-project-row:hover .project-sidebar-actions,
 .project-sidebar-actions:focus-within,
 .project-sidebar-actions.active {
   opacity: 1;
@@ -878,9 +895,10 @@ const unassignedItems = computed(() => {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.project-sidebar-project:hover,
+.project-sidebar-project-row:hover .project-sidebar-project,
+.project-sidebar-project-row:focus-within .project-sidebar-project,
 .project-sidebar-project.active {
-  background: #f3f4f6;
+  background: transparent;
   color: #111827;
 }
 
@@ -890,6 +908,7 @@ const unassignedItems = computed(() => {
 
 .project-sidebar-project span {
   min-width: 0;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -954,7 +973,7 @@ const unassignedItems = computed(() => {
 .project-history-leave-active {
   max-height: 600px;
   overflow: hidden;
-  transition: max-height 0.2s ease, opacity 0.16s ease, transform 0.2s ease;
+  transition: max-height 0.1s ease, opacity 0.08s ease, transform 0.1s ease;
 }
 
 .project-history-enter-from,
@@ -1020,22 +1039,25 @@ const unassignedItems = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 8px;
-  padding: 2px 4px 2px 8px;
+  min-height: 41px;
+  border-radius: 7px;
+  padding: 0 4px 0 6px;
   transition: background 0.12s ease;
 }
 
-.recent-row:hover {
+.recent-row:hover,
+.recent-row:focus-within {
   background: #f3f4f6;
 }
 
 .recent-row.active-chat {
-  background: #ececee;
+  background: #f3f4f6;
 }
 
 .item-circle {
   width: 6px;
   height: 6px;
+  margin-left: 5px;
   border: 1px solid #d4d4d8;
   border-radius: 50%;
   flex-shrink: 0;
@@ -1071,8 +1093,8 @@ const unassignedItems = computed(() => {
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 6px 0;
-  font-size: 13.5px;
+  padding: 7px 0;
+  font-size: 14px;
   line-height: 1.35;
   color: #374151;
   text-decoration: none;
@@ -1098,8 +1120,8 @@ const unassignedItems = computed(() => {
 .item-options-btn {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 25px;
+  height: 27px;
   border-radius: 4px;
   border: none;
   background: transparent;
