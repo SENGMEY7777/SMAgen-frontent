@@ -60,6 +60,25 @@ export function useWorkflowRuntime({
     return merged
   }
 
+  const reconcileTerminalTasks = (tasks, status, errorMessage = '') => {
+    const normalizedStatus = String(status || '').toUpperCase()
+    if (!isTerminalWorkflowStatus(normalizedStatus)) return tasks
+
+    const fallbackStatus = normalizedStatus === 'COMPLETED' || normalizedStatus === 'SUCCESS' ? 'SUCCESS' : 'FAILED'
+    return (Array.isArray(tasks) ? tasks : []).map((task) => {
+      const taskStatus = getWorkflowTaskStatus(task)
+      if (['SUCCESS', 'COMPLETED', 'FAILED', 'SKIPPED'].includes(taskStatus)) return task
+
+      return {
+        ...task,
+        status: fallbackStatus,
+        ...(fallbackStatus === 'FAILED'
+          ? { error_message: task.error_message || errorMessage || 'The workflow stopped before this task completed.' }
+          : {}),
+      }
+    })
+  }
+
   const getWorkflowLogKey = (entry, normalizedEntry) => {
     const explicitId = entry?.id
       || entry?.telemetryId
@@ -222,6 +241,11 @@ export function useWorkflowRuntime({
       nextWorkflow.plan = data.plan
     }
     if (isTerminalWorkflowStatus(nextStatus)) {
+      nextWorkflow.tasks = reconcileTerminalTasks(
+        nextWorkflow.tasks,
+        nextStatus,
+        data?.error || data?.message || data?.reason,
+      )
       nextWorkflow.completedAt = data?.completedAt || data?.completed_at || workflow.completedAt || new Date().toISOString()
       nextWorkflow.approval = null
     }
@@ -323,7 +347,7 @@ export function useWorkflowRuntime({
         updateWorkflowMessage(index, {
           status,
           approval: null,
-          tasks,
+          tasks: reconcileTerminalTasks(tasks, status, workflowError),
           logs,
           completedAt,
           finalSeconds,
