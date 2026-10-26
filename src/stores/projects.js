@@ -53,7 +53,7 @@ const readStorage = () => {
 
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref(readStorage())
-  const activeProjectId = ref(localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) || projects.value[0]?.id || null)
+  const activeProjectId = ref(localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) || null)
 
   watch(
     projects,
