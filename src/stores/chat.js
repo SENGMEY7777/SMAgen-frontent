@@ -5,6 +5,8 @@ import { STORAGE_KEYS } from '@/config/constants'
 const CHATS_STORAGE_KEY = STORAGE_KEYS.CHATS || 'kairo_chats'
 const ACTIVE_CHAT_STORAGE_KEY = `${CHATS_STORAGE_KEY}:active-session`
 
+const createMessageId = () => `message_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+
 const readStorage = () => {
   try {
     const raw = localStorage.getItem(CHATS_STORAGE_KEY)
@@ -81,6 +83,15 @@ export const useChatStore = defineStore('chat', () => {
 
   const addMessage = ({ role, content, images = [], files = [], ...rest }) => {
     const timestamp = new Date().toISOString()
+    const message = {
+      id: rest.id || createMessageId(),
+      role,
+      content,
+      images,
+      files,
+      ...rest,
+      createdAt: rest.createdAt || timestamp,
+    }
 
     if (!activeSessionId.value) {
       // Create new session from first prompt
@@ -89,7 +100,7 @@ export const useChatStore = defineStore('chat', () => {
         id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         title,
         type: 'chat',
-        messages: [{ role, content, images, files, ...rest, createdAt: timestamp }],
+        messages: [message],
         createdAt: timestamp,
         updatedAt: timestamp,
       }
@@ -100,7 +111,7 @@ export const useChatStore = defineStore('chat', () => {
 
     const session = sessions.value.find((s) => s.id === activeSessionId.value)
     if (session) {
-      session.messages.push({ role, content, images, files, ...rest, createdAt: timestamp })
+      session.messages.push(message)
       session.updatedAt = timestamp
       // Reorder to top
       const idx = sessions.value.indexOf(session)
