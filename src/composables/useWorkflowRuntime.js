@@ -69,10 +69,15 @@ export function useWorkflowRuntime({
       const taskStatus = getWorkflowTaskStatus(task)
       if (['SUCCESS', 'COMPLETED', 'FAILED', 'SKIPPED'].includes(taskStatus)) return task
 
+      const reconciledStatus = fallbackStatus === 'FAILED'
+        && !['RUNNING', 'AWAITING_APPROVAL'].includes(taskStatus)
+        ? 'SKIPPED'
+        : fallbackStatus
+
       return {
         ...task,
-        status: fallbackStatus,
-        ...(fallbackStatus === 'FAILED'
+        status: reconciledStatus,
+        ...(reconciledStatus === 'FAILED'
           ? { error_message: task.error_message || errorMessage || 'The workflow stopped before this task completed.' }
           : {}),
       }
@@ -309,7 +314,13 @@ export function useWorkflowRuntime({
       const tasks = mergeWorkflowTasks(currentWorkflow.tasks, getWorkflowTasks(workflowRun))
       const logs = mergeWorkflowLogs(currentWorkflow.logs, getWorkflowLogs(workflowRun))
       const workflowStatus = workflowRun.status || workflowRun.run_status || workflowRun.state
-      const workflowErrorValue = workflowRun.error || workflowRun.error_message || workflowRun.failure_reason || ''
+      const failedTask = tasks.find((task) => getWorkflowTaskStatus(task) === 'FAILED')
+      const workflowErrorValue = workflowRun.error
+        || workflowRun.error_message
+        || workflowRun.failure_reason
+        || failedTask?.error_message
+        || failedTask?.errorMessage
+        || ''
       const workflowError = workflowErrorValue ? stringifyWorkflowValue(workflowErrorValue) : ''
       const awaitingTask = tasks.find((task) => getWorkflowTaskStatus(task) === 'AWAITING_APPROVAL')
       const awaitingApproval = String(workflowStatus || '').toUpperCase() === 'AWAITING_APPROVAL' || Boolean(awaitingTask)
