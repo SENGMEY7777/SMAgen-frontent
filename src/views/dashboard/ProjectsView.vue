@@ -65,6 +65,15 @@
             <div class="project-header-right">
               <span v-if="projectsStore.activeProjectId === proj.id" class="active-badge">Active</span>
               <div class="project-actions" @click.stop>
+                <input
+                  class="project-color-picker"
+                  type="color"
+                  :value="proj.color || '#3b82f6'"
+                  :aria-label="`Change ${proj.name} color`"
+                  :title="`Change ${proj.name} color`"
+                  @click.stop
+                  @input.stop="updateProjectColor(proj.id, $event)"
+                />
                 <button type="button" class="icon-action-btn danger" title="Delete project" @click="requestDeleteProject(proj)">
                   <IconTrash :size="14" />
                 </button>
@@ -182,6 +191,10 @@ const confirmDeleteProject = () => {
 
 const selectProject = (id) => {
   projectsStore.activeProjectId = id
+}
+
+const updateProjectColor = (id, event) => {
+  projectsStore.updateProject(id, { color: event.target.value })
 }
 
 const launchChat = (proj) => {
@@ -340,6 +353,25 @@ const launchWorkflow = (proj) => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.project-color-picker {
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.project-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.project-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
 }
 
 .icon-action-btn {

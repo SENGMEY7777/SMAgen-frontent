@@ -96,8 +96,8 @@
                   :title="project.workspacePath"
                   @click="toggleProject(project.id)"
                 >
-                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="17" />
-                  <IconFolder v-else :size="17" />
+                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="17" :style="{ color: project.color }" />
+                  <IconFolder v-else :size="17" :style="{ color: project.color }" />
                   <span>{{ project.name }}</span>
                 </button>
                 <div class="project-sidebar-actions" :class="{ active: activeProjectMenuId === project.id }">
