@@ -265,11 +265,11 @@
               </button>
               <!-- Stop Button when generating vs Start/Send Button when idle -->
               <button
-                v-if="loading"
+                v-if="loading || hasActiveWorkflowRun"
                 class="stop-button"
                 type="button"
-                title="Stop generating"
-                aria-label="Stop generating"
+                :title="hasActiveWorkflowRun ? 'Stop workflow' : 'Stop generating'"
+                :aria-label="hasActiveWorkflowRun ? 'Stop workflow' : 'Stop generating'"
                 @click="stopGeneration"
               >
                 <IconPlayerStop :size="14" />
@@ -374,6 +374,10 @@ const timeGreeting = computed(() => {
 })
 
 const currentMessages = computed(() => chatStore.messages)
+const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse().find((message) => (
+  message?.workflow?.runId && isWorkflowRunning(message.workflow)
+)) || null)
+const hasActiveWorkflowRun = computed(() => Boolean(activeWorkflowMessage.value))
 
 const workflowApprovalOptions = (tool = 'this action') => [
   { number: '1', value: 'allow_once', label: 'Yes, allow this time' },
@@ -659,6 +663,7 @@ const {
   startWorkflowPolling,
   skipWorkflowApproval,
   submitWorkflowApproval,
+  cancelWorkflowRun,
 } = useWorkflowRuntime({
   chatStore,
   currentMessages,
@@ -835,8 +840,21 @@ const cancelEditUserMessage = () => {
 }
 
 let activeAbortController = null
+let workflowStopRequested = false
 
 const stopGeneration = () => {
+  if (activeWorkflowMessage.value?.workflow?.runId) {
+    cancelWorkflowRun(activeWorkflowMessage.value)
+    return
+  }
+
+  if (activeMode.value === 'workflow' && loading.value) {
+    // The run ID is created by the backend after planning. Keep the request
+    // alive long enough to receive that ID, then cancel the actual run.
+    workflowStopRequested = true
+    return
+  }
+
   if (activeAbortController) {
     activeAbortController.abort()
   }
@@ -902,6 +920,7 @@ const addWorkflowPlaceholder = (goalPrompt) => {
       elapsedSeconds: 0,
       approval: null,
       decisionPending: false,
+      cancellationPending: false,
       tasks: [],
       logs: [],
       isStreamOpen: false,
@@ -913,6 +932,7 @@ const addWorkflowPlaceholder = (goalPrompt) => {
 }
 
 const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = []) => {
+  workflowStopRequested = false
   const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
   const response = await api.runWorkflow({
     goalPrompt,
@@ -926,6 +946,13 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
     status: 'RUNNING',
     error: '',
   })
+
+  if (workflowStopRequested) {
+    workflowStopRequested = false
+    await cancelWorkflowRun(currentMessages.value[workflowMessageIndex])
+    return
+  }
+
   startWorkflowPolling(workflowMessageIndex, String(runId))
 }
 
