@@ -292,7 +292,10 @@ export function useWorkflowRuntime({
       approval = { ...approval, ...(detailPayload || {}) }
     }
 
-    const approvalId = approval?.id || existingApproval?.id || `virtual-${runId}`
+    const existingApprovalId = String(existingApproval?.id || '')
+    const approvalId = approval?.id
+      || (existingApprovalId && !existingApprovalId.startsWith('virtual-') ? existingApprovalId : '')
+      || (task?.id ? `task-${task.id}` : `virtual-${runId}`)
     return {
       id: approvalId,
       taskId: task?.id || approval?.task_id || approval?.taskId || existingApproval?.taskId || null,
@@ -402,22 +405,19 @@ export function useWorkflowRuntime({
     }
   }
 
-  const skipWorkflowApproval = (message) => {
-    const index = currentMessages.value.indexOf(message)
-    if (index === -1) return
-    updateWorkflowMessage(index, {
-      error: 'This approval is still pending. Select an option and press Submit when you are ready.',
-    })
+  const skipWorkflowApproval = async (message) => {
+    await submitWorkflowApproval(message, 'REJECTED', 'Skipped by user')
   }
 
-  const submitWorkflowApproval = async (message) => {
+  const submitWorkflowApproval = async (message, forcedStatus = null, forcedRejectionReason = '') => {
     const index = currentMessages.value.indexOf(message)
     const workflow = index === -1 ? null : currentMessages.value[index]?.workflow
     const approval = workflow?.approval
     if (!workflow || !approval || workflow.decisionPending) return
 
-    const isRejecting = approval.choice === 'reject'
-    if (isRejecting && !approval.rejectionReason?.trim()) {
+    const isRejecting = forcedStatus === 'REJECTED' || approval.choice === 'reject'
+    const rejectionReason = forcedRejectionReason.trim() || approval.rejectionReason?.trim() || ''
+    if (isRejecting && !rejectionReason) {
       updateWorkflowMessage(index, { error: 'Tell SMAgen what to do instead before submitting.' })
       return
     }
@@ -436,7 +436,7 @@ export function useWorkflowRuntime({
         try {
           await api.decideApproval(approvalId, {
             status,
-            ...(isRejecting ? { rejectionReason: approval.rejectionReason.trim() } : {}),
+            ...(isRejecting ? { rejectionReason } : {}),
           })
           decisionRecorded = true
         } catch (error) {
@@ -444,17 +444,27 @@ export function useWorkflowRuntime({
         }
       }
 
-      if (status === 'APPROVED') {
+      if (status === 'APPROVED' && !decisionRecorded) {
         if (!runId) throw new ApiError('This approval is missing its workflow run ID.')
         try {
           await api.resumeWorkflow(runId)
         } catch (resumeError) {
           if (resumeError?.status !== 409 && !decisionRecorded) throw resumeError
         }
+      } else if (status === 'REJECTED' && !decisionRecorded) {
+        // Virtual approvals can occur when the task exists but its approval
+        // record was not returned yet. Resume so the scheduler can continue
+        // after the task-level rejection is applied by the backend.
+        if (!runId) throw new ApiError('This approval is missing its workflow run ID.')
+        try {
+          await api.resumeWorkflow(runId)
+        } catch (resumeError) {
+          if (resumeError?.status !== 409) throw resumeError
+        }
       }
 
       updateWorkflowMessage(index, {
-        status: status === 'APPROVED' ? 'RUNNING' : 'REJECTED',
+        status: 'RUNNING',
         approval: null,
         decisionPending: false,
         error: '',
