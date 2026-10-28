@@ -10,16 +10,16 @@
       class="stream-subactivity-text"
       :class="{
         'is-live': isWorkflowLive(workflow),
-        'is-clickable': canExpandCurrentWorkflow(workflow),
-        'is-expanded': isCurrentTaskExpanded(workflow),
+        'is-clickable': canToggleWorkflowActivity(workflow),
+        'is-expanded': isWorkflowActivityExpanded(workflow),
       }"
-      :role="canExpandCurrentWorkflow(workflow) ? 'button' : undefined"
-      :tabindex="canExpandCurrentWorkflow(workflow) ? 0 : undefined"
-      :aria-expanded="canExpandCurrentWorkflow(workflow) ? isCurrentTaskExpanded(workflow) : undefined"
-      :aria-label="canExpandCurrentWorkflow(workflow) ? `Show details for ${getCurrentWorkflowTask(workflow)?.title || 'current workflow'}` : undefined"
+      :role="canToggleWorkflowActivity(workflow) ? 'button' : undefined"
+      :tabindex="canToggleWorkflowActivity(workflow) ? 0 : undefined"
+      :aria-expanded="canToggleWorkflowActivity(workflow) ? isWorkflowActivityExpanded(workflow) : undefined"
+      :aria-label="canToggleWorkflowActivity(workflow) ? `${isWorkflowActivityExpanded(workflow) ? 'Hide' : 'Show'} workflow activity` : undefined"
       aria-live="polite"
-      @click="toggleCurrentTask(workflow)"
-      @keydown="handleCurrentTaskKeydown($event, workflow)"
+      @click="toggleWorkflowActivity(workflow)"
+      @keydown="handleWorkflowActivityKeydown($event, workflow)"
     >
       <span class="stream-current-task-icon" aria-hidden="true">
         <component :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
@@ -29,16 +29,16 @@
         <span>.</span><span>.</span><span>.</span>
       </span>
       <IconChevronDown
-        v-if="canExpandCurrentWorkflow(workflow)"
+        v-if="canToggleWorkflowActivity(workflow)"
         :size="13"
         class="stream-current-task-chevron"
-        :class="{ 'rotate-180': isCurrentTaskExpanded(workflow) }"
+        :class="{ 'rotate-180': isWorkflowActivityExpanded(workflow) }"
         aria-hidden="true"
       />
     </div>
 
     <div
-      v-if="isCurrentTaskExpanded(workflow)"
+      v-if="isWorkflowActivityExpanded(workflow)"
       class="stream-current-task-details"
       aria-live="polite"
     >
@@ -56,39 +56,7 @@
       <p v-if="getCurrentWorkflowTask(workflow)?.instruction" class="stream-current-task-instruction">
         {{ getCurrentWorkflowTask(workflow).instruction }}
       </p>
-      <div v-if="getCurrentWorkflowTask(workflow)" class="stream-current-task-meta">
-        <span class="stream-current-task-tool">
-          <component :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="12" />
-          {{ formatTaskTool(getCurrentWorkflowTask(workflow)) }}
-        </span>
-        <span v-if="getCurrentWorkflowTask(workflow).node_key || getCurrentWorkflowTask(workflow).nodeKey">
-          {{ getCurrentWorkflowTask(workflow).node_key || getCurrentWorkflowTask(workflow).nodeKey }}
-        </span>
-      </div>
-      <details v-if="getCurrentWorkflowTask(workflow) && formatTaskInput(getCurrentWorkflowTask(workflow))" class="stream-current-task-input">
-        <summary>Task input</summary>
-        <pre><code>{{ formatTaskInput(getCurrentWorkflowTask(workflow)) }}</code></pre>
-      </details>
     </div>
-
-    <section
-      v-if="isWorkflowLive(workflow) && getLiveActivities(workflow).length"
-      class="stream-live-activity"
-      aria-live="polite"
-      aria-label="Live workflow activity"
-    >
-      <div class="stream-live-activity-head">
-        <span class="stream-live-indicator active"></span>
-        <strong>Live activity</strong>
-        <span>{{ getActivityCount(workflow) }} events</span>
-      </div>
-      <div v-for="activity in getLiveActivities(workflow)" :key="activity.id" class="stream-live-activity-row">
-        <span class="stream-activity-status" :class="activity.statusClass"></span>
-        <span class="stream-activity-source">{{ activity.source }}</span>
-        <span class="stream-activity-message">{{ activity.message }}</span>
-        <time v-if="activity.time" class="stream-activity-time">{{ activity.time }}</time>
-      </div>
-    </section>
 
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
       <button type="button" class="stream-steps-toggle" @click="$emit('toggle-stream')">
@@ -587,12 +555,6 @@ const getTaskIcon = (task) => {
   return IconLoader2
 }
 
-const formatTaskTool = (task) => {
-  const tool = getTaskTool(task)
-  if (tool === 'workflow') return 'Workflow task'
-  return tool.replace(/([a-z])([A-Z])/g, '$1 $2')
-}
-
 const formatTaskStatus = (task) => {
   const status = getTaskStatus(task)
   return status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
@@ -601,17 +563,6 @@ const formatTaskStatus = (task) => {
 const formatWorkflowStatus = (workflow) => {
   const status = String(workflow?.status || 'STARTING').toUpperCase()
   return status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
-}
-
-const formatTaskInput = (task) => {
-  const input = task?.tool_input ?? task?.toolInput ?? task?.input
-  if (input === undefined || input === null || input === '') return ''
-  if (typeof input === 'string') return input
-  try {
-    return JSON.stringify(input, null, 2)
-  } catch {
-    return String(input)
-  }
 }
 
 const copied = ref(false)
@@ -624,31 +575,31 @@ const reviewPanelWidth = ref(null)
 const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
 const showAllEditedFiles = ref(false)
-const currentTaskExpanded = ref(false)
+const workflowActivityExpanded = ref(false)
 const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
 const MAX_VISIBLE_EDITED_FILES = 3
 
-const canExpandCurrentWorkflow = (workflow) => Boolean(
+const canToggleWorkflowActivity = (workflow) => Boolean(
   getCurrentWorkflowTask(workflow) || isWorkflowLive(workflow),
 )
 
-const isCurrentTaskExpanded = (workflow) => Boolean(
-  canExpandCurrentWorkflow(workflow) && currentTaskExpanded.value,
+const isWorkflowActivityExpanded = (workflow) => Boolean(
+  canToggleWorkflowActivity(workflow) && workflowActivityExpanded.value,
 )
 
-const toggleCurrentTask = (workflow) => {
-  if (!canExpandCurrentWorkflow(workflow)) return
-  currentTaskExpanded.value = !currentTaskExpanded.value
+const toggleWorkflowActivity = (workflow) => {
+  if (!canToggleWorkflowActivity(workflow)) return
+  workflowActivityExpanded.value = !workflowActivityExpanded.value
 }
 
-const handleCurrentTaskKeydown = (event, workflow) => {
-  if (!canExpandCurrentWorkflow(workflow)) return
+const handleWorkflowActivityKeydown = (event, workflow) => {
+  if (!canToggleWorkflowActivity(workflow)) return
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
-  toggleCurrentTask(workflow)
+  toggleWorkflowActivity(workflow)
 }
 
 const getReviewPanelWidth = () => reviewPanelWidth.value || (window.innerWidth <= 640 ? window.innerWidth : Math.min(840, window.innerWidth * 0.52))
@@ -706,65 +657,6 @@ const resizeReviewPanelWithKeyboard = (event) => {
   event.preventDefault()
   reviewPanelWidth.value = clampReviewPanelWidth(nextWidth)
 }
-
-const getRawActivities = (workflow) => {
-  const sources = [workflow?.logs, workflow?.activity_logs, workflow?.activityLogs, workflow?.events, workflow?.telemetry]
-  for (const source of sources) {
-    if (Array.isArray(source) && source.length) return source
-    if (Array.isArray(source?.items) && source.items.length) return source.items
-    if (Array.isArray(source?.data) && source.data.length) return source.data
-  }
-  return []
-}
-
-const formatActivityName = (value) => String(value || 'Activity')
-  .replace(/[_-]+/g, ' ')
-  .replace(/\b\w/g, (letter) => letter.toUpperCase())
-
-const formatActivityMessage = (activity) => {
-  const eventName = activity?.event || activity?.event_name || activity?.eventName || activity?.type || activity?.kind
-  const payload = activity?.payload ?? activity?.details
-  const message = activity?.message || activity?.description
-  if (typeof message === 'string' && message.trim() && message !== eventName) return message
-  if (typeof payload === 'object') {
-    const payloadMessage = payload.message || payload.error || payload.reason || payload.status
-    if (payloadMessage) return `${formatActivityName(eventName)}: ${typeof payloadMessage === 'string' ? payloadMessage : JSON.stringify(payloadMessage)}`
-  }
-  if (message && typeof message !== 'object') return String(message)
-  return formatActivityName(eventName)
-}
-
-const getLiveActivities = (workflow) => getRawActivities(workflow)
-  .map((activity, index) => {
-    const eventName = activity?.event || activity?.event_name || activity?.eventName || activity?.type || activity?.kind || ''
-    const eventText = typeof eventName === 'string' ? eventName : ''
-    const rawLevel = String(activity?.level || activity?.severity || '').toLowerCase()
-    const searchable = `${eventText} ${activity?.message || ''}`.toLowerCase()
-    const statusClass = rawLevel === 'error' || /failed|error|exception/.test(searchable)
-      ? 'error'
-      : (rawLevel === 'warn' || /approval|awaiting|warning/.test(searchable) ? 'warning' : 'success')
-    const timestamp = activity?.created_at || activity?.createdAt || activity?.timestamp || activity?.occurred_at || activity?.time
-    let time = ''
-    if (timestamp) {
-      const date = new Date(timestamp)
-      if (!Number.isNaN(date.getTime())) {
-        time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-      }
-    }
-    return {
-      id: activity?.id || activity?.log_id || activity?.logId || `${eventName || 'activity'}-${index}`,
-      source: activity?.source || activity?.service || activity?.component || eventText.split('_')[0]?.toUpperCase() || 'SYSTEM',
-      message: formatActivityMessage(activity),
-      statusClass,
-      time,
-      timestamp: timestamp ? new Date(timestamp).getTime() : index,
-    }
-  })
-  .sort((left, right) => left.timestamp - right.timestamp)
-  .slice(-5)
-  .reverse()
-
-const getActivityCount = (workflow) => getRawActivities(workflow).length
 
 const parseValue = (value) => {
   if (!value) return null
@@ -866,7 +758,17 @@ const getTaskResultPaths = (task) => {
     'output',
   ])
   const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input'])
-  return [...findResultPaths(output, [], Number.POSITIVE_INFINITY), ...findResultPaths(input, [], Number.POSITIVE_INFINITY)]
+  // Prefer paths reported by the tool after execution. The planner input can
+  // contain an outdated or partially-prefixed path, which previously caused
+  // the completion response to show the same file twice (for example, once
+  // under `Product/services` and again under `Product/controllers`). Use the
+  // original input only when the tool did not return any path.
+  const outputPaths = findResultPaths(output, [], Number.POSITIVE_INFINITY)
+  const sourcePaths = outputPaths.length
+    ? outputPaths
+    : findResultPaths(input, [], Number.POSITIVE_INFINITY)
+
+  return sourcePaths
     .map((path) => String(path).trim())
     .filter((path, index, paths) => path && paths.indexOf(path) === index)
 }
@@ -1122,12 +1024,46 @@ const highlightReviewLine = (rawLine, filename = '') => {
     return result || '&nbsp;'
   }
 
-  // JS/TS
-  let line = escapeReviewHtml(rawLine)
-  line = line.replace(/(["'`])(?:(?=(\\?))\2.)*?\1/g, (m) => `<span class="tok-string">${m}</span>`)
-  line = line.replace(/\b(\d+(?:\.\d+)?)\b/g, (m) => `<span class="tok-num">${m}</span>`)
-  line = line.replace(/\b(import|export|from|default|const|let|var|function|return|if|else|true|false|null|undefined|async|await|class|new|this|typeof|def|elif|lambda|is|not|and|or|pass|raise|public|private|protected|static|final|interface|SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\b/g, (m) => `<span class="tok-keyword">${m}</span>`)
-  line = line.replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g, (m) => `<span class="tok-fn">${m}</span>`)
+  // JS/TS. Protect tokens before escaping and highlighting the rest of the
+  // line. Running regex replacements over already-generated span markup turns
+  // source code such as `status(400)` into visible fragments like
+  // `class="tok-num">400`, which corrupts the code review display.
+  const tokens = []
+  const addToken = (html) => {
+    // Use a placeholder without decimal digits so the number highlighter does
+    // not process the placeholder itself.
+    const id = `\uE000${String.fromCharCode(0xE100 + tokens.length)}\uE001`
+    tokens.push(html)
+    return id
+  }
+
+  let source = String(rawLine)
+  source = source.replace(/(["'`])(?:(?=(\\?))\2.)*?\1/g, (m) => (
+    addToken(`<span class="tok-string">${escapeReviewHtml(m)}</span>`)
+  ))
+  source = source.replace(/(?:\/\/|#|--\s)[^\n]*/g, (m) => (
+    addToken(`<span class="tok-comment">${escapeReviewHtml(m)}</span>`)
+  ))
+
+  // Tokenize the remaining source before escaping it. If highlighting runs
+  // after escaping, an apostrophe becomes `&#39;` and the numeric token pass
+  // can incorrectly rewrite the `39` into markup.
+  source = source.replace(/\b(\d+(?:\.\d+)?)\b/g, (m) => (
+    addToken(`<span class="tok-num">${escapeReviewHtml(m)}</span>`)
+  ))
+  source = source.replace(/\b(import|export|from|default|const|let|var|function|return|if|else|true|false|null|undefined|async|await|class|new|this|typeof|def|elif|lambda|is|not|and|or|pass|raise|public|private|protected|static|final|interface|SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\b/g, (m) => (
+    addToken(`<span class="tok-keyword">${escapeReviewHtml(m)}</span>`)
+  ))
+  source = source.replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g, (m) => (
+    addToken(`<span class="tok-fn">${escapeReviewHtml(m)}</span>`)
+  ))
+
+  let line = escapeReviewHtml(source)
+  tokens.forEach((tokenHtml, index) => {
+    const placeholder = `\uE000${String.fromCharCode(0xE100 + index)}\uE001`
+    line = line.split(placeholder).join(tokenHtml)
+  })
+
   return line || '&nbsp;'
 }
 
@@ -1588,6 +1524,50 @@ const highlightCode = (value) => {
 }
 
 .stream-plan-text :deep(p) {
+  margin: 0 0 8px;
+}
+
+.stream-plan-text :deep(.md-h1),
+.stream-plan-text :deep(.md-h2),
+.stream-plan-text :deep(.md-h3),
+.stream-plan-text :deep(.md-h4),
+.stream-plan-text :deep(.md-h5),
+.stream-plan-text :deep(.md-h6) {
+  margin: 14px 0 7px;
+  color: #27272a;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.stream-plan-text :deep(.md-h1) { font-size: 24px; }
+.stream-plan-text :deep(.md-h2) { font-size: 21px; }
+.stream-plan-text :deep(.md-h3) { font-size: 18px; }
+.stream-plan-text :deep(.md-h4) { font-size: 16px; }
+.stream-plan-text :deep(.md-h5),
+.stream-plan-text :deep(.md-h6) { font-size: 15px; }
+
+.stream-plan-text :deep(.md-list) {
+  margin: 7px 0 10px;
+  padding-left: 22px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.stream-plan-text :deep(.md-list li) {
+  margin: 3px 0;
+}
+
+.stream-plan-text :deep(.code-block) {
+  margin: 10px 0 12px;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.stream-plan-text :deep(.code-block pre) {
+  max-height: 280px;
+  overflow: auto;
   margin: 0;
 }
 
@@ -1647,33 +1627,30 @@ const highlightCode = (value) => {
 }
 
 .stream-current-task-details {
-  max-width: 620px;
+  width: calc(100% - 21px);
+  max-width: 1240px;
   margin: 2px 0 12px 21px;
-  padding: 11px 13px;
-  border: 1px solid #e4e4e7;
-  border-radius: 9px;
+  padding: 22px 27px;
+  border: 2px solid #e4e4e7;
+  border-radius: 18px;
   background: #fafafa;
   color: #52525b;
   animation: task-details-enter 180ms ease-out both;
 }
 
-.stream-current-task-details-head,
-.stream-current-task-meta {
+.stream-current-task-details-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.stream-current-task-details-head {
   justify-content: space-between;
-  margin-bottom: 7px;
+  gap: 12px;
+  margin-bottom: 18px;
   color: #52525b;
-  font-size: 11.5px;
+  font-size: 22px;
 }
 
 .stream-current-task-status {
   color: #a1a1aa;
-  font-size: 10.5px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1681,56 +1658,17 @@ const highlightCode = (value) => {
 
 .stream-current-task-title {
   color: #27272a;
-  font-size: 13px;
+  font-size: 25px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .stream-current-task-instruction {
-  margin: 5px 0 8px;
+  margin: 5px 0 0;
   color: #71717a;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
-}
-
-.stream-current-task-meta {
-  color: #a1a1aa;
-  font-size: 10.5px;
-}
-
-.stream-current-task-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #71717a;
-  font-weight: 600;
-}
-
-.stream-current-task-input {
-  margin-top: 9px;
-  border-top: 1px solid #e4e4e7;
-  padding-top: 8px;
-  font-size: 11px;
-}
-
-.stream-current-task-input summary {
-  cursor: pointer;
-  color: #71717a;
-  font-weight: 600;
-}
-
-.stream-current-task-input pre {
-  max-height: 180px;
-  margin: 7px 0 0;
-  overflow: auto;
-  padding: 8px;
-  border-radius: 6px;
-  background: #f4f4f5;
-  color: #52525b;
-  font-size: 10.5px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 @keyframes task-details-enter {
@@ -1827,93 +1765,6 @@ const highlightCode = (value) => {
   border: 1px solid #dbeafe;
   border-radius: 10px;
   background: #f8fbff;
-}
-
-.stream-live-activity.completed {
-  border-color: #dcfce7;
-  background: #fbfffc;
-}
-
-.stream-live-activity-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #334155;
-  font-size: 11px;
-  margin-bottom: 7px;
-}
-
-.stream-live-activity-head strong {
-  font-size: 11.5px;
-}
-
-.stream-live-activity-head > span:last-child {
-  margin-left: auto;
-  color: #94a3b8;
-}
-
-.stream-live-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #94a3b8;
-}
-
-.stream-live-indicator.active {
-  background: #2563eb;
-  box-shadow: 0 0 0 3px #dbeafe;
-  animation: live-pulse 1.4s ease-in-out infinite;
-}
-
-.stream-live-activity-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 5px 0;
-  border-top: 1px solid #eef2f7;
-  color: #475569;
-  font-size: 11.5px;
-}
-
-.stream-activity-status {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #22c55e;
-}
-
-.stream-activity-status.warning { background: #f59e0b; }
-.stream-activity-status.error { background: #ef4444; }
-
-.stream-activity-source {
-  flex: 0 0 auto;
-  min-width: 66px;
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.stream-activity-message {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.stream-activity-time {
-  flex: 0 0 auto;
-  margin-left: auto;
-  color: #94a3b8;
-  font-size: 10px;
-}
-
-@keyframes live-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
 }
 
 .stream-steps-preview {
