@@ -8,13 +8,67 @@
     <div
       v-if="getCurrentWorkingText(workflow)"
       class="stream-subactivity-text"
-      :class="{ 'is-live': isWorkflowLive(workflow) }"
+      :class="{
+        'is-live': isWorkflowLive(workflow),
+        'is-clickable': canExpandCurrentWorkflow(workflow),
+        'is-expanded': isCurrentTaskExpanded(workflow),
+      }"
+      :role="canExpandCurrentWorkflow(workflow) ? 'button' : undefined"
+      :tabindex="canExpandCurrentWorkflow(workflow) ? 0 : undefined"
+      :aria-expanded="canExpandCurrentWorkflow(workflow) ? isCurrentTaskExpanded(workflow) : undefined"
+      :aria-label="canExpandCurrentWorkflow(workflow) ? `Show details for ${getCurrentWorkflowTask(workflow)?.title || 'current workflow'}` : undefined"
       aria-live="polite"
+      @click="toggleCurrentTask(workflow)"
+      @keydown="handleCurrentTaskKeydown($event, workflow)"
     >
+      <span class="stream-current-task-icon" aria-hidden="true">
+        <component :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
+      </span>
       <span class="stream-subactivity-label">{{ getCurrentWorkingText(workflow) }}</span>
       <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
         <span>.</span><span>.</span><span>.</span>
       </span>
+      <IconChevronDown
+        v-if="canExpandCurrentWorkflow(workflow)"
+        :size="13"
+        class="stream-current-task-chevron"
+        :class="{ 'rotate-180': isCurrentTaskExpanded(workflow) }"
+        aria-hidden="true"
+      />
+    </div>
+
+    <div
+      v-if="isCurrentTaskExpanded(workflow)"
+      class="stream-current-task-details"
+      aria-live="polite"
+    >
+      <div class="stream-current-task-details-head">
+        <strong>{{ getCurrentWorkflowTask(workflow) ? 'About this task' : 'About this workflow' }}</strong>
+        <span class="stream-current-task-status">
+          {{ getCurrentWorkflowTask(workflow) ? formatTaskStatus(getCurrentWorkflowTask(workflow)) : formatWorkflowStatus(workflow) }}
+        </span>
+      </div>
+      <div class="stream-current-task-title">
+        {{ getCurrentWorkflowTask(workflow)
+          ? getCurrentWorkflowTask(workflow).title || getCurrentWorkflowTask(workflow).instruction || 'Workflow task'
+          : workflow.goalPrompt || workflow.goal_prompt || workflow.goal || 'Preparing workflow' }}
+      </div>
+      <p v-if="getCurrentWorkflowTask(workflow)?.instruction" class="stream-current-task-instruction">
+        {{ getCurrentWorkflowTask(workflow).instruction }}
+      </p>
+      <div v-if="getCurrentWorkflowTask(workflow)" class="stream-current-task-meta">
+        <span class="stream-current-task-tool">
+          <component :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="12" />
+          {{ formatTaskTool(getCurrentWorkflowTask(workflow)) }}
+        </span>
+        <span v-if="getCurrentWorkflowTask(workflow).node_key || getCurrentWorkflowTask(workflow).nodeKey">
+          {{ getCurrentWorkflowTask(workflow).node_key || getCurrentWorkflowTask(workflow).nodeKey }}
+        </span>
+      </div>
+      <details v-if="getCurrentWorkflowTask(workflow) && formatTaskInput(getCurrentWorkflowTask(workflow))" class="stream-current-task-input">
+        <summary>Task input</summary>
+        <pre><code>{{ formatTaskInput(getCurrentWorkflowTask(workflow)) }}</code></pre>
+      </details>
     </div>
 
     <section
@@ -430,7 +484,9 @@ import {
   IconCopy,
   IconDots,
   IconExternalLink,
+  IconFile,
   IconFileDiff,
+  IconFolder,
   IconLayoutSidebarRight,
   IconLoader2,
   IconMaximize,
@@ -441,6 +497,8 @@ import {
   IconTerminal2,
   IconThumbDown,
   IconThumbUp,
+  IconWorld,
+  IconCode,
   IconX,
   IconZoomIn,
   IconZoomOut,
@@ -505,6 +563,57 @@ const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(Strin
 
 const isWorkflowLive = (workflow) => ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(String(workflow?.status || '').toUpperCase())
 
+const getTaskStatus = (task) => String(
+  task?.status || task?.task_status || task?.state || 'PENDING',
+).toUpperCase()
+
+const getCurrentWorkflowTask = (workflow) => {
+  const tasks = workflow?.tasks || []
+  return tasks.find((task) => getTaskStatus(task) === 'RUNNING')
+    || tasks.find((task) => getTaskStatus(task) === 'AWAITING_APPROVAL')
+    || tasks.find((task) => ['QUEUED', 'PENDING', 'WAITING'].includes(getTaskStatus(task)))
+    || null
+}
+
+const getTaskTool = (task) => String(task?.assigned_tool || task?.assignedTool || 'workflow').trim()
+
+const getTaskIcon = (task) => {
+  const tool = getTaskTool(task).toLowerCase()
+  if (tool === 'filemanager' || tool.includes('file')) return IconFolder
+  if (tool === 'executecommand' || tool.includes('command') || tool.includes('terminal')) return IconTerminal2
+  if (tool === 'httprequester' || tool.includes('http') || tool.includes('request')) return IconWorld
+  if (tool === 'imagegenerator' || tool.includes('image')) return IconFile
+  if (tool === 'workflow' || tool === 'planner' || tool === 'scheduler') return IconCode
+  return IconLoader2
+}
+
+const formatTaskTool = (task) => {
+  const tool = getTaskTool(task)
+  if (tool === 'workflow') return 'Workflow task'
+  return tool.replace(/([a-z])([A-Z])/g, '$1 $2')
+}
+
+const formatTaskStatus = (task) => {
+  const status = getTaskStatus(task)
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+const formatWorkflowStatus = (workflow) => {
+  const status = String(workflow?.status || 'STARTING').toUpperCase()
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+const formatTaskInput = (task) => {
+  const input = task?.tool_input ?? task?.toolInput ?? task?.input
+  if (input === undefined || input === null || input === '') return ''
+  if (typeof input === 'string') return input
+  try {
+    return JSON.stringify(input, null, 2)
+  } catch {
+    return String(input)
+  }
+}
+
 const copied = ref(false)
 const copiedCode = ref(false)
 const reaction = ref(null)
@@ -515,11 +624,32 @@ const reviewPanelWidth = ref(null)
 const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
 const showAllEditedFiles = ref(false)
+const currentTaskExpanded = ref(false)
 const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
 const MAX_VISIBLE_EDITED_FILES = 3
+
+const canExpandCurrentWorkflow = (workflow) => Boolean(
+  getCurrentWorkflowTask(workflow) || isWorkflowLive(workflow),
+)
+
+const isCurrentTaskExpanded = (workflow) => Boolean(
+  canExpandCurrentWorkflow(workflow) && currentTaskExpanded.value,
+)
+
+const toggleCurrentTask = (workflow) => {
+  if (!canExpandCurrentWorkflow(workflow)) return
+  currentTaskExpanded.value = !currentTaskExpanded.value
+}
+
+const handleCurrentTaskKeydown = (event, workflow) => {
+  if (!canExpandCurrentWorkflow(workflow)) return
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  toggleCurrentTask(workflow)
+}
 
 const getReviewPanelWidth = () => reviewPanelWidth.value || (window.innerWidth <= 640 ? window.innerWidth : Math.min(840, window.innerWidth * 0.52))
 const getReviewPanelMaxWidth = () => Math.max(REVIEW_PANEL_MIN_WIDTH, Math.min(REVIEW_PANEL_MAX_WIDTH, window.innerWidth - 48))
@@ -1485,6 +1615,135 @@ const highlightCode = (value) => {
   transition: color 180ms ease, opacity 180ms ease;
 }
 
+.stream-subactivity-text.is-clickable {
+  cursor: pointer;
+  user-select: none;
+  padding: 3px 5px;
+  margin-left: -5px;
+  border-radius: 6px;
+  transition: background-color 160ms ease, color 180ms ease, opacity 180ms ease;
+}
+
+.stream-subactivity-text.is-clickable:hover,
+.stream-subactivity-text.is-clickable:focus-visible {
+  outline: none;
+  background: #f4f4f5;
+}
+
+.stream-current-task-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: #a1a1aa;
+}
+
+.stream-current-task-chevron {
+  flex: 0 0 auto;
+  color: #a1a1aa;
+  transition: transform 180ms ease;
+}
+
+.stream-current-task-details {
+  max-width: 620px;
+  margin: 2px 0 12px 21px;
+  padding: 11px 13px;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  background: #fafafa;
+  color: #52525b;
+  animation: task-details-enter 180ms ease-out both;
+}
+
+.stream-current-task-details-head,
+.stream-current-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stream-current-task-details-head {
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: #52525b;
+  font-size: 11.5px;
+}
+
+.stream-current-task-status {
+  color: #a1a1aa;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stream-current-task-title {
+  color: #27272a;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.stream-current-task-instruction {
+  margin: 5px 0 8px;
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stream-current-task-meta {
+  color: #a1a1aa;
+  font-size: 10.5px;
+}
+
+.stream-current-task-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #71717a;
+  font-weight: 600;
+}
+
+.stream-current-task-input {
+  margin-top: 9px;
+  border-top: 1px solid #e4e4e7;
+  padding-top: 8px;
+  font-size: 11px;
+}
+
+.stream-current-task-input summary {
+  cursor: pointer;
+  color: #71717a;
+  font-weight: 600;
+}
+
+.stream-current-task-input pre {
+  max-height: 180px;
+  margin: 7px 0 0;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 6px;
+  background: #f4f4f5;
+  color: #52525b;
+  font-size: 10.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@keyframes task-details-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .stream-subactivity-text.is-live {
   color: #8f8f99;
 }
@@ -1556,7 +1815,8 @@ const highlightCode = (value) => {
 @media (prefers-reduced-motion: reduce) {
   .stream-subactivity-text,
   .stream-subactivity-text.is-live .stream-subactivity-label,
-  .stream-subactivity-dots span {
+  .stream-subactivity-dots span,
+  .stream-current-task-details {
     animation: none;
   }
 }
