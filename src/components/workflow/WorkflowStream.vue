@@ -1,5 +1,5 @@
 <template>
-  <div class="workflow-antigravity-stream">
+  <div ref="workflowStreamRef" class="workflow-antigravity-stream">
     <div class="stream-elapsed-header">{{ getElapsedText(workflow) }}</div>
     <hr class="stream-hairline-divider" />
 
@@ -18,7 +18,7 @@
       :aria-expanded="canToggleWorkflowActivity(workflow) ? isWorkflowActivityExpanded(workflow) : undefined"
       :aria-label="canToggleWorkflowActivity(workflow) ? `${isWorkflowActivityExpanded(workflow) ? 'Hide' : 'Show'} workflow activity` : undefined"
       aria-live="polite"
-      @click="toggleWorkflowActivity(workflow)"
+      @click.stop="toggleWorkflowActivity(workflow)"
       @keydown="handleWorkflowActivityKeydown($event, workflow)"
     >
       <span class="stream-current-task-icon" aria-hidden="true">
@@ -59,7 +59,7 @@
     </div>
 
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
-      <button type="button" class="stream-steps-toggle" @click="$emit('toggle-stream')">
+      <button type="button" class="stream-steps-toggle" @click.stop="toggleStream()">
         <span>{{ workflow.isStreamOpen ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
         <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen }" />
       </button>
@@ -69,7 +69,7 @@
           v-for="(step, stepIndex) in getWorkflowSteps(workflow)"
           :key="step.id || stepIndex"
           class="stream-step-item"
-          @click="$emit('toggle-step', step.id || stepIndex)"
+          @click.stop="toggleStep(step.id || stepIndex)"
         >
           <div class="stream-step-row-head">
             <span class="stream-step-icon" :class="step.statusClass">
@@ -211,7 +211,7 @@
             type="button"
             class="completion-edit-file-list-toggle"
             :aria-expanded="showAllEditedFiles"
-            @click="showAllEditedFiles = !showAllEditedFiles"
+            @click.stop="toggleEditedFiles()"
           >
             <span>{{ showAllEditedFiles ? 'Show fewer files' : `Show ${editedFiles.length - MAX_VISIBLE_EDITED_FILES} more files` }}</span>
             <IconChevronDown :size="16" :class="{ 'rotate-180': showAllEditedFiles }" />
@@ -441,7 +441,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   IconArrowRight,
   IconArrowBackUp,
@@ -517,7 +517,7 @@ const props = defineProps({
   },
 })
 
-defineEmits([
+const emit = defineEmits([
   'toggle-stream',
   'toggle-step',
   'skip-approval',
@@ -576,11 +576,56 @@ const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
 const showAllEditedFiles = ref(false)
 const workflowActivityExpanded = ref(false)
+const workflowStreamRef = ref(null)
 const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
 const MAX_VISIBLE_EDITED_FILES = 3
+
+const getWorkflowScrollContainer = () => {
+  let element = workflowStreamRef.value?.parentElement || null
+
+  while (element && element !== document.body) {
+    const styles = window.getComputedStyle(element)
+    if (/(auto|scroll|overlay)/.test(styles.overflowY) && element.scrollHeight > element.clientHeight) {
+      return element
+    }
+    element = element.parentElement
+  }
+
+  return document.scrollingElement || document.documentElement
+}
+
+const preserveWorkflowViewport = (mutate) => {
+  const stream = workflowStreamRef.value
+  if (!stream) {
+    mutate()
+    return
+  }
+
+  const scrollContainer = getWorkflowScrollContainer()
+  const isDocumentScroll = scrollContainer === document.scrollingElement
+    || scrollContainer === document.documentElement
+  const previousScrollTop = isDocumentScroll ? window.scrollY : scrollContainer.scrollTop
+  const previousStreamTop = stream.getBoundingClientRect().top
+
+  mutate()
+
+  nextTick(() => {
+    window.requestAnimationFrame(() => {
+      const streamTopDelta = stream.getBoundingClientRect().top - previousStreamTop
+      if (Math.abs(streamTopDelta) < 0.5) return
+
+      const nextScrollTop = Math.max(0, previousScrollTop + streamTopDelta)
+      if (isDocumentScroll) {
+        window.scrollTo({ top: nextScrollTop, behavior: 'auto' })
+      } else {
+        scrollContainer.scrollTop = nextScrollTop
+      }
+    })
+  })
+}
 
 const canToggleWorkflowActivity = (workflow) => Boolean(
   getCurrentWorkflowTask(workflow) || isWorkflowLive(workflow),
@@ -592,7 +637,23 @@ const isWorkflowActivityExpanded = (workflow) => Boolean(
 
 const toggleWorkflowActivity = (workflow) => {
   if (!canToggleWorkflowActivity(workflow)) return
-  workflowActivityExpanded.value = !workflowActivityExpanded.value
+  preserveWorkflowViewport(() => {
+    workflowActivityExpanded.value = !workflowActivityExpanded.value
+  })
+}
+
+const toggleStream = () => {
+  preserveWorkflowViewport(() => emit('toggle-stream'))
+}
+
+const toggleStep = (stepId) => {
+  preserveWorkflowViewport(() => emit('toggle-step', stepId))
+}
+
+const toggleEditedFiles = () => {
+  preserveWorkflowViewport(() => {
+    showAllEditedFiles.value = !showAllEditedFiles.value
+  })
 }
 
 const handleWorkflowActivityKeydown = (event, workflow) => {
@@ -1293,10 +1354,12 @@ const copyReviewCode = async (workflow) => {
 }
 
 const openReview = (workflow, selectedFile = null) => {
-  const files = workflow === props.workflow ? editedFiles.value : getEditedFileItems(workflow)
-  reviewTaskId.value = selectedFile?.taskId || files[0]?.taskId || null
-  reviewPanelCollapsed.value = false
-  reviewOpen.value = true
+  preserveWorkflowViewport(() => {
+    const files = workflow === props.workflow ? editedFiles.value : getEditedFileItems(workflow)
+    reviewTaskId.value = selectedFile?.taskId || files[0]?.taskId || null
+    reviewPanelCollapsed.value = false
+    reviewOpen.value = true
+  })
 }
 
 const toggleReview = (workflow) => {
@@ -1324,7 +1387,9 @@ const resetReviewZoom = () => {
 }
 
 const closeReview = () => {
-  reviewOpen.value = false
+  preserveWorkflowViewport(() => {
+    reviewOpen.value = false
+  })
 }
 
 const isValidationTask = (task) => {
