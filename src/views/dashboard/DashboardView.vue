@@ -508,13 +508,34 @@ const getWorkflowElapsedText = (workflow) => {
 
 const getWorkflowPlanText = (workflow) => {
   if (!workflow) return ''
-  if (workflow.summary) return workflow.summary
-  if (workflow.plan) return workflow.plan
+  const prompt = String(workflow.goalPrompt || '').replace(/\s+/g, ' ').trim()
+  const summary = String(workflow.summary || workflow.plan || '').replace(/\s+/g, ' ').trim()
+  const detailedSections = /\b(?:target location|folder structure|tech stack specifications|core features|architectural rules|verification requirements)\b/i
+  const source = summary && (!detailedSections.test(summary) && summary.length <= 320)
+    ? summary
+    : prompt || summary
 
-  const prompt = workflow.goalPrompt || ''
-  if (!prompt) return "I'll execute the requested autonomous workflow."
+  if (!source) return "I'll execute the requested autonomous workflow."
 
-  let text = prompt.trim()
+  // Workflow summaries can accidentally contain the entire implementation
+  // prompt. Keep the headline focused on the user's intent instead of showing
+  // folder trees, stack specifications, and all acceptance criteria inline.
+  let text = source
+    .replace(/^plan\s+for:\s*/i, '')
+    .replace(/^act\s+as\s+.+?\.\s*/i, '')
+    .trim()
+
+  const actionStart = text.search(/\b(?:generate|create|build|implement|add|remove|fix|set\s+up|setup|configure|update)\b/i)
+  if (actionStart > 0 && actionStart < 180) {
+    text = text.slice(actionStart)
+  }
+
+  const detailStart = text.search(/\b(?:target location|folder structure|tech stack specifications|core features|architectural rules|verification requirements)\b/i)
+  if (detailStart > 0) {
+    text = text.slice(0, detailStart).trim()
+  }
+
+  text = text.length > 280 ? `${text.slice(0, 277).trimEnd()}…` : text
   if (/^please\s+/i.test(text)) {
     text = "I'll " + text.slice(7).trim()
   } else if (!/^i'll\s+/i.test(text) && !/^i\s+will\s+/i.test(text)) {
@@ -813,9 +834,21 @@ const extractWorkflowDestination = (message) => {
   return ''
 }
 
+const requestsPreviousLocalDestination = (text) => {
+  const value = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!value) return false
+
+  // Do not silently carry a previous Desktop project into an unrelated
+  // workflow. Reuse it only when the user clearly asks to continue in the
+  // existing project or folder.
+  return /\b(?:same|that|this|existing|current|previous)\s+(?:project|folder|directory|workspace)\b/i.test(value)
+    || /\b(?:continue|keep\s+working|work|add|update|modify|extend|install|configure)\b.{0,50}\b(?:in|inside|within|to)\s+(?:the\s+)?(?:same|that|this|existing|current|previous)\s+(?:project|folder|directory|workspace)\b/i.test(value)
+}
+
 const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const directDestination = extractLocalDestination(goalPrompt)
   if (directDestination) return directDestination
+  if (!requestsPreviousLocalDestination(goalPrompt)) return ''
 
   for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
     const message = contextMessages[index]
