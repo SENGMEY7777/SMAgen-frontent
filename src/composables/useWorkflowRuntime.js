@@ -64,7 +64,9 @@ export function useWorkflowRuntime({
     const normalizedStatus = String(status || '').toUpperCase()
     if (!isTerminalWorkflowStatus(normalizedStatus)) return tasks
 
-    const fallbackStatus = normalizedStatus === 'COMPLETED' || normalizedStatus === 'SUCCESS' ? 'SUCCESS' : 'FAILED'
+    const fallbackStatus = normalizedStatus === 'COMPLETED' || normalizedStatus === 'SUCCESS'
+      ? 'SUCCESS'
+      : (normalizedStatus === 'CANCELLED' ? 'SKIPPED' : 'FAILED')
     return (Array.isArray(tasks) ? tasks : []).map((task) => {
       const taskStatus = getWorkflowTaskStatus(task)
       if (['SUCCESS', 'COMPLETED', 'FAILED', 'SKIPPED'].includes(taskStatus)) return task
@@ -126,8 +128,10 @@ export function useWorkflowRuntime({
   const getEventStatus = (eventName, data) => {
     const rawStatus = String(data?.status || data?.runStatus || data?.run_status || '').toUpperCase()
     if (eventName === 'run_finished' || eventName === 'workflow_completed') {
+      if (rawStatus === 'CANCELLED') return 'CANCELLED'
       return rawStatus === 'FAILED' ? 'FAILED' : 'COMPLETED'
     }
+    if (eventName === 'workflow_cancelled' || eventName === 'run_cancelled') return 'CANCELLED'
     if (eventName === 'workflow_failed') return 'FAILED'
     if (eventName === 'approval_required' || eventName === 'node_awaiting_approval') return 'AWAITING_APPROVAL'
     if (eventName === 'run_started' || eventName === 'node_running' || eventName === 'node_retrying') return 'RUNNING'
@@ -270,6 +274,38 @@ export function useWorkflowRuntime({
     }
   }
 
+  const cancelWorkflowRun = async (message) => {
+    const index = currentMessages.value.indexOf(message)
+    const workflow = index === -1 ? null : currentMessages.value[index]?.workflow
+    const runId = String(workflow?.runId || '')
+    if (!workflow || !runId || workflow.cancellationPending) return
+
+    updateWorkflowMessage(index, {
+      status: 'CANCELLING',
+      cancellationPending: true,
+      error: '',
+    })
+
+    try {
+      await api.cancelWorkflow(runId)
+      stopWorkflowPolling(runId)
+      updateWorkflowMessage(index, {
+        status: 'CANCELLED',
+        cancellationPending: false,
+        approval: null,
+        error: '',
+      })
+      await refreshWorkflowMessage(index, runId)
+    } catch (error) {
+      updateWorkflowMessage(index, {
+        status: workflow.status,
+        cancellationPending: false,
+        error: error instanceof ApiError ? error.message : 'Unable to stop this workflow.',
+      })
+      startWorkflowPolling(index, runId)
+    }
+  }
+
   const findWorkflowApproval = async (run, task, runId, existingApproval = null) => {
     let approval = null
     try {
@@ -327,7 +363,9 @@ export function useWorkflowRuntime({
         || failedTask?.error_message
         || failedTask?.errorMessage
         || ''
-      const workflowError = workflowErrorValue ? stringifyWorkflowValue(workflowErrorValue) : ''
+      const workflowError = workflowErrorValue
+        ? stringifyWorkflowValue(workflowErrorValue)
+        : (String(workflowStatus || '').toUpperCase() === 'CANCELLED' ? 'Workflow cancelled by user' : '')
       const awaitingTask = tasks.find((task) => getWorkflowTaskStatus(task) === 'AWAITING_APPROVAL')
       const awaitingApproval = String(workflowStatus || '').toUpperCase() === 'AWAITING_APPROVAL' || Boolean(awaitingTask)
       const existingApproval = currentWorkflow.approval || null
@@ -578,6 +616,7 @@ export function useWorkflowRuntime({
     timerTick,
     startWorkflowPolling,
     stopWorkflowPolling,
+    cancelWorkflowRun,
     refreshWorkflowMessage,
     skipWorkflowApproval,
     submitWorkflowApproval,
