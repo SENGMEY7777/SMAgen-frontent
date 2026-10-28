@@ -160,7 +160,25 @@ export const explainWorkflowError = (value) => {
     nextStep: 'Try again. If the problem continues, open the activity logs and share the technical details.',
   }
 
-  if (/self-healing reflection failed|reflection.*gemini|gemini service is temporarily unavailable/.test(fingerprint)) {
+  if (code === 'LOCAL_DESKTOP_FILE_NOT_FOUND' || code === 'LOCAL_DESKTOP_PATH_NOT_FOUND' || /requested Desktop (?:file|path) was not found|local Desktop path was not found/.test(fingerprint)) {
+    explanation = {
+      title: 'The file was not found',
+      message: 'KAIRO could not find that file in the active Desktop project, so it stopped without deleting anything.',
+      nextStep: 'Check the filename and specify the project-relative path, for example: Workflow/src/views/LoginView.php.',
+    }
+  } else if (code === 'LOCAL_DESKTOP_FILE_AMBIGUOUS' || /more than one Desktop file matches/.test(fingerprint)) {
+    explanation = {
+      title: 'More than one matching file was found',
+      message: 'KAIRO found multiple files with that name and did not guess which one to delete.',
+      nextStep: 'Run the request again with the exact project-relative path, for example: Workflow/src/views/LoginView.php.',
+    }
+  } else if (code === 'LOCAL_DESKTOP_PATH_TYPE_MISMATCH' || /Desktop path is not a file/.test(fingerprint)) {
+    explanation = {
+      title: 'The target type does not match',
+      message: 'The request asked to delete a file, but the selected Desktop path is a folder.',
+      nextStep: 'Specify the exact file path, or say “remove folder” if you intend to delete the folder.',
+    }
+  } else if (/self-healing reflection failed|reflection.*gemini|gemini service is temporarily unavailable/.test(fingerprint)) {
     explanation = {
       title: 'Automatic repair service is unavailable',
       message: 'The workflow task failed, and KAIRO could not ask Gemini for a safe correction because the Gemini service was temporarily unavailable.',
