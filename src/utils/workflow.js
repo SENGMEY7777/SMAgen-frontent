@@ -178,11 +178,11 @@ export const explainWorkflowError = (value) => {
       message: 'The request asked to delete a file, but the selected Desktop path is a folder.',
       nextStep: 'Specify the exact file path, or say “remove folder” if you intend to delete the folder.',
     }
-  } else if (/self-healing reflection failed|reflection.*gemini|gemini service is temporarily unavailable/.test(fingerprint)) {
+  } else if (/self-healing reflection failed|reflection.*gemini|automatic repair was unavailable|gemini service is temporarily unavailable/.test(fingerprint)) {
     explanation = {
-      title: 'Automatic repair service is unavailable',
-      message: 'The workflow task failed, and KAIRO could not ask Gemini for a safe correction because the Gemini service was temporarily unavailable.',
-      nextStep: 'Try the workflow again when the Gemini service is available. The failed task and any dependent tasks were stopped safely.',
+      title: 'The task failed and automatic repair was unavailable',
+      message: 'A workflow task could not finish. KAIRO could not generate a safe correction because the Gemini repair service was temporarily unavailable, so dependent tasks were stopped safely.',
+      nextStep: 'Open View steps to inspect the failed task, then try again when the Gemini service is available.',
     }
   } else if (code === 'LLM_TIMEOUT' || /timed out|timeout/.test(fingerprint)) {
     explanation = {
