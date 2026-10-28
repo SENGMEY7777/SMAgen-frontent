@@ -86,12 +86,6 @@
       </header>
 
       <div v-if="errorMessage" class="zyn-inline-error">{{ errorMessage }}</div>
-      <div v-if="run && isRunFailed && runFailureMessage" class="zyn-run-failure">
-        <div>
-          <strong>Execution failed</strong>
-          <span>{{ runFailureMessage }}</span>
-        </div>
-      </div>
 
       <!-- Main Two-Column Layout -->
       <div class="zyn-editor-body">
@@ -397,11 +391,6 @@
                     </span>
                   </div>
 
-                  <div v-if="isTaskFailed(tasks[0])" class="node-error-details">
-                    <strong>Execution failed</strong>
-                    <span>{{ taskError(tasks[0]) || 'The backend reported a failure without details.' }}</span>
-                  </div>
-
                   <!-- Inline Approval Banner if awaiting approval -->
                   <div
                   v-if="isTaskAwaiting(tasks[0])"
@@ -487,11 +476,6 @@
                     </span>
                   </div>
 
-                  <div v-if="isTaskFailed(tasks[1])" class="node-error-details">
-                    <strong>Execution failed</strong>
-                    <span>{{ taskError(tasks[1]) || 'The backend reported a failure without details.' }}</span>
-                  </div>
-
                   <!-- Inline Approval Banner if awaiting approval -->
                   <div
                   v-if="isTaskAwaiting(tasks[1])"
@@ -549,9 +533,6 @@
                   <div class="mini-node-body">
                     <small>{{ task.assigned_tool }}</small>
                     <p>{{ task.instruction }}</p>
-                    <div v-if="isTaskFailed(task)" class="mini-node-error">
-                      {{ taskError(task) || 'The backend reported a failure without details.' }}
-                    </div>
                   </div>
                   <div
                     v-if="isTaskAwaiting(task)"
@@ -784,34 +765,6 @@ const logs = computed(() => {
 const normalizeStatus = (value) => String(value || '').trim().toUpperCase()
 const taskStatus = (task) => normalizeStatus(task?.status || task?.task_status || task?.state)
 const runStatus = computed(() => normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state))
-const parseTaskPayload = (value) => {
-  if (!value) return null
-  if (typeof value === 'object') return value
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
-}
-const taskError = (task) => {
-  if (!task) return ''
-  const outputPayload = parseTaskPayload(task.output_payload || task.outputPayload)
-  const error = task.error
-    || task.error_message
-    || task.errorMessage
-    || task.failure_reason
-    || task.failureReason
-    || outputPayload?.error
-    || outputPayload?.message
-    || (task.output && taskStatus(task) === 'FAILED' ? task.output : '')
-  if (!error) return ''
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
-}
 const isTaskAwaiting = (task) => taskStatus(task) === 'AWAITING_APPROVAL'
 const isTaskSuccessful = (task) => ['SUCCESS', 'COMPLETED'].includes(taskStatus(task))
 const isTaskFailed = (task) => ['FAILED', 'SKIPPED', 'CANCELLED'].includes(taskStatus(task))
@@ -835,17 +788,6 @@ const isActive = computed(() => ACTIVE_RUN_STATUSES.includes(normalizeStatus(run
 const isRunFailed = computed(() => ['FAILED', 'CANCELLED'].includes(normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state)))
 const hasPendingApproval = computed(() => {
   return normalizeStatus(run.value?.status || run.value?.run_status || run.value?.state) === 'AWAITING_APPROVAL' || tasks.value.some(isTaskAwaiting)
-})
-const runFailureMessage = computed(() => {
-  const runError = run.value?.error
-    || run.value?.error_message
-    || run.value?.errorMessage
-    || run.value?.failure_reason
-    || run.value?.failureReason
-  if (runError) return typeof runError === 'string' ? runError : JSON.stringify(runError)
-
-  const failureLog = logs.value.find((log) => log.level === 'ERROR' || /(failed|error|dependency)/i.test(`${log.event || ''} ${log.message || ''}`))
-  return failureLog ? formatLogMessage(failureLog.message, failureLog.payload, failureLog.event) : ''
 })
 
 // Simulated / Measured Performance Metrics
@@ -1483,34 +1425,6 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #fee2e2;
 }
 
-.zyn-run-failure {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 9px 16px;
-  background: #fff7f7;
-  border-bottom: 1px solid #fecaca;
-  color: #991b1b;
-  font-size: 12px;
-}
-
-.zyn-run-failure div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.zyn-run-failure strong {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.zyn-run-failure span {
-  overflow-wrap: anywhere;
-}
-
 /* Two-Column Editor Layout */
 .zyn-editor-body {
   display: flex;
@@ -1999,26 +1913,6 @@ onBeforeUnmount(() => {
   border-color: #fecaca;
 }
 
-.node-error-details {
-  display: grid;
-  gap: 3px;
-  margin: 9px 0 4px;
-  padding: 8px 9px;
-  border: 1px solid #fecaca;
-  border-radius: 7px;
-  background: #fff7f7;
-  color: #991b1b;
-  font-size: 10.5px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.node-error-details strong {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 .node-approval-banner {
   margin: 10px 0 6px;
   padding: 7px 10px;
@@ -2313,17 +2207,6 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 11.5px;
   color: #334155;
-}
-
-.mini-node-error {
-  margin-top: 6px;
-  padding: 5px 7px;
-  border-radius: 6px;
-  background: #fff7f7;
-  color: #b91c1c;
-  font-size: 10.5px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
 }
 
 /* Logs View */
