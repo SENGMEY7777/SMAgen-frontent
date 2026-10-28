@@ -278,6 +278,7 @@ export const api = {
   listWorkflows: () => request('/workflows/listWorkflows'),
   runWorkflow: (body) => request('/workflows/run', json('POST', body)),
   resumeWorkflow: (runId) => request(`/workflows/run/${runId}`, json('POST', {})),
+  cancelWorkflow: (runId) => request(`/workflows/runs/${runId}/cancel`, json('POST', {})),
   listRuns: () => request('/workflows/runs'),
   getRun: (runId) => request(`/workflows/runs/${runId}`),
 
