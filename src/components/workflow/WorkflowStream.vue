@@ -11,8 +11,7 @@
       :class="{ 'is-live': isWorkflowLive(workflow) }"
       aria-live="polite"
     >
-      <span class="stream-subactivity-indicator" aria-hidden="true"></span>
-      <span>{{ getCurrentWorkingText(workflow) }}</span>
+      <span class="stream-subactivity-label">{{ getCurrentWorkingText(workflow) }}</span>
       <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
         <span>.</span><span>.</span><span>.</span>
       </span>
@@ -1490,18 +1489,18 @@ const highlightCode = (value) => {
   color: #8f8f99;
 }
 
-.stream-subactivity-indicator {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #a1a1aa;
+.stream-subactivity-label {
+  color: inherit;
 }
 
-.stream-subactivity-text.is-live .stream-subactivity-indicator {
-  background: #2563eb;
-  box-shadow: 0 0 0 3px #dbeafe;
-  animation: subactivity-pulse 1.5s ease-in-out infinite;
+.stream-subactivity-text.is-live .stream-subactivity-label {
+  color: transparent;
+  background: linear-gradient(90deg, #8f8f99 0%, #8f8f99 38%, #d4d4d8 50%, #8f8f99 62%, #8f8f99 100%);
+  background-size: 220% 100%;
+  background-position: -120% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: subactivity-text-shimmer 1.25s linear infinite;
 }
 
 .stream-subactivity-dots {
@@ -1534,14 +1533,12 @@ const highlightCode = (value) => {
   }
 }
 
-@keyframes subactivity-pulse {
-  0%, 100% {
-    opacity: 0.55;
-    transform: scale(0.85);
+@keyframes subactivity-text-shimmer {
+  from {
+    background-position: -120% 0;
   }
-  50% {
-    opacity: 1;
-    transform: scale(1);
+  to {
+    background-position: 100% 0;
   }
 }
 
@@ -1558,7 +1555,7 @@ const highlightCode = (value) => {
 
 @media (prefers-reduced-motion: reduce) {
   .stream-subactivity-text,
-  .stream-subactivity-text.is-live .stream-subactivity-indicator,
+  .stream-subactivity-text.is-live .stream-subactivity-label,
   .stream-subactivity-dots span {
     animation: none;
   }
