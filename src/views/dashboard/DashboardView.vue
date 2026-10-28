@@ -400,7 +400,8 @@ const isStepExpanded = (workflow, stepId) => {
 const toggleStepExpanded = (workflow, stepId) => {
   if (!workflow) return
   if (!workflow.expandedSteps) workflow.expandedSteps = {}
-  workflow.expandedSteps[stepId] = !workflow.expandedSteps[stepId]
+  const shouldExpand = !workflow.expandedSteps[stepId]
+  workflow.expandedSteps = shouldExpand ? { [stepId]: true } : {}
 }
 
 const getWorkflowSteps = (workflow) => {
