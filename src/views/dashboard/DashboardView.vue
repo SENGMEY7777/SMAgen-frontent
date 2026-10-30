@@ -564,11 +564,25 @@ const getWorkflowGoalPreview = (workflow) => {
 const getCurrentWorkingText = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
   const phaseIndex = timerTick.value % 4
+  const connectionStatus = String(workflow?.connectionStatus || '').toUpperCase()
+  const isConnectionRecovering = ['RECONNECTING', 'OFFLINE'].includes(connectionStatus)
+  const reconnectAttempt = Math.min(
+    Math.max(0, Number(workflow?.connectionAttempt) || 0),
+    Number(workflow?.connectionMaxAttempts) || 5,
+  )
   if (status === 'COMPLETED' || status === 'SUCCESS') {
     return ''
   }
   if (status === 'FAILED' || status === 'CANCELLED') {
     return workflow?.runId ? 'Workflow stopped' : 'Unable to start workflow'
+  }
+  if (isConnectionRecovering && isWorkflowRunning(workflow)) {
+    if (connectionStatus === 'OFFLINE') {
+      return 'Waiting for internet connection · Retrying when connection returns'
+    }
+    return reconnectAttempt
+      ? `Waiting for internet connection · Reconnecting ${reconnectAttempt}/${Number(workflow?.connectionMaxAttempts) || 5}`
+      : 'Waiting for internet connection · Reconnecting…'
   }
   const runningTask = (workflow?.tasks || []).find((t) => getWorkflowTaskStatus(t) === 'RUNNING')
   if (runningTask) {
