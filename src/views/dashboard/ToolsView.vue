@@ -37,10 +37,10 @@
         <div class="soft-card stat-card">
           <div class="stat-header">
             <span class="stat-label">HITL Protected</span>
-            <span class="stat-badge orange">1 Tool</span>
+            <span class="stat-badge orange">2 Tools</span>
           </div>
-          <div class="stat-value">SQL</div>
-          <div class="stat-desc">Requires human authorization gate</div>
+          <div class="stat-value">SQL + SSH</div>
+          <div class="stat-desc">Require human authorization gates</div>
         </div>
       </div>
 
@@ -94,6 +94,7 @@ import {
   IconSearch,
   IconWorld,
   IconCode,
+  IconTerminal2,
   IconTool,
 } from '@tabler/icons-vue'
 
@@ -103,6 +104,7 @@ const toolIconMap = {
   globe: IconWorld,
   sandbox: IconCode,
   code: IconCode,
+  terminal: IconTerminal2,
 }
 
 const tools = ref([
@@ -153,6 +155,18 @@ const tools = ref([
     icon: 'code',
     callsCount: 205,
     endpoint: '/api/v1/tools/sandbox',
+  },
+  {
+    id: 'ssh',
+    name: 'SSH Remote Executor',
+    category: 'Remote Operations',
+    description: 'Run approved commands on configured SSH targets with host-key verification, timeouts, and masked output.',
+    enabled: true,
+    securityTier: 'HITL Required',
+    securityColor: 'orange',
+    icon: 'terminal',
+    callsCount: 0,
+    endpoint: '/api/v1/tools/ssh',
   },
   {
     id: 'filesystem',
