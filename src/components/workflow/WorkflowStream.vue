@@ -104,7 +104,8 @@
       </div>
     </div>
 
-    <div v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
+    <div v-if="(isWorkflowComplete(workflow) || reviewOpen) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
+      <template v-if="isWorkflowComplete(workflow)">
       <div class="completion-heading-row">
         <div class="completion-heading-copy">
           <h3>Done — workflow completed successfully.</h3>
@@ -135,6 +136,7 @@
                 :aria-label="`Review ${file.path}`"
                 @click="openReview(workflow, file)"
               >
+                <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
                 {{ file.path }}
               </button>
             </div>
@@ -195,6 +197,7 @@
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
+                <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
                   <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
@@ -218,6 +221,8 @@
           </button>
         </div>
       </div>
+
+      </template>
 
       <section
         v-if="reviewOpen"
@@ -305,6 +310,7 @@
               <span class="file-strip-caret">▼</span>
               <span class="file-strip-path">
                 <span class="file-strip-dir">{{ selectedFileDir }}</span>
+                <IconFile :size="15" class="file-language-icon" aria-hidden="true" />
                 <strong class="file-strip-name">{{ selectedFileName }}</strong>
               </span>
               <div class="file-strip-stats">
@@ -329,7 +335,7 @@
               :class="{ active: String(file.taskId) === String(reviewTaskId) }"
               @click="reviewTaskId = file.taskId"
             >
-              <IconFile :size="12" />
+              <IconFile :size="13" class="file-language-icon" aria-hidden="true" />
               <span>{{ file.path }}</span>
               <span class="pill-stats">+{{ fileStatsById[file.id].additions }} -{{ fileStatsById[file.id].deletions }}</span>
             </button>
@@ -351,6 +357,8 @@
           <div v-else class="workflow-review-empty">No file output is available for review.</div>
         </div>
       </section>
+
+      <template v-if="isWorkflowComplete(workflow)">
 
       <div v-if="validationItems.length" class="completion-results">
         <div class="completion-results-heading">Tests passed:</div>
@@ -393,7 +401,29 @@
         </button>
         <span v-if="completionTimeLabel" class="completion-response-time">{{ completionTimeLabel }}</span>
       </div>
+      </template>
     </div>
+
+    <section
+      v-if="!isWorkflowComplete(workflow) && !workflow.approval && editedFiles.length"
+      class="workflow-partial-changes"
+      aria-label="Changes made before the workflow stopped"
+    >
+      <div class="workflow-partial-changes-heading">Files changed</div>
+      <ul class="workflow-partial-changes-list">
+        <li v-for="file in editedFiles" :key="`partial-${file.id}`" class="workflow-partial-change-row">
+          <button
+            type="button"
+            class="workflow-partial-change-path"
+            :aria-label="`Review ${file.path}`"
+            @click.stop="openReview(workflow, file, $event)"
+          >
+            <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+            {{ file.path }}
+          </button>
+        </li>
+      </ul>
+    </section>
 
     <Teleport to=".composer-container">
       <WorkflowApprovalPanel
@@ -892,6 +922,21 @@ const findNumericValue = (value, keys) => {
   return null
 }
 
+const normalizeReviewPath = (value) => String(value || '')
+  .replace(/\\/g, '/')
+  .replace(/^\.\//, '')
+  .replace(/^\/+/, '')
+  .trim()
+
+const reviewPathsMatch = (left, right) => {
+  const first = normalizeReviewPath(left)
+  const second = normalizeReviewPath(right)
+  if (!first || !second) return false
+  return first === second
+    || first.endsWith(`/${second}`)
+    || second.endsWith(`/${first}`)
+}
+
 const extractCodeContent = (obj, targetPath = '') => {
   if (!obj) return ''
   if (typeof obj === 'string') {
@@ -913,13 +958,19 @@ const extractCodeContent = (obj, targetPath = '') => {
 
   if (Array.isArray(obj.files)) {
     if (targetPath) {
-      const match = obj.files.find((f) => f && (f.path === targetPath || f.fileName === targetPath || String(f.path || '').endsWith(targetPath)))
+      const match = obj.files.find((f) => f && (
+        reviewPathsMatch(f.path, targetPath)
+        || reviewPathsMatch(f.fileName, targetPath)
+      ))
       if (match && typeof match.content === 'string') return match.content
     }
     const first = obj.files.find((f) => f && typeof f.content === 'string')
     if (first) return first.content
   } else if (obj.files && typeof obj.files === 'object') {
-    if (targetPath && typeof obj.files[targetPath] === 'string') return obj.files[targetPath]
+    if (targetPath) {
+      const matchingKey = Object.keys(obj.files).find((key) => reviewPathsMatch(key, targetPath))
+      if (matchingKey && typeof obj.files[matchingKey] === 'string') return obj.files[matchingKey]
+    }
     const firstVal = Object.values(obj.files).find((v) => typeof v === 'string')
     if (firstVal) return firstVal
   }
@@ -2178,11 +2229,22 @@ const highlightCode = (value) => {
 }
 
 .completion-file-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
   padding: 0;
   color: #2f80d7;
   font: inherit;
   text-align: left;
   overflow-wrap: anywhere;
+}
+
+.file-language-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  color: #71717a;
+  vertical-align: middle;
 }
 
 .completion-edit-card {
@@ -2255,6 +2317,50 @@ const highlightCode = (value) => {
 
 .completion-edit-removed {
   color: #dc2626;
+}
+
+.workflow-partial-changes {
+  margin: 16px 0 4px;
+  padding: 14px 16px;
+  color: #27272a;
+}
+
+.workflow-partial-changes-heading {
+  color: #18181b;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.workflow-partial-changes-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  list-style: disc;
+}
+
+.workflow-partial-change-row {
+  min-width: 0;
+}
+
+.workflow-partial-change-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  color: #2f5fba;
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.workflow-partial-change-path:focus:not(:focus-visible),
+.completion-file-link:focus:not(:focus-visible),
+.completion-edit-file-toggle:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
 .completion-edit-card-actions {
@@ -2722,6 +2828,7 @@ const highlightCode = (value) => {
 .file-strip-path {
   display: flex;
   align-items: center;
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
