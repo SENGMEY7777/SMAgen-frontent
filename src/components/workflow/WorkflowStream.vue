@@ -22,7 +22,8 @@
       @keydown="handleWorkflowActivityKeydown($event, workflow)"
     >
       <span class="stream-current-task-icon" aria-hidden="true">
-        <component :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
+        <IconWifiOff v-if="isConnectionRecovering(workflow)" :size="13" />
+        <component v-else :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
       </span>
       <span class="stream-subactivity-label">{{ getCurrentWorkingText(workflow) }}</span>
       <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
@@ -496,6 +497,7 @@ import {
   IconThumbDown,
   IconThumbUp,
   IconWorld,
+  IconWifiOff,
   IconCode,
   IconX,
   IconZoomIn,
@@ -558,6 +560,9 @@ const emit = defineEmits([
 ])
 
 const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
+const isConnectionRecovering = (workflow) => ['RECONNECTING', 'OFFLINE'].includes(
+  String(workflow?.connectionStatus || '').toUpperCase(),
+)
 
 const isWorkflowLive = (workflow) => ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(String(workflow?.status || '').toUpperCase())
 
