@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { api, ApiError } from '@/services/api'
-import { createSocketClient } from '@/services/socket'
+import { createSocketClient, SOCKET_RECONNECT_ATTEMPTS } from '@/services/socket'
 import {
   deriveWorkflowStatus,
   getWorkflowLogs,
@@ -26,6 +26,26 @@ export function useWorkflowRuntime({
   const timerTick = ref(0)
   let timerInterval = null
   let workflowSocket = null
+  let latestReconnectAttempt = 0
+  let handleBrowserOffline = null
+  let handleBrowserOnline = null
+
+  const updateActiveConnectionState = (status, attempt = 0) => {
+    const normalizedStatus = String(status || '').toUpperCase()
+    currentMessages.value.forEach((message, index) => {
+      if (!message?.workflow || isTerminalWorkflowStatus(message.workflow.status)) return
+      updateWorkflowMessage(index, {
+        connectionStatus: normalizedStatus,
+        connectionAttempt: Math.max(0, Number(attempt) || 0),
+        connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
+      })
+    })
+  }
+
+  const isConnectionUnavailable = (error) => (
+    error?.code === 'NETWORK_ERROR'
+    || (typeof navigator !== 'undefined' && navigator.onLine === false)
+  )
 
   const getEventRunId = (payload) => payload?.runId
     || payload?.run_id
@@ -262,6 +282,8 @@ export function useWorkflowRuntime({
       )
       nextWorkflow.completedAt = data?.completedAt || data?.completed_at || workflow.completedAt || new Date().toISOString()
       nextWorkflow.approval = null
+      nextWorkflow.connectionStatus = 'CONNECTED'
+      nextWorkflow.connectionAttempt = 0
     }
 
     updateWorkflowMessage(index, nextWorkflow)
@@ -371,6 +393,9 @@ export function useWorkflowRuntime({
       const awaitingTask = tasks.find((task) => getWorkflowTaskStatus(task) === 'AWAITING_APPROVAL')
       const awaitingApproval = String(workflowStatus || '').toUpperCase() === 'AWAITING_APPROVAL' || Boolean(awaitingTask)
       const existingApproval = currentWorkflow.approval || null
+      const connectionLost = (typeof navigator !== 'undefined' && navigator.onLine === false)
+        || Boolean(workflowSocket && !workflowSocket.connected)
+      const connectionStatus = connectionLost ? 'RECONNECTING' : 'CONNECTED'
 
       if (awaitingApproval) {
         const existingTaskId = existingApproval?.taskId || existingApproval?.task_id
@@ -384,6 +409,9 @@ export function useWorkflowRuntime({
           approval,
           tasks,
           logs,
+          connectionStatus,
+          connectionAttempt: connectionLost ? latestReconnectAttempt : 0,
+          connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
           error: workflowError,
         })
       } else {
@@ -413,12 +441,24 @@ export function useWorkflowRuntime({
           logs,
           completedAt,
           finalSeconds,
+          connectionStatus: 'CONNECTED',
+          connectionAttempt: 0,
+          connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
           error: workflowError,
         })
         if (isTerminal) stopWorkflowPolling(runId)
       }
     } catch (error) {
-      if (!currentMessages.value[index]?.workflow?.approval) {
+      if (isConnectionUnavailable(error)) {
+        updateWorkflowMessage(index, {
+          connectionStatus: 'RECONNECTING',
+          connectionAttempt: latestReconnectAttempt,
+          connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
+          // A temporary network loss is not a workflow failure. Keep the
+          // current run alive and let polling/socket reconnection recover it.
+          error: '',
+        })
+      } else if (!currentMessages.value[index]?.workflow?.approval) {
         updateWorkflowMessage(index, {
           error: error instanceof ApiError ? error.message : 'Unable to refresh workflow status.',
         })
@@ -531,6 +571,24 @@ export function useWorkflowRuntime({
   }
 
   onMounted(() => {
+    handleBrowserOffline = () => {
+      latestReconnectAttempt = 0
+      updateActiveConnectionState('RECONNECTING')
+    }
+
+    handleBrowserOnline = () => {
+      latestReconnectAttempt = 0
+      updateActiveConnectionState('RECONNECTING')
+      if (workflowSocket && !workflowSocket.connected) {
+        try {
+          workflowSocket.connect()
+        } catch {}
+      }
+    }
+
+    window.addEventListener('offline', handleBrowserOffline)
+    window.addEventListener('online', handleBrowserOnline)
+
     currentMessages.value.forEach((message, index) => {
       if (message.workflow?.runId && !isTerminalWorkflowStatus(message.workflow.status)) {
         startWorkflowPolling(index, message.workflow.runId)
@@ -593,7 +651,30 @@ export function useWorkflowRuntime({
         })
       }
 
-      workflowSocket.on('connect', joinActiveRuns)
+      workflowSocket.on('connect', () => {
+        latestReconnectAttempt = 0
+        updateActiveConnectionState('CONNECTED')
+        joinActiveRuns()
+      })
+      workflowSocket.on('disconnect', (reason) => {
+        if (reason === 'io client disconnect') return
+        updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
+      })
+      workflowSocket.io.on('reconnect_attempt', (attempt) => {
+        latestReconnectAttempt = Math.min(Number(attempt) || 0, SOCKET_RECONNECT_ATTEMPTS)
+        updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
+      })
+      workflowSocket.io.on('reconnect_error', () => {
+        updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
+      })
+      workflowSocket.io.on('reconnect', () => {
+        latestReconnectAttempt = 0
+        updateActiveConnectionState('CONNECTED')
+      })
+      workflowSocket.io.on('reconnect_failed', () => {
+        latestReconnectAttempt = SOCKET_RECONNECT_ATTEMPTS
+        updateActiveConnectionState('OFFLINE', latestReconnectAttempt)
+      })
       joinActiveRuns()
     }
 
@@ -617,6 +698,10 @@ export function useWorkflowRuntime({
       } catch {}
       workflowSocket = null
     }
+    if (handleBrowserOffline) window.removeEventListener('offline', handleBrowserOffline)
+    if (handleBrowserOnline) window.removeEventListener('online', handleBrowserOnline)
+    handleBrowserOffline = null
+    handleBrowserOnline = null
   })
 
   return {
