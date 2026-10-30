@@ -2243,7 +2243,7 @@ const highlightCode = (value) => {
 .file-language-icon {
   display: inline-block;
   flex: 0 0 auto;
-  color: #71717a;
+  color: #2563eb;
   vertical-align: middle;
 }
 
