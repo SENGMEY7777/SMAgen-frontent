@@ -839,11 +839,24 @@ const requestsPreviousLocalDestination = (text) => {
   const value = String(text || '').replace(/\s+/g, ' ').trim()
   if (!value) return false
 
-  // Do not silently carry a previous Desktop project into an unrelated
-  // workflow. Reuse it only when the user clearly asks to continue in the
-  // existing project or folder.
-  return /\b(?:same|that|this|existing|current|previous)\s+(?:project|folder|directory|workspace)\b/i.test(value)
+  // Reuse the previous local project when the user explicitly refers to it.
+  const explicitlyReferencesPreviousProject = /\b(?:same|that|this|existing|current|previous)\s+(?:project|folder|directory|workspace)\b/i.test(value)
     || /\b(?:continue|keep\s+working|work|add|update|modify|extend|install|configure)\b.{0,50}\b(?:in|inside|within|to)\s+(?:the\s+)?(?:same|that|this|existing|current|previous)\s+(?:project|folder|directory|workspace)\b/i.test(value)
+
+  if (explicitlyReferencesPreviousProject) return true
+
+  // Short feature follow-ups commonly omit the project name (for example,
+  // "add MVC + Service layer"). Carry the last workflow destination only
+  // when the prompt clearly modifies existing work and does not request a
+  // new project, folder, or explicit destination.
+  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|build)\b/i.test(value)
+  const requestsNewTarget = /\b(?:new|another|different)\s+(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
+    || /\b(?:create|setup|set\s+up|initialize|scaffold|start)\b[\s\S]{0,60}\b(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
+    || /\b(?:folder|directory|project)\s+(?:name|named|called)\b/i.test(value)
+
+  return hasContinuationIntent
+    && !requestsNewTarget
+    && !extractLocalDestination(value)
 }
 
 const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
