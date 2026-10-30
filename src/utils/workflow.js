@@ -222,6 +222,12 @@ export const explainWorkflowError = (value) => {
       message: 'The workflow can read server files, but it is not allowed to create or update files.',
       nextStep: 'Set SERVER_FILE_ACCESS=read-write on the Node.js server, restart it, and approve the requested file changes.',
     }
+  } else if (/plugin:vite:import-analysis|failed to parse source for import analysis|install @vitejs\/plugin-vue|@vitejs\/plugin-vue|invalid js syntax[\s\S]{0,120}\.vue/.test(fingerprint)) {
+    explanation = {
+      title: 'Vue build tooling is missing',
+      message: 'Vite found a .vue file but the project is not configured with @vitejs/plugin-vue, so Vue template syntax was parsed as ordinary JavaScript.',
+      nextStep: 'Install @vitejs/plugin-vue, add vue() to vite.config.js, then run npm install and npm run build again. This is a build-configuration error, not an existing-file conflict.',
+    }
   } else if (/file already exists|eexist|overwrite.*not permitted|already exists.*overwrite/.test(fingerprint)) {
     explanation = {
       title: 'The requested target already exists',
@@ -246,11 +252,23 @@ export const explainWorkflowError = (value) => {
       message: 'The workflow tried to run a command that is not allowed by the execution safety rules.',
       nextStep: 'Ask for the commands to run as separate safe steps instead of one chained command.',
     }
+  } else if (/ssh target is not configured|host key verification failed|permission denied|batchmode|could not resolve hostname|connection timed out|ssh command is blocked|ssh commands must be/.test(fingerprint)) {
+    explanation = {
+      title: 'SSH remote access was blocked safely',
+      message: 'KAIRO could not run the remote command because the SSH target, authentication, host key, connection, or command-safety policy was not valid.',
+      nextStep: 'Check SSH_TARGETS_JSON, the deploy user, the SSH key, and known_hosts. Review the target and command, then approve the task again. KAIRO will not change credentials or host trust settings automatically.',
+    }
   } else if (/command is not allowed|not allowed by the executor|security policy/.test(fingerprint)) {
     explanation = {
       title: 'The requested runtime is not enabled',
       message: 'The workflow requested a command that the backend safety allowlist does not currently support.',
       nextStep: 'Restart the backend after enabling the required runtime command, then run the workflow again.',
+    }
+  } else if (/npm.*(?:not found|enoent)|(?:spawn|executable).*npm.*enoent|node(?:\.js)? equivalent.*not found|command not found.*(?:npm|node)/.test(fingerprint)) {
+    explanation = {
+      title: 'Node.js or npm is not available to KAIRO',
+      message: 'The workflow could not start because the backend process could not find npm in its PATH. This commonly happens when Node.js is installed through nvm, fnm, Volta, or Homebrew but KAIRO was started from a GUI or service.',
+      nextStep: 'Confirm Node.js and npm are installed, restart the KAIRO backend from the configured Node.js environment, and run the workflow again. KAIRO does not install runtimes automatically.',
     }
   } else if (/externally-managed-environment|pep\s*668|break-system-packages|system pip/.test(fingerprint)) {
     explanation = {
