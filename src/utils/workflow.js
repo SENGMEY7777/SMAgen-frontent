@@ -258,6 +258,12 @@ export const explainWorkflowError = (value) => {
       message: 'macOS blocked installation through the system Python environment. The project virtual environment must be used for package installation.',
       nextStep: 'Run the install step with ./venv/bin/python -m pip install -r requirements.txt, then run validation again. Do not use system pip, --user, or --break-system-packages.',
     }
+  } else if (/could not resolve entry module[\s\S]{0,120}index\.html|missing[\s\S]{0,40}index\.html|index\.html[\s\S]{0,40}(?:missing|entry module)/.test(fingerprint)) {
+    explanation = {
+      title: 'The Vue entry file is missing',
+      message: 'Vite started correctly, but the project root does not contain index.html, so the production build has no entry point to load.',
+      nextStep: 'KAIRO should create the missing root index.html with a #app mount element and a module script for /src/main.js, then run npm run build again.',
+    }
   } else if (/missing.*(?:build|script)|(?:build|script).*missing|npm run build.*(?:failed|error)/.test(fingerprint)) {
     explanation = {
       title: 'The project build script is missing',
