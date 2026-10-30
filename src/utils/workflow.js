@@ -172,11 +172,17 @@ export const explainWorkflowError = (value) => {
       message: 'KAIRO found multiple files with that name and did not guess which one to delete.',
       nextStep: 'Run the request again with the exact project-relative path, for example: Workflow/src/views/LoginView.php.',
     }
+  } else if (code === 'LOCAL_FILE_PATH_TYPE_MISMATCH') {
+    explanation = {
+      title: 'The existing target has the wrong type',
+      message: 'KAIRO found a folder where the project expected a file, so it stopped without changing that path.',
+      nextStep: 'Check the project structure and choose a file path that is not already used by a folder.',
+    }
   } else if (code === 'LOCAL_DESKTOP_PATH_TYPE_MISMATCH' || /Desktop path is not a file/.test(fingerprint)) {
     explanation = {
-      title: 'The target type does not match',
-      message: 'The request asked to delete a file, but the selected Desktop path is a folder.',
-      nextStep: 'Specify the exact file path, or say “remove folder” if you intend to delete the folder.',
+      title: 'The Desktop target type does not match',
+      message: 'KAIRO found an item at the requested Desktop path, but it is not the type required by this task.',
+      nextStep: 'Check whether the path should be a folder or a file, then run the request with the correct path.',
     }
   } else if (/self-healing reflection failed|reflection.*gemini|automatic repair was unavailable|gemini service is temporarily unavailable/.test(fingerprint)) {
     explanation = {
@@ -231,6 +237,12 @@ export const explainWorkflowError = (value) => {
       title: 'A command was blocked for safety',
       message: 'The workflow tried to run a command that is not allowed by the execution safety rules.',
       nextStep: 'Ask for the commands to run as separate safe steps instead of one chained command.',
+    }
+  } else if (/\beslint\b|\bnpm\s+(?:run\s+)?lint\b|\bprettier\b/.test(fingerprint)) {
+    explanation = {
+      title: 'Project verification failed',
+      message: 'The project files were created, but the requested code-quality check returned an error.',
+      nextStep: 'Open the activity details to read the exact lint output, then add the required configuration or fix the reported files and run the check again.',
     }
   } else if (/execution safety policy blocked|self-healing skipped.*policy/.test(fingerprint)) {
     explanation = {
