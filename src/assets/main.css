@@ -1407,20 +1407,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  border-radius: 999px;
   color: #4b5563;
-  background: #f3f4f6;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
-
-.status-pill.running, .status-pill.queued { color: #4338ca; background: #eef2ff; }
-.status-pill.completed, .status-pill.success, .status-pill.approved { color: #065f46; background: #d1fae5; }
-.status-pill.failed, .status-pill.rejected { color: #991b1b; background: #fee2e2; }
-.status-pill.awaiting_approval, .status-pill.pending { color: #92400e; background: #fef3c7; }
 
 .empty-state {
   padding: 48px 20px;
