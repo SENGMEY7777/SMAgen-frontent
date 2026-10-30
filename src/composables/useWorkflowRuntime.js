@@ -13,6 +13,8 @@ import {
   stringifyWorkflowValue,
 } from '@/utils/workflow'
 
+const WORKFLOW_POLL_INTERVAL_MS = 4000
+
 export function useWorkflowRuntime({
   chatStore,
   currentMessages,
@@ -309,7 +311,7 @@ export function useWorkflowRuntime({
   const findWorkflowApproval = async (run, task, runId, existingApproval = null) => {
     let approval = null
     try {
-      const response = await api.listApprovals()
+      const response = await api.listApprovals(runId)
       const approvalPayload = response?.data || response
       const approvals = Array.isArray(approvalPayload)
         ? approvalPayload
@@ -371,7 +373,12 @@ export function useWorkflowRuntime({
       const existingApproval = currentWorkflow.approval || null
 
       if (awaitingApproval) {
-        const approval = await findWorkflowApproval(workflowRun, awaitingTask, runId, existingApproval)
+        const existingTaskId = existingApproval?.taskId || existingApproval?.task_id
+        const canReuseApproval = existingApproval
+          && (!awaitingTask?.id || !existingTaskId || String(existingTaskId) === String(awaitingTask.id))
+        const approval = canReuseApproval
+          ? existingApproval
+          : await findWorkflowApproval(workflowRun, awaitingTask, runId, existingApproval)
         updateWorkflowMessage(index, {
           status: 'AWAITING_APPROVAL',
           approval,
@@ -433,7 +440,7 @@ export function useWorkflowRuntime({
         return
       }
       refreshWorkflowMessage(index, runId)
-    }, 2000)
+    }, WORKFLOW_POLL_INTERVAL_MS)
     workflowPollers.set(key, poller)
 
     if (workflowSocket) {
