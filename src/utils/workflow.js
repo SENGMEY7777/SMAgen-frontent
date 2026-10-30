@@ -155,9 +155,11 @@ export const explainWorkflowError = (value) => {
   if (!message && !code && !status) return null
 
   let explanation = {
-    title: 'Workflow stopped',
-    message: 'The workflow could not complete because an unexpected error occurred.',
-    nextStep: 'Try again. If the problem continues, open the activity logs and share the technical details.',
+    title: 'A workflow step failed',
+    message: /^workflow failed\.?$/i.test(message)
+      ? 'The workflow stopped because one of its tasks failed before completion.'
+      : `The workflow stopped because ${message || 'one of its tasks failed before completion.'}`,
+    nextStep: 'Open View steps and expand the failed task to see the exact error, then correct it and run the workflow again.',
   }
 
   if (code === 'LOCAL_DESKTOP_FILE_NOT_FOUND' || code === 'LOCAL_DESKTOP_PATH_NOT_FOUND' || /requested Desktop (?:file|path) was not found|local Desktop path was not found/.test(fingerprint)) {
@@ -165,6 +167,12 @@ export const explainWorkflowError = (value) => {
       title: 'The file was not found',
       message: 'KAIRO could not find that file in the active Desktop project, so it stopped without deleting anything.',
       nextStep: 'Check the filename and specify the project-relative path, for example: Workflow/src/views/LoginView.php.',
+    }
+  } else if (code === 'LOCAL_DESKTOP_DESTINATION_EXISTS' || /destination Desktop path already exists/.test(fingerprint)) {
+    explanation = {
+      title: 'The rename destination already exists',
+      message: 'KAIRO found another file or folder at the new name, so it stopped without changing the original project.',
+      nextStep: 'Choose a different destination name, or explicitly ask to merge or replace the existing destination after confirming its contents.',
     }
   } else if (code === 'LOCAL_DESKTOP_FILE_AMBIGUOUS' || /more than one Desktop file matches/.test(fingerprint)) {
     explanation = {
@@ -232,11 +240,23 @@ export const explainWorkflowError = (value) => {
       message: 'The generated project contains a dependency symlink that cannot be copied to the destination.',
       nextStep: 'Remove node_modules from the export or export the source files without installed dependencies.',
     }
-  } else if (/shell chaining|\&\&|command.*not allowed/.test(fingerprint)) {
+  } else if (/shell chaining|\&\&|shell operators|command chaining/.test(fingerprint)) {
     explanation = {
       title: 'A command was blocked for safety',
       message: 'The workflow tried to run a command that is not allowed by the execution safety rules.',
       nextStep: 'Ask for the commands to run as separate safe steps instead of one chained command.',
+    }
+  } else if (/command is not allowed|not allowed by the executor|security policy/.test(fingerprint)) {
+    explanation = {
+      title: 'The requested runtime is not enabled',
+      message: 'The workflow requested a command that the backend safety allowlist does not currently support.',
+      nextStep: 'Restart the backend after enabling the required runtime command, then run the workflow again.',
+    }
+  } else if (/externally-managed-environment|pep\s*668|break-system-packages|system pip/.test(fingerprint)) {
+    explanation = {
+      title: 'Python dependencies must stay inside the virtual environment',
+      message: 'macOS blocked installation through the system Python environment. The project virtual environment must be used for package installation.',
+      nextStep: 'Run the install step with ./venv/bin/python -m pip install -r requirements.txt, then run validation again. Do not use system pip, --user, or --break-system-packages.',
     }
   } else if (/\beslint\b|\bnpm\s+(?:run\s+)?lint\b|\bprettier\b/.test(fingerprint)) {
     explanation = {
