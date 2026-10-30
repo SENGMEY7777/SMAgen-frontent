@@ -258,6 +258,18 @@ export const explainWorkflowError = (value) => {
       message: 'macOS blocked installation through the system Python environment. The project virtual environment must be used for package installation.',
       nextStep: 'Run the install step with ./venv/bin/python -m pip install -r requirements.txt, then run validation again. Do not use system pip, --user, or --break-system-packages.',
     }
+  } else if (/missing.*(?:build|script)|(?:build|script).*missing|npm run build.*(?:failed|error)/.test(fingerprint)) {
+    explanation = {
+      title: 'The project build script is missing',
+      message: 'The Vue project does not contain a usable package.json build script, so production verification could not start.',
+      nextStep: 'KAIRO should add "build": "vite build" to package.json before running npm run build. Retry the workflow after restarting the backend with the latest planner.',
+    }
+  } else if (code === 'LLM_INVALID_JSON' || /bad escaped character|invalid escape|malformed json|unexpected token.*json|json\.parse/.test(fingerprint)) {
+    explanation = {
+      title: 'The AI planner returned malformed JSON',
+      message: 'The AI generated a plan containing an invalid escaped character, so KAIRO stopped before executing any task.',
+      nextStep: 'Retry the workflow. KAIRO now repairs common backslashes from regexes, source code, and file paths; if it continues, shorten the prompt and remove large pasted code blocks.',
+    }
   } else if (/\beslint\b|\bnpm\s+(?:run\s+)?lint\b|\bprettier\b/.test(fingerprint)) {
     explanation = {
       title: 'Project verification failed',
