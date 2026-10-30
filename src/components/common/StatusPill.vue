@@ -1,12 +1,20 @@
 <template>
   <span class="status-pill" :class="statusClass">
-    <span class="status-dot"></span>
+    <component :is="statusIcon" :size="14" aria-hidden="true" />
     <span class="status-text">{{ displayLabel }}</span>
   </span>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import {
+  IconCircleCheck,
+  IconCircleDot,
+  IconCirclePlus,
+  IconCircleX,
+  IconClock,
+  IconLoader2,
+} from '@tabler/icons-vue'
 
 const props = defineProps({
   status: { type: String, default: '' },
@@ -22,17 +30,25 @@ const displayLabel = computed(() => {
 const statusClass = computed(() => {
   return String(props.status || '').toLowerCase()
 })
+
+const statusIcon = computed(() => {
+  const status = String(props.status || '').toLowerCase()
+
+  if (status === 'created') return IconCirclePlus
+  if (['running', 'in_progress'].includes(status)) return IconLoader2
+  if (['queued', 'pending', 'awaiting_approval'].includes(status)) return IconClock
+  if (['completed', 'success', 'approved'].includes(status)) return IconCircleCheck
+  if (['failed', 'rejected'].includes(status)) return IconCircleX
+  return IconCircleDot
+})
 </script>
 
 <style scoped>
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
+  gap: 4px;
   color: #4b5563;
-  background: #f3f4f6;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -40,15 +56,15 @@ const statusClass = computed(() => {
   white-space: nowrap;
 }
 
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
+.status-pill :deep(svg) {
+  flex: 0 0 auto;
 }
 
-.status-pill.running, .status-pill.queued { color: #4338ca; background: #eef2ff; }
-.status-pill.completed, .status-pill.success, .status-pill.approved { color: #065f46; background: #d1fae5; }
-.status-pill.failed, .status-pill.rejected { color: #991b1b; background: #fee2e2; }
-.status-pill.awaiting_approval, .status-pill.pending { color: #92400e; background: #fef3c7; }
+.status-pill.running :deep(svg) {
+  animation: status-spin 1.2s linear infinite;
+}
+
+@keyframes status-spin {
+  to { transform: rotate(360deg); }
+}
 </style>
