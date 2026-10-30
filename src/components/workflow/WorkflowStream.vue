@@ -1317,7 +1317,20 @@ const getReviewLines = (task, workflow = null, targetPath = '') => {
 const editedFiles = computed(() => getEditedFileItems(props.workflow))
 const completionChanges = computed(() => getCompletionChanges(props.workflow))
 const validationItems = computed(() => getValidationItems(props.workflow))
-const workflowErrorExplanation = computed(() => explainWorkflowError(props.workflow?.error))
+const workflowErrorValue = computed(() => {
+  const explicitError = props.workflow?.error
+    || props.workflow?.error_message
+    || props.workflow?.failure_reason
+  if (explicitError) return explicitError
+
+  const failedTask = (props.workflow?.tasks || []).find((task) => getTaskStatus(task) === 'FAILED')
+  return failedTask?.error_message
+    || failedTask?.errorMessage
+    || (['FAILED', 'CANCELLED'].includes(String(props.workflow?.status || '').toUpperCase())
+      ? 'Workflow failed.'
+      : '')
+})
+const workflowErrorExplanation = computed(() => explainWorkflowError(workflowErrorValue.value))
 const workflowDiffStats = computed(() => getWorkflowDiffStats(props.workflow, editedFiles.value))
 const editedFilesHeading = computed(() => getEditedFilesHeading(props.workflow, editedFiles.value))
 const selectedFile = computed(() => getSelectedFile(props.workflow, editedFiles.value))
