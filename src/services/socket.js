@@ -2,6 +2,7 @@ import { io } from 'socket.io-client'
 import { apiBaseUrl } from '@/services/api'
 import { STORAGE_KEYS } from '@/config/constants'
 
+export const SOCKET_RECONNECT_ATTEMPTS = 5
 
 export function createSocketClient() {
   const token = localStorage.getItem(STORAGE_KEYS.TOKEN) || ''
@@ -19,7 +20,11 @@ export function createSocketClient() {
     path: '/socket.io',
     auth: { token },
     transports: ['websocket', 'polling'],
-    reconnectionAttempts: 2,
+    reconnection: true,
+    reconnectionAttempts: SOCKET_RECONNECT_ATTEMPTS,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.25,
     timeout: 6000,
   })
 }
