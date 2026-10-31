@@ -61,3 +61,40 @@ npm run dev
 ```sh
 npm run build
 ```
+
+## Run frontend and backend with Docker
+
+The Compose file in this project builds both the Vue frontend and the KAIRO
+backend. Browser requests remain same-origin; Nginx forwards API, Socket.IO,
+and workspace requests to the internal `kairo-api:5000` service.
+
+Before starting, make sure `/Users/user/Documents/Project/Kairo-Backend/.env`
+contains valid backend secrets and database settings. The backend container
+uses the host database by default through `host.docker.internal`.
+
+1. Start Docker Desktop.
+2. From this directory, build and start both services:
+
+```sh
+docker compose up --build
+```
+
+Open <http://localhost:8080>.
+
+The backend is also exposed for health checks at:
+
+```text
+http://localhost:8082/health
+```
+
+To stop both services:
+
+```sh
+docker compose down
+```
+
+If the backend is deployed separately, set its origin in `.env` instead:
+
+```env
+API_UPSTREAM=https://api.example.com
+```
