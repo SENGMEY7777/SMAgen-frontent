@@ -1,34 +1,33 @@
 server {
     listen 80;
-    server_name localhost;
+    server_name _;
 
     root /usr/share/nginx/html;
     index index.html;
 
-    # Gzip compression
+    # The official Nginx image expands API_UPSTREAM when the container starts.
+    # Example values: http://host.docker.internal:8082 or https://api.example.com
+
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
     gzip_proxied any;
-    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml application/json;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json image/svg+xml;
 
-    # Keep browser requests same-origin and proxy them to the API server.
     location /api/ {
-        proxy_pass https://kairo-sengmey-dev.duckdns.org;
-        proxy_ssl_server_name on;
-        proxy_set_header Host kairo-sengmey-dev.duckdns.org;
+        proxy_pass ${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $proxy_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Origin '';
     }
 
-    # Proxy Socket.IO through the same frontend origin as the API.
     location /socket.io/ {
-        proxy_pass https://kairo-sengmey-dev.duckdns.org;
-        proxy_ssl_server_name on;
+        proxy_pass ${API_UPSTREAM};
         proxy_http_version 1.1;
-        proxy_set_header Host kairo-sengmey-dev.duckdns.org;
+        proxy_set_header Host $proxy_host;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header X-Real-IP $remote_addr;
@@ -37,31 +36,23 @@ server {
         proxy_set_header Origin '';
     }
 
-    # Proxy generated workflow images to the API server.
     location ^~ /workspaces/ {
-        proxy_pass https://kairo-sengmey-dev.duckdns.org;
-        proxy_ssl_server_name on;
-        proxy_set_header Host kairo-sengmey-dev.duckdns.org;
+        proxy_pass ${API_UPSTREAM};
+        proxy_set_header Host $proxy_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Origin '';
     }
 
-    # SPA routing fallback
+    # Vue Router history fallback.
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # Static assets cache
     location ~* \.(?:ico|css|js|gif|jpe?g|png|svg|woff2?|eot|ttf|otf)$ {
         expires 6M;
         access_log off;
         add_header Cache-Control "public, max-age=15552000, immutable";
-    }
-
-    error_page 500 502 503 504 /50x.html;
-    location = /50x.html {
-        root /usr/share/nginx/html;
     }
 }
