@@ -14,8 +14,10 @@ services:
       DB_PORT: ${DB_PORT:-3306}
       APP_URL: http://localhost:${FRONTEND_PORT:-8080}
       CORS_ORIGIN: http://localhost:${FRONTEND_PORT:-8080}
-      # A container cannot safely write to the host Desktop by default.
-      LOCAL_DESKTOP_OUTPUT: ${LOCAL_DESKTOP_OUTPUT:-false}
+      # Enable explicit local Desktop output for local development only.
+      LOCAL_DESKTOP_OUTPUT: "true"
+      # Kairo resolves the Desktop directory from os.homedir().
+      HOME: /home/appuser
     # Docker already supervises and restarts this service. Running Node
     # directly avoids PM2 writing runtime files under the unprivileged user.
     command: ["node", "app.js"]
@@ -25,6 +27,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - kairo_workspaces:/app/workspaces
+      # Map the host Desktop to the container user's Desktop directory.
+      # This is intentionally limited to the local Docker development stack.
+      - /Users/user/Desktop:/home/appuser/Desktop
     restart: unless-stopped
     healthcheck:
       test:
