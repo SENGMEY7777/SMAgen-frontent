@@ -333,6 +333,7 @@ import {
 import { api, ApiError } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowRuntime } from '@/composables/useWorkflowRuntime'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatRelativeTime } from '@/utils/formatters'
@@ -347,6 +348,7 @@ import {
 const router = useRouter()
 const auth = useAuthStore()
 const chatStore = useChatStore()
+const projectsStore = useProjectsStore()
 
 const chatThreadRef = ref(null)
 const showScrollButton = ref(false)
@@ -844,6 +846,17 @@ const extractWorkflowDestination = (message) => {
     if (action === 'exportworkspacetodownloads') {
       return `Downloads/${path}`
     }
+    if (action === 'createdesktopfile' || action === 'createdesktopfiles' || action === 'deletedesktoppath' || action === 'renamedesktoppath') {
+      const rootFolder = path.split('/')[0]
+      if (rootFolder && rootFolder !== '.' && rootFolder !== '..') {
+        return `Desktop/${rootFolder}`
+      }
+    }
+  }
+
+  if (message?.workflow?.goalPrompt) {
+    const promptDestination = extractLocalDestination(message.workflow.goalPrompt)
+    if (promptDestination) return promptDestination
   }
 
   return ''
@@ -860,10 +873,10 @@ const requestsPreviousLocalDestination = (text) => {
   if (explicitlyReferencesPreviousProject) return true
 
   // Short feature follow-ups commonly omit the project name (for example,
-  // "add MVC + Service layer"). Carry the last workflow destination only
-  // when the prompt clearly modifies existing work and does not request a
-  // new project, folder, or explicit destination.
-  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|build)\b/i.test(value)
+  // "add MVC + Service layer", "please remove gitkeep"). Carry the last workflow
+  // destination only when the prompt clearly modifies existing work and does
+  // not request a new project, folder, or explicit destination.
+  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build)\b/i.test(value)
   const requestsNewTarget = /\b(?:new|another|different)\s+(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:create|setup|set\s+up|initialize|scaffold|start)\b[\s\S]{0,60}\b(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:folder|directory|project)\s+(?:name|named|called)\b/i.test(value)
@@ -876,15 +889,28 @@ const requestsPreviousLocalDestination = (text) => {
 const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const directDestination = extractLocalDestination(goalPrompt)
   if (directDestination) return directDestination
-  if (!requestsPreviousLocalDestination(goalPrompt)) return ''
 
+  // 1. Check conversation context messages (most recent first)
   for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
     const message = contextMessages[index]
     const workflowDestination = extractWorkflowDestination(message)
     if (workflowDestination) return workflowDestination
-    if (message?.role !== 'user') continue
-    const destination = extractLocalDestination(message.content)
-    if (destination) return destination
+    if (message?.role === 'user') {
+      const destination = extractLocalDestination(message.content)
+      if (destination) return destination
+    }
+  }
+
+  // 2. Check active project from sidebar (remember project folder)
+  const activeProj = projectsStore?.activeProject
+  if (activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
+    const workspacePath = String(activeProj.workspacePath || '').trim()
+    if (/desktop[\\/]/i.test(workspacePath)) {
+      const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
+      if (sub) return `Desktop/${sub}`
+    }
+    const folder = normalizeLocalFolderName(activeProj.name)
+    if (folder) return `Desktop/${folder}`
   }
 
   return ''
