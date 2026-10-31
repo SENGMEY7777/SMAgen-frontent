@@ -41,7 +41,27 @@ const getToken = () => localStorage.getItem('omni_token')
 
 const isJsonContentType = (contentType) => contentType.toLowerCase().includes('json')
 
+const isHtmlGatewayError = (value) => (
+  typeof value === 'string'
+  && /<!doctype\s+html|<html[\s>]|<title>\s*\d{3}\s+[^<]*<\/title>|nginx\//i.test(value)
+)
+
 const getApiErrorMessage = (payload, status) => {
+  // Reverse proxies often return an HTML error page when the API is down.
+  // Never show that implementation detail in the chat UI.
+  if (isHtmlGatewayError(payload)) {
+    if (status === 502) {
+      return 'The KAIRO backend is temporarily unavailable. Please start the backend server and try again.'
+    }
+    if (status === 503) {
+      return 'The KAIRO backend is temporarily unavailable for maintenance. Please try again shortly.'
+    }
+    if (status === 504) {
+      return 'The KAIRO backend took too long to respond. Please try again shortly.'
+    }
+    return `KAIRO could not complete the request (HTTP ${status}). Please try again.`
+  }
+
   if (typeof payload === 'string' && payload.trim()) return payload.trim()
   return payload?.message
     || payload?.detail
