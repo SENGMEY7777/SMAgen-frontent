@@ -115,7 +115,7 @@ const request = async (path, options = {}) => {
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) })
 
-const chatBody = (message, history) => ({ message, history })
+const chatBody = (message, history, extra = {}) => ({ message, history, ...extra })
 
 const extractStreamText = (value) => {
   if (value == null) return ''
@@ -158,7 +158,7 @@ const parseStreamPayload = (payload) => {
 }
 
 const streamChat = async (message, history = [], options = {}) => {
-  const { signal, onChunk, headers: optionHeaders = {} } = options
+  const { signal, onChunk, projectContext, localDestination, headers: optionHeaders = {} } = options
   const headers = new Headers(optionHeaders)
   headers.set('Content-Type', 'application/json')
   headers.set('Accept', 'text/event-stream, application/x-ndjson, text/plain, application/json')
@@ -166,12 +166,17 @@ const streamChat = async (message, history = [], options = {}) => {
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
+  const extraPayload = {
+    ...(projectContext ? { projectContext } : {}),
+    ...(localDestination ? { localDestination } : {}),
+  }
+
   let response
   try {
     response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(chatBody(message, history)),
+      body: JSON.stringify(chatBody(message, history, extraPayload)),
       signal,
     })
   } catch (error) {
@@ -291,7 +296,14 @@ export const api = {
   adminLogout: () => request('/admin/auth/logout', { method: 'DELETE' }),
   createAdminApiKey: () => request('/admin/auth/api-keys', json('POST', {})),
 
-  chat: (message, history = [], options = {}) => request('/chat', { ...json('POST', chatBody(message, history)), ...options }),
+  chat: (message, history = [], options = {}) => {
+    const { projectContext, localDestination, ...restOptions } = options
+    const extra = {
+      ...(projectContext ? { projectContext } : {}),
+      ...(localDestination ? { localDestination } : {}),
+    }
+    return request('/chat', { ...json('POST', chatBody(message, history, extra)), ...restOptions })
+  },
   chatStream: streamChat,
 
   createWorkflow: (body) => request('/workflows/create', json('POST', body)),
