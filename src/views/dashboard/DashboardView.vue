@@ -57,11 +57,36 @@
 
                 <template v-else>
                   <div class="assistant-markdown" v-html="renderMarkdown(message.content)"></div>
-                  <div class="message-actions">
+                  <div class="message-actions" aria-label="Assistant response actions">
                     <button class="action-btn" type="button" @click="copyMessage(message.content, index)">
                       <component :is="copiedIndex === index ? IconCheck : IconCopy" :size="13" />
                       <span>{{ copiedIndex === index ? 'Copied' : 'Copy' }}</span>
                     </button>
+                    <button
+                      class="action-btn"
+                      :class="{ active: message.reaction === 'like' }"
+                      type="button"
+                      :aria-pressed="message.reaction === 'like'"
+                      title="Like response"
+                      @click="setMessageReaction(index, 'like')"
+                    >
+                      <IconThumbUp :size="14" />
+                      <span>Like</span>
+                    </button>
+                    <button
+                      class="action-btn"
+                      :class="{ active: message.reaction === 'unlike' }"
+                      type="button"
+                      :aria-pressed="message.reaction === 'unlike'"
+                      title="Unlike response"
+                      @click="setMessageReaction(index, 'unlike')"
+                    >
+                      <IconThumbDown :size="14" />
+                      <span>Unlike</span>
+                    </button>
+                    <span v-if="messageTimeLabel(message.createdAt)" class="assistant-response-time">
+                      {{ messageTimeLabel(message.createdAt) }}
+                    </span>
                   </div>
                 </template>
                 </div>
@@ -329,6 +354,8 @@ import {
   IconBulb,
   IconPlayerStop,
   IconArrowUp,
+  IconThumbUp,
+  IconThumbDown,
 } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -959,9 +986,19 @@ const requestChatReply = async (prompt, history, signal) => {
   streamingContent.value = ''
   let receivedChunk = false
 
+  const activeProj = projectsStore?.activeProject
+  const localDest = inferWorkflowLocalDestination(prompt, currentMessages.value)
+  const projectContext = activeProj ? {
+    id: activeProj.id,
+    name: activeProj.name,
+    workspacePath: activeProj.workspacePath,
+  } : null
+
   try {
     await api.chatStream(prompt, history, {
       signal,
+      projectContext,
+      localDestination: localDest,
       onChunk: (chunk) => {
         if (!chunk) return
         receivedChunk = true
@@ -974,7 +1011,7 @@ const requestChatReply = async (prompt, history, signal) => {
 
     // Preserve the existing history-validation fallback for older API deployments.
     if (history.length > 0 && !receivedChunk) {
-      const response = await api.chat(prompt, [], { signal })
+      const response = await api.chat(prompt, [], { signal, projectContext, localDestination: localDest })
       streamingContent.value = response?.data?.message || 'I could not generate a response.'
       return
     }
@@ -1186,6 +1223,22 @@ const copyMessage = async (content, index) => {
       if (copiedIndex.value === index) copiedIndex.value = null
     }, 2000)
   } catch {}
+}
+
+const setMessageReaction = (index, nextReaction) => {
+  const message = currentMessages.value[index]
+  if (!message || message.role !== 'assistant') return
+  chatStore.updateMessage(index, {
+    reaction: message.reaction === nextReaction ? null : nextReaction,
+  })
+}
+
+const messageTimeLabel = (value) => {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
 const loadRuns = async () => {
