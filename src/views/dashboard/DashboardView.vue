@@ -11,7 +11,7 @@
       />
 
       <div v-if="!currentMessages.length" class="hero">
-        <div class="orb"></div>
+        <img :src="logoUrl" class="orb orb-hero" alt="KAIRO logo" />
         <h1>{{ timeGreeting }}, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
         <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
         <div class="prompt-suggestions">
@@ -339,6 +339,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import logoUrl from '@/assets/logo-kairo.png'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import WorkflowStream from '@/components/workflow/WorkflowStream.vue'
 import {
@@ -1388,6 +1389,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+
+.orb-hero {
+  border-radius: 10%;
+}
 
 .composer-input {
   width: 50% !important;
