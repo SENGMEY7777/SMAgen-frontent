@@ -1118,6 +1118,18 @@
   color: #111827;
 }
 
+.action-btn.active {
+  color: #334e73;
+  background: #eef2f7;
+}
+
+.assistant-response-time {
+  margin-left: 8px;
+  color: #a1a1aa;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .typing-dots {
   display: flex;
   gap: 4px;
