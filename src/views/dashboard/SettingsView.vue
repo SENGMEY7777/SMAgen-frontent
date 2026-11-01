@@ -13,7 +13,14 @@
         <div class="soft-card">
           <div class="eyebrow">Profile</div>
           <div class="profile-line">
-            <span class="avatar large-avatar">{{ auth.initials }}</span>
+            <span class="avatar large-avatar">
+              <img
+                class="avatar-image"
+                :class="{ 'avatar-image-default': auth.usesDefaultAvatar }"
+                :src="auth.avatarUrl"
+                alt=""
+              />
+            </span>
             <div>
               <h3>{{ auth.displayName }}</h3>
               <p>{{ auth.user?.email }}</p>
@@ -114,8 +121,8 @@ const logout = async () => {
 }
 
 .large-avatar {
-  width: 50px;
-  height: 50px;
+  width: 70px;
+  height: 70px;
   font-size: 15px;
 }
 
