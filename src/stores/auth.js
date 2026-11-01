@@ -5,6 +5,7 @@ import { api, ApiError } from '@/services/api'
 const TOKEN_KEY = 'omni_token'
 const USER_KEY = 'omni_user'
 const ROLE_KEY = 'omni_role'
+const DEFAULT_AVATAR_URL = 'https://thumbs.dreamstime.com/b/default-avatar-profile-icon-vector-social-media-user-image-182145777.jpg'
 
 const readJson = (key, fallback = null) => {
   try {
@@ -25,6 +26,22 @@ export const useAuthStore = defineStore('auth', () => {
   const isPrivileged = computed(() => ['ADMIN', 'OPERATOR'].includes(String(role.value).toUpperCase()))
   const displayName = computed(() => user.value?.full_name || user.value?.fullName || user.value?.email?.split('@')[0] || 'Developer')
   const initials = computed(() => displayName.value.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'OM')
+  const profileImageUrl = computed(() => {
+    const profileImage = user.value?.avatar_url
+      || user.value?.avatarUrl
+      || user.value?.profile_image_url
+      || user.value?.profileImageUrl
+      || user.value?.profile_image
+      || user.value?.profileImage
+      || user.value?.image_url
+      || user.value?.imageUrl
+      || user.value?.picture
+    return typeof profileImage === 'string' && profileImage.trim()
+      ? profileImage.trim()
+      : ''
+  })
+  const avatarUrl = computed(() => profileImageUrl.value || DEFAULT_AVATAR_URL)
+  const usesDefaultAvatar = computed(() => !profileImageUrl.value)
 
   const setSession = (payload, selectedRole) => {
     const session = payload?.data || payload || {}
@@ -102,6 +119,8 @@ export const useAuthStore = defineStore('auth', () => {
     isPrivileged,
     displayName,
     initials,
+    avatarUrl,
+    usesDefaultAvatar,
     login,
     register,
     logout,
