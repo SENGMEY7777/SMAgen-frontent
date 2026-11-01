@@ -373,36 +373,37 @@
         </ul>
       </div>
 
-      <div class="completion-actions" aria-label="Workflow response actions">
-        <button type="button" class="completion-action-btn" :title="copied ? 'Copied' : 'Copy response'" @click="copyCompletionResponse(workflow)">
-          <component :is="copied ? IconCheck : IconCopy" :size="14" />
-          <span>{{ copied ? 'Copied' : 'Copy' }}</span>
-        </button>
-        <button
-          type="button"
-          class="completion-action-btn reaction-btn"
-          :class="{ active: reaction === 'like' }"
-          :aria-pressed="reaction === 'like'"
-          title="Like response"
-          @click="setReaction('like')"
-        >
-          <IconThumbUp :size="14" />
-          <span>Like</span>
-        </button>
-        <button
-          type="button"
-          class="completion-action-btn reaction-btn"
-          :class="{ active: reaction === 'unlike' }"
-          :aria-pressed="reaction === 'unlike'"
-          title="Unlike response"
-          @click="setReaction('unlike')"
-        >
-          <IconThumbDown :size="14" />
-          <span>Unlike</span>
-        </button>
-        <span v-if="completionTimeLabel" class="completion-response-time">{{ completionTimeLabel }}</span>
-      </div>
       </template>
+    </div>
+
+    <div v-if="isWorkflowTerminal(workflow) && !workflow.approval" class="completion-actions" aria-label="Workflow response actions">
+      <button type="button" class="completion-action-btn" :title="copied ? 'Copied' : 'Copy response'" @click="copyCompletionResponse(workflow)">
+        <component :is="copied ? IconCheck : IconCopy" :size="14" />
+        <span>{{ copied ? 'Copied' : 'Copy' }}</span>
+      </button>
+      <button
+        type="button"
+        class="completion-action-btn reaction-btn"
+        :class="{ active: reaction === 'like' }"
+        :aria-pressed="reaction === 'like'"
+        title="Like response"
+        @click="setReaction('like')"
+      >
+        <IconThumbUp :size="14" />
+        <span>Like</span>
+      </button>
+      <button
+        type="button"
+        class="completion-action-btn reaction-btn"
+        :class="{ active: reaction === 'unlike' }"
+        :aria-pressed="reaction === 'unlike'"
+        title="Unlike response"
+        @click="setReaction('unlike')"
+      >
+        <IconThumbDown :size="14" />
+        <span>Unlike</span>
+      </button>
+      <span v-if="completionTimeLabel" class="completion-response-time">{{ completionTimeLabel }}</span>
     </div>
 
     <section
@@ -560,6 +561,14 @@ const emit = defineEmits([
 ])
 
 const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
+const isWorkflowTerminal = (workflow) => [
+  'COMPLETED',
+  'SUCCESS',
+  'FAILED',
+  'CANCELLED',
+  'REJECTED',
+  'STOPPED',
+].includes(String(workflow?.status || '').toUpperCase())
 const isConnectionRecovering = (workflow) => ['RECONNECTING', 'OFFLINE'].includes(
   String(workflow?.connectionStatus || '').toUpperCase(),
 )
@@ -1486,7 +1495,7 @@ const getValidationItems = (workflow) => getCompletedTasks(workflow)
 const getCompletionChanges = (workflow) => getWorkflowResultItems(workflow)
 
 const getCompletionTimeLabel = (workflow) => {
-  const timestamp = workflow?.completedAt || workflow?.createdAt
+  const timestamp = workflow?.completedAt || workflow?.updatedAt || workflow?.createdAt
   if (!timestamp) return ''
   const date = new Date(timestamp)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -1500,6 +1509,21 @@ const getCompletionDuration = (workflow) => {
 }
 
 const getWorkflowResponseText = (workflow) => {
+  if (!isWorkflowComplete(workflow)) {
+    const status = String(workflow?.status || '').toUpperCase()
+    const stopped = ['CANCELLED', 'STOPPED'].includes(status)
+    const goal = workflow?.goalPrompt || workflow?.goal_prompt || workflow?.goal
+    const reason = workflowErrorExplanation.value?.message
+      || workflowErrorValue.value
+      || 'The workflow did not complete.'
+    return [
+      goal ? `Request: ${goal}` : '',
+      stopped ? 'Workflow stopped.' : 'Workflow failed.',
+      `Details: ${reason}`,
+      workflowErrorExplanation.value?.nextStep ? `Next step: ${workflowErrorExplanation.value.nextStep}` : '',
+    ].filter(Boolean).join('\n')
+  }
+
   const changes = getCompletionChanges(workflow)
   const files = getEditedFileItems(workflow)
   const validation = getValidationItems(workflow)
