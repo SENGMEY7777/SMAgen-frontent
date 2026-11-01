@@ -282,7 +282,14 @@
           @click="router.push('/settings'); closeMenu()"
           title="Account Settings"
         >
-          <span class="avatar">{{ auth.initials }}</span>
+          <span class="avatar">
+            <img
+              class="avatar-image"
+              :class="{ 'avatar-image-default': auth.usesDefaultAvatar }"
+              :src="auth.avatarUrl"
+              alt=""
+            />
+          </span>
           <span class="account-copy">
             <span class="account-name">{{ auth.displayName }}</span>
             <span class="account-email">{{ auth.user?.email }}</span>
@@ -318,7 +325,12 @@
             title="Settings"
             @click="router.push('/settings')"
           >
-            {{ auth.initials }}
+            <img
+              class="avatar-image"
+              :class="{ 'avatar-image-default': auth.usesDefaultAvatar }"
+              :src="auth.avatarUrl"
+              alt=""
+            />
           </button>
         </div>
       </header>
