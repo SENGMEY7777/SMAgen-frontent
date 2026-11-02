@@ -123,7 +123,7 @@
                 </div>
               </div>
 
-              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" @click.stop>
+              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" :class="{ 'drop-up': projectMenuOpensUp }" @click.stop>
                 <button class="project-dropdown-item" type="button" @click.stop="copyProjectName(project)">
                   <IconCopy :size="16" />
                   <span>Copy Project Name</span>
@@ -238,7 +238,7 @@
                 </button>
 
                 <!-- Floating Dropdown Menu Card -->
-                <div v-if="activeMenuId === item.id" class="item-dropdown-menu" @click.stop>
+                <div v-if="activeMenuId === item.id" class="item-dropdown-menu" :class="{ 'drop-up': menuOpensUp }" @click.stop>
                   <button class="dropdown-item" type="button" @click.stop="handlePin(item)">
                     <IconPin :size="15" />
                     <span class="dropdown-label">{{ item.pinned ? 'Unpin' : 'Pin' }}</span>
@@ -540,6 +540,8 @@ const formatRecentTime = (timestamp) => {
 
 const activeMenuId = ref(null)
 const activeProjectMenuId = ref(null)
+const menuOpensUp = ref(false)
+const projectMenuOpensUp = ref(false)
 const projectToDelete = ref(null)
 const renamingId = ref(null)
 const renameDraft = ref('')
@@ -552,7 +554,17 @@ const deleteProjectMessage = computed(() => {
 
 const toggleProjectMenu = (projectId, event) => {
   event?.stopPropagation()
-  activeProjectMenuId.value = activeProjectMenuId.value === projectId ? null : projectId
+  if (activeProjectMenuId.value === projectId) {
+    activeProjectMenuId.value = null
+    return
+  }
+  if (event?.currentTarget) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    projectMenuOpensUp.value = (window.innerHeight - rect.bottom) < 260
+  } else {
+    projectMenuOpensUp.value = false
+  }
+  activeProjectMenuId.value = projectId
 }
 
 const copyProjectName = async (project) => {
@@ -596,7 +608,17 @@ const deleteProject = (project) => {
 
 const toggleMenu = (id, event) => {
   event?.stopPropagation()
-  activeMenuId.value = activeMenuId.value === id ? null : id
+  if (activeMenuId.value === id) {
+    activeMenuId.value = null
+    return
+  }
+  if (event?.currentTarget) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    menuOpensUp.value = (window.innerHeight - rect.bottom) < 260
+  } else {
+    menuOpensUp.value = false
+  }
+  activeMenuId.value = id
 }
 
 const closeAllMenus = () => {
@@ -736,7 +758,7 @@ const unassignedItems = computed(() => {
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0 3px 14px 12px;
+  padding: 0 3px 28px 12px;
   display: flex;
   flex-direction: column;
 }
@@ -938,6 +960,12 @@ const unassignedItems = computed(() => {
   background: #ffffff;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
   animation: menuIn 0.12s ease-out;
+}
+
+.project-dropdown-menu.drop-up {
+  top: auto;
+  bottom: 34px;
+  animation: menuInUp 0.12s ease-out;
 }
 
 .project-dropdown-item {
@@ -1170,8 +1198,19 @@ const unassignedItems = computed(() => {
   animation: menuIn 0.12s ease-out;
 }
 
+.item-dropdown-menu.drop-up {
+  top: auto;
+  bottom: calc(100% + 2px);
+  animation: menuInUp 0.12s ease-out;
+}
+
 @keyframes menuIn {
   from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes menuInUp {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
