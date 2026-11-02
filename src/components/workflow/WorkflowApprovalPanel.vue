@@ -124,9 +124,11 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
 <style scoped>
 .workflow-approval-panel {
+  order: -1;
   width: 100%;
-  margin: 18px 0 16px;
-  padding: 18px;
+  max-width: 820px;
+  margin: 0 0 12px 0;
+  padding: 18px 20px;
   border: 1px solid #dbe3ec;
   border-radius: 16px;
   background: #ffffff;
@@ -215,11 +217,17 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 }
 
 .workflow-choice input {
-  width: 17px;
-  height: 17px;
-  margin: 0;
-  flex: 0 0 auto;
-  accent-color: #2563eb;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .workflow-choice-number {
