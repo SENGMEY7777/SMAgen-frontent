@@ -437,12 +437,6 @@ const handleNewChat = () => {
   })
 }
 
-watch(() => chatStore.activeSessionId, (newId, oldId) => {
-  if (!newId && oldId) {
-    handleNewChat()
-  }
-})
-
 const toggleStreamOpen = (workflow) => {
   if (workflow) {
     workflow.isStreamOpen = workflow.isStreamOpen === false ? true : false
@@ -987,12 +981,6 @@ let workflowStopRequested = false
 watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
   if (String(sessionId || '') === String(previousSessionId || '')) return
 
-  // Creating the first session is part of sending the current message; do
-  // not clear that request's loading state when the store assigns its ID.
-  if (!previousSessionId) return
-
-  // Composer state belongs to the selected chat. Abort a pending text reply
-  // so its late chunks cannot be written into the newly selected history.
   if (activeAbortController) {
     activeAbortController.abort()
     activeAbortController = null
@@ -1007,8 +995,12 @@ watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
   editDraft.value = ''
   activeMode.value = 'chat'
   nextTick(() => {
+    autoResizeTextarea()
     handleScroll()
-    scrollToBottom()
+    scrollToBottom(true)
+    if (!sessionId) {
+      textareaRef.value?.focus()
+    }
   })
 })
 
