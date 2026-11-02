@@ -177,16 +177,16 @@
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
                     </button>
-                    <RouterLink
+                    <button
                       v-else
                       class="project-sidebar-item-link"
-                      :to="`/runs/${item.id}`"
-                      :title="item.title"
-                      @click="closeMenu"
+                      type="button"
+                      :title="`Open chat: ${item.title}`"
+                      @click="selectWorkflow(item)"
                     >
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
-                    </RouterLink>
+                    </button>
                   </div>
                 </div>
               </Transition>
@@ -239,16 +239,16 @@
                   <span class="recent-title">{{ item.title }}</span>
                 </button>
 
-                <!-- Workflow Item Link -->
-                <RouterLink
+                <!-- Workflow item: open its conversation in Chat, not the DAG canvas. -->
+                <button
                   v-else
                   class="recent-link"
-                  :to="`/runs/${item.id}`"
-                  :title="item.title"
-                  @click="closeMenu"
+                  type="button"
+                  :title="`Open chat: ${item.title}`"
+                  @click="selectWorkflow(item)"
                 >
                   <span class="recent-title">{{ item.title }}</span>
-                </RouterLink>
+                </button>
 
                 <!-- 3-Dots Button -->
                 <button
@@ -514,6 +514,8 @@ const handleProjectUpload = (event) => {
 }
 
 const getProjectIdForItem = (item) => {
+  if (item.projectId) return item.projectId
+
   const explicitlyLinkedProject = projectsStore.projects.find((project) =>
     project.linkedItems?.some((linkedItemId) => String(linkedItemId) === String(item.id)),
   )
@@ -532,6 +534,7 @@ const getProjectIdForItem = (item) => {
 const newChat = () => {
   projectsStore.activeProjectId = null
   chatStore.startNewChat()
+  window.dispatchEvent(new CustomEvent('kairo:new-chat'))
   closeMenu()
   if (route.name !== 'chat') {
     router.push({ name: 'chat' })
@@ -544,6 +547,28 @@ const selectChat = (sessionId) => {
   projectsStore.activeProjectId = projId || null
   if (projId && collapsedProjectIds.value.has(projId)) {
     toggleProjectHistory(projId)
+  }
+  closeMenu()
+  if (route.name !== 'chat') {
+    router.push({ name: 'chat' })
+  }
+}
+
+const selectWorkflow = (item) => {
+  const projectId = getProjectIdForItem(item)
+  const session = chatStore.ensureWorkflowSession({
+    runId: item.id,
+    title: item.title,
+    status: item.status,
+    projectId,
+    createdAt: item.updatedAt,
+  })
+
+  if (!session) return
+
+  projectsStore.activeProjectId = session.projectId || projectId || null
+  if (projectsStore.activeProjectId && collapsedProjectIds.value.has(projectsStore.activeProjectId)) {
+    toggleProjectHistory(projectsStore.activeProjectId)
   }
   closeMenu()
   if (route.name !== 'chat') {
@@ -741,6 +766,8 @@ const combinedRecentItems = computed(() => {
         id: r.id,
         title: r.goal_prompt || r.title || 'Workflow run',
         type: 'workflow',
+        status: r.status || r.run_status || r.state || 'COMPLETED',
+        projectId: r.projectId || r.project_id || null,
         pinned: false,
         updatedAt: Number.isNaN(ts) ? 0 : ts,
       }
@@ -831,6 +858,7 @@ const unassignedItems = computed(() => {
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  user-select: none;
 }
 
 .sidebar-new-chat-btn:hover {
@@ -1399,5 +1427,8 @@ const unassignedItems = computed(() => {
 .new-chat-btn {
   white-space: nowrap;
   flex-shrink: 0;
+  cursor: pointer;
+  border: none;
+  user-select: none;
 }
 </style>
