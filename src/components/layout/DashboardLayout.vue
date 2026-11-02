@@ -3,10 +3,26 @@
     <aside class="sidebar" :class="{ open: mobileOpen }">
       <!-- Fixed Sidebar Header -->
       <div class="sidebar-header">
-        <div class="brand">
-          <BrandMark />
-          <span>KAIRO</span>
+        <div class="sidebar-brand-row">
+          <div class="brand">
+            <BrandMark />
+            <span>KAIRO</span>
+          </div>
+          <button
+            class="sidebar-new-chat-icon-btn"
+            type="button"
+            title="New Chat"
+            aria-label="New Chat"
+            @click="newChat"
+          >
+            <IconPlus :size="16" />
+          </button>
         </div>
+
+        <button class="sidebar-new-chat-btn" type="button" @click="newChat">
+          <IconPlus :size="15" />
+          <span>New Chat</span>
+        </button>
 
         <label class="search-box">
           <IconSearch :size="15" />
@@ -181,6 +197,15 @@
         <div v-if="unassignedItems.length" class="side-section">
           <div class="side-label-row">
             <span class="side-label">Chats and tasks</span>
+            <button
+              class="section-action-btn"
+              type="button"
+              title="New Chat"
+              aria-label="New Chat"
+              @click="newChat"
+            >
+              <IconPlus :size="15" />
+            </button>
           </div>
           <div class="recent-list">
             <template v-for="item in unassignedItems" :key="item.id">
@@ -703,13 +728,23 @@ const combinedRecentItems = computed(() => {
       return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
     })
     .filter((r) => !chatLinkedRunIds.has(String(r.id)))
-    .map((r) => ({
-      id: r.id,
-      title: r.goal_prompt || r.title || 'Workflow run',
-      type: 'workflow',
-      pinned: false,
-      updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
-    }))
+    .map((r) => {
+      const rawDate = r.created_at || r.updatedAt || 0
+      let ts = new Date(rawDate).getTime()
+      // Guard against future timestamps caused by server/DB timezone discrepancies
+      if (!Number.isNaN(ts) && ts > Date.now()) {
+        const offsetMs = (new Date()).getTimezoneOffset() * 60000
+        const corrected = ts + offsetMs
+        ts = corrected > Date.now() ? Date.now() - 1000 : corrected
+      }
+      return {
+        id: r.id,
+        title: r.goal_prompt || r.title || 'Workflow run',
+        type: 'workflow',
+        pinned: false,
+        updatedAt: Number.isNaN(ts) ? 0 : ts,
+      }
+    })
 
   const chatItems = chatStore.sessions
     .map((s) => ({
@@ -749,6 +784,77 @@ const unassignedItems = computed(() => {
   display: flex;
   flex-direction: column;
   padding: 0 12px 6px 12px;
+}
+
+.sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.sidebar-new-chat-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-new-chat-icon-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+.sidebar-new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  height: 35px;
+  margin: 4px 0 8px 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.sidebar-new-chat-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.section-action-btn {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.section-action-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .sidebar-scrollable {
@@ -1281,5 +1387,17 @@ const unassignedItems = computed(() => {
   padding: 10px 12px 0 12px;
   border-top: 1px solid #e5e7eb;
   background: #fbfcfd;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.new-chat-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 </style>
