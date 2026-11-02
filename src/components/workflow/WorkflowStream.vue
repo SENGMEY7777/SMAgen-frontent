@@ -431,7 +431,7 @@
       <WorkflowApprovalPanel
         v-if="workflow.approval"
         :approval="workflow.approval"
-        :options="approvalOptions(workflow.approval.assignedTool)"
+        :options="approvalOptions(workflow.approval.actionSummary || workflow.approval.toolInput || workflow.approval.assignedTool)"
         :run-id="workflow.runId"
         :message-index="messageIndex"
         :decision-pending="workflow.decisionPending"
