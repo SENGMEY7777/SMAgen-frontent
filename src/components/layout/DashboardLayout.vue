@@ -98,8 +98,14 @@
                   :title="project.workspacePath"
                   @click="selectProject(project)"
                 >
-                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="17" :style="{ color: project.color }" />
-                  <IconFolder v-else :size="17" :style="{ color: project.color }" />
+                  <IconChevronDown
+                    :size="14"
+                    class="project-expand-icon"
+                    :class="{ 'rotate-minus-90': !isProjectExpanded(project.id) }"
+                    @click.stop="toggleProjectHistory(project.id)"
+                  />
+                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="16" :style="{ color: project.color }" />
+                  <IconFolder v-else :size="16" :style="{ color: project.color }" />
                   <span>{{ project.name }}</span>
                 </button>
                 <div class="project-sidebar-actions" :class="{ active: activeProjectMenuId === project.id }">
@@ -422,15 +428,9 @@ const isProjectActive = (projectId) => {
 }
 
 const selectProject = (project) => {
-  const isAlreadyActive = projectsStore.activeProjectId === project.id
   projectsStore.activeProjectId = project.id
 
-  if (isAlreadyActive) {
-    toggleProjectHistory(project.id)
-    return
-  }
-
-  // Ensure this project is expanded so its chats show automatically ("show auto")
+  // ALWAYS ensure this project is expanded when clicking it
   if (collapsedProjectIds.value.has(project.id)) {
     const next = new Set(collapsedProjectIds.value)
     next.delete(project.id)
@@ -562,7 +562,12 @@ const selectChat = (sessionId) => {
   const projId = getProjectIdForItem({ id: sessionId, type: 'chat' })
   projectsStore.activeProjectId = projId || null
   if (projId && collapsedProjectIds.value.has(projId)) {
-    toggleProjectHistory(projId)
+    const next = new Set(collapsedProjectIds.value)
+    next.delete(projId)
+    collapsedProjectIds.value = next
+    try {
+      localStorage.setItem('collapsed_project_ids', JSON.stringify(Array.from(next)))
+    } catch {}
   }
   closeMenu()
   if (route.name !== 'chat') {
@@ -584,7 +589,12 @@ const selectWorkflow = (item) => {
 
   projectsStore.activeProjectId = session.projectId || projectId || null
   if (projectsStore.activeProjectId && collapsedProjectIds.value.has(projectsStore.activeProjectId)) {
-    toggleProjectHistory(projectsStore.activeProjectId)
+    const next = new Set(collapsedProjectIds.value)
+    next.delete(projectsStore.activeProjectId)
+    collapsedProjectIds.value = next
+    try {
+      localStorage.setItem('collapsed_project_ids', JSON.stringify(Array.from(next)))
+    } catch {}
   }
   closeMenu()
   if (route.name !== 'chat') {
@@ -1019,6 +1029,22 @@ const unassignedItems = computed(() => {
 .project-sidebar-project.active {
   background: transparent;
   color: #111827;
+}
+
+.project-expand-icon {
+  flex: 0 0 auto;
+  color: #9ca3af;
+  margin-right: -4px;
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.project-expand-icon:hover {
+  color: #111827;
+}
+
+.project-expand-icon.rotate-minus-90 {
+  transform: rotate(-90deg);
 }
 
 .project-sidebar-project svg {
