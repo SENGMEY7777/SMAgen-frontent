@@ -104,10 +104,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const selectSession = (sessionId) => {
-    const exists = sessions.value.some((s) => s.id === sessionId)
-    if (exists) {
-      activeSessionId.value = sessionId
+    const session = sessions.value.find((s) => String(s.id) === String(sessionId))
+    if (session) {
+      activeSessionId.value = session.id
     }
+  }
+
+  const getSessionMessages = (sessionId = activeSessionId.value) => {
+    return sessions.value.find((session) => String(session.id) === String(sessionId))?.messages || []
   }
 
   const addMessage = ({ role, content, images = [], files = [], ...rest }) => {
@@ -179,14 +183,86 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  const updateMessage = (index, updates) => {
-    const session = sessions.value.find((s) => s.id === activeSessionId.value)
+  const updateMessage = (index, updates, sessionId = activeSessionId.value) => {
+    const session = sessions.value.find((s) => String(s.id) === String(sessionId))
     const message = session?.messages?.[index]
     if (!message || !updates || typeof updates !== 'object') return null
 
     Object.assign(message, updates)
     session.updatedAt = new Date().toISOString()
     return message
+  }
+
+  const ensureWorkflowSession = ({
+    runId,
+    title = 'Workflow chat',
+    status = 'COMPLETED',
+    projectId = null,
+    createdAt = null,
+  } = {}) => {
+    if (!runId) return null
+
+    const normalizedRunId = String(runId)
+    const existingSession = sessions.value.find((session) => (
+      session.messages?.some((message) => String(message?.workflow?.runId || '') === normalizedRunId)
+    ))
+
+    if (existingSession) {
+      activeSessionId.value = existingSession.id
+      return existingSession
+    }
+
+    const timestamp = createdAt && !Number.isNaN(new Date(createdAt).getTime())
+      ? new Date(createdAt).toISOString()
+      : new Date().toISOString()
+    const workflowTitle = String(title || 'Workflow chat').trim() || 'Workflow chat'
+    const session = {
+      id: `chat_workflow_${normalizedRunId}`,
+      title: workflowTitle.length > 50 ? `${workflowTitle.slice(0, 47)}...` : workflowTitle,
+      type: 'chat',
+      projectId: projectId || null,
+      messages: [
+        {
+          id: createMessageId(),
+          role: 'user',
+          content: workflowTitle,
+          images: [],
+          files: [],
+          requestMode: 'workflow',
+          createdAt: timestamp,
+        },
+        {
+          id: createMessageId(),
+          role: 'assistant',
+          content: '',
+          images: [],
+          files: [],
+          requestMode: 'workflow',
+          workflow: {
+            runId: normalizedRunId,
+            goalPrompt: workflowTitle,
+            status: String(status || 'COMPLETED').toUpperCase(),
+            startedAt: new Date(timestamp).getTime(),
+            elapsedSeconds: 0,
+            approval: null,
+            decisionPending: false,
+            cancellationPending: false,
+            tasks: [],
+            logs: [],
+            isStreamOpen: false,
+            expandedSteps: {},
+            error: '',
+          },
+          createdAt: timestamp,
+        },
+      ],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+
+    sessions.value.unshift(session)
+    activeSessionId.value = session.id
+    return session
   }
 
   const renameSession = (sessionId, newTitle) => {
@@ -213,8 +289,10 @@ export const useChatStore = defineStore('chat', () => {
     startNewChat,
     selectSession,
     addMessage,
+    getSessionMessages,
     editMessage,
     updateMessage,
+    ensureWorkflowSession,
     renameSession,
     togglePinSession,
     deleteSession,
