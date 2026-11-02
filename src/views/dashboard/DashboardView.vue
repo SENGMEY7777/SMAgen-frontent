@@ -409,13 +409,39 @@ const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse(
 )) || null)
 const hasActiveWorkflowRun = computed(() => Boolean(activeWorkflowMessage.value))
 
-const workflowApprovalOptions = () => [
-  { number: '1', value: 'allow_once', label: 'Yes, allow this time' },
-  { number: '2', value: 'allow_conversation', label: 'Yes, and always allow in this conversation' },
-  { number: '3', value: 'allow_project', label: 'Yes, and always allow in this project' },
-  { number: '4', value: 'allow_always', label: 'Yes, and always allow' },
-  { number: '5', value: 'reject', label: 'No (tell the agent what to do instead)' },
-]
+const workflowApprovalOptions = (tool = 'this action') => {
+  const shortTool = typeof tool === 'string' && tool.length > 50 ? `${tool.slice(0, 47)}...` : (tool || 'this action')
+  return [
+    { number: '1', value: 'allow_once', label: 'Yes, allow this time' },
+    { number: '2', value: 'allow_conversation', label: `Yes, and always allow '${shortTool}' in this conversation` },
+    { number: '3', value: 'allow_project', label: `Yes, and always allow '${shortTool}' in this project` },
+    { number: '4', value: 'allow_always', label: `Yes, and always allow '${shortTool}'` },
+    { number: '5', value: 'reject', label: 'No (tell SMAgen what to do instead)' },
+  ]
+}
+
+const handleNewChat = () => {
+  if (activeAbortController) {
+    activeAbortController.abort()
+    activeAbortController = null
+  }
+  loading.value = false
+  input.value = ''
+  attachedImages.value = []
+  attachedFiles.value = []
+  errorMessage.value = ''
+  streamingContent.value = ''
+  autoResizeTextarea()
+  nextTick(() => {
+    textareaRef.value?.focus()
+  })
+}
+
+watch(() => chatStore.activeSessionId, (newId, oldId) => {
+  if (!newId && oldId) {
+    handleNewChat()
+  }
+})
 
 const toggleStreamOpen = (workflow) => {
   if (workflow) {
@@ -650,8 +676,9 @@ const getCurrentWorkingText = (workflow) => {
   return `Workflow status: ${status || 'UNKNOWN'}`
 }
 
-const updateWorkflowMessage = (index, patch) => {
-  const message = currentMessages.value[index]
+const updateWorkflowMessage = (index, patch, sessionId = chatStore.activeSessionId) => {
+  const sessionMessages = chatStore.getSessionMessages(sessionId)
+  const message = sessionMessages[index]
   if (!message?.workflow) return null
 
   const nextWorkflow = {
@@ -665,7 +692,7 @@ const updateWorkflowMessage = (index, patch) => {
       : null
   }
 
-  return chatStore.updateMessage(index, { workflow: nextWorkflow })
+  return chatStore.updateMessage(index, { workflow: nextWorkflow }, sessionId)
 }
 
 const updateWorkflowApproval = (message, field, value) => {
@@ -957,6 +984,34 @@ const cancelEditUserMessage = () => {
 let activeAbortController = null
 let workflowStopRequested = false
 
+watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
+  if (String(sessionId || '') === String(previousSessionId || '')) return
+
+  // Creating the first session is part of sending the current message; do
+  // not clear that request's loading state when the store assigns its ID.
+  if (!previousSessionId) return
+
+  // Composer state belongs to the selected chat. Abort a pending text reply
+  // so its late chunks cannot be written into the newly selected history.
+  if (activeAbortController) {
+    activeAbortController.abort()
+    activeAbortController = null
+  }
+  streamingContent.value = ''
+  loading.value = false
+  errorMessage.value = ''
+  input.value = ''
+  attachedImages.value = []
+  attachedFiles.value = []
+  editingIndex.value = null
+  editDraft.value = ''
+  activeMode.value = 'chat'
+  nextTick(() => {
+    handleScroll()
+    scrollToBottom()
+  })
+})
+
 const stopGeneration = () => {
   if (activeWorkflowMessage.value?.workflow?.runId) {
     cancelWorkflowRun(activeWorkflowMessage.value)
@@ -975,20 +1030,22 @@ const stopGeneration = () => {
   }
 }
 
-const commitStreamingResponse = () => {
+const commitStreamingResponse = (sessionId = chatStore.activeSessionId) => {
   const content = streamingContent.value
-  if (content) {
+  // A response belongs to the chat that started it. Never append a late
+  // response to whichever chat the user selected while it was generating.
+  if (content && String(sessionId || '') === String(chatStore.activeSessionId || '')) {
     chatStore.addMessage({ role: 'assistant', content })
   }
   streamingContent.value = ''
 }
 
-const requestChatReply = async (prompt, history, signal) => {
+const requestChatReply = async (prompt, history, signal, sessionId = chatStore.activeSessionId) => {
   streamingContent.value = ''
   let receivedChunk = false
 
   const activeProj = projectsStore?.activeProject
-  const localDest = inferWorkflowLocalDestination(prompt, currentMessages.value)
+  const localDest = inferWorkflowLocalDestination(prompt, chatStore.getSessionMessages(sessionId))
   const projectContext = activeProj ? {
     id: activeProj.id,
     name: activeProj.name,
@@ -1031,8 +1088,8 @@ const isWorkflowUserMessage = (index, message) => {
     || detectRequestMode(message?.content || '') === 'workflow'
 }
 
-const addWorkflowPlaceholder = (goalPrompt) => {
-  const workflowMessageIndex = currentMessages.value.length
+const addWorkflowPlaceholder = (goalPrompt, sessionId = chatStore.activeSessionId) => {
+  const workflowMessageIndex = chatStore.getSessionMessages(sessionId).length
   chatStore.addMessage({
     role: 'assistant',
     content: '',
@@ -1056,7 +1113,12 @@ const addWorkflowPlaceholder = (goalPrompt) => {
   return workflowMessageIndex
 }
 
-const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = []) => {
+const startWorkflowRun = async (
+  workflowMessageIndex,
+  goalPrompt,
+  contextMessages = [],
+  sessionId = chatStore.activeSessionId,
+) => {
   workflowStopRequested = false
   const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
   const response = await api.runWorkflow({
@@ -1070,15 +1132,20 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
     runId: String(runId),
     status: 'RUNNING',
     error: '',
-  })
+  }, sessionId)
 
-  if (workflowStopRequested) {
+  if (workflowStopRequested && String(sessionId || '') === String(chatStore.activeSessionId || '')) {
     workflowStopRequested = false
-    await cancelWorkflowRun(currentMessages.value[workflowMessageIndex])
+    await cancelWorkflowRun(chatStore.getSessionMessages(sessionId)[workflowMessageIndex])
     return
   }
 
-  startWorkflowPolling(workflowMessageIndex, String(runId))
+  // Polling follows the selected chat. If the user switched chats while the
+  // run was being created, the runtime will resume polling when that chat is
+  // selected again.
+  if (String(sessionId || '') === String(chatStore.activeSessionId || '')) {
+    startWorkflowPolling(workflowMessageIndex, String(runId))
+  }
 }
 
 const submitEditUserMessage = async (index) => {
@@ -1281,16 +1348,17 @@ const send = async () => {
   }
 
   if (requestMode === 'workflow') {
-    chatStore.addMessage({
+    const workflowSession = chatStore.addMessage({
       role: 'user',
       content: message,
       images,
       files,
       requestMode: 'workflow',
     })
+    const workflowSessionId = workflowSession?.id || chatStore.activeSessionId
 
     const goalPrompt = message || (files.length ? 'Run a workflow using the uploaded file(s).' : 'Run workflow')
-    const workflowMessageIndex = addWorkflowPlaceholder(goalPrompt)
+    const workflowMessageIndex = addWorkflowPlaceholder(goalPrompt, workflowSessionId)
 
     input.value = ''
     attachedImages.value = []
@@ -1301,12 +1369,17 @@ const send = async () => {
     try {
       // The current user message and the workflow placeholder are both already
       // in the store; only earlier messages should provide follow-up context.
-      await startWorkflowRun(workflowMessageIndex, fullPrompt, currentMessages.value.slice(0, -2))
+      await startWorkflowRun(
+        workflowMessageIndex,
+        fullPrompt,
+        chatStore.getSessionMessages(workflowSessionId).slice(0, -2),
+        workflowSessionId,
+      )
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
         error: error instanceof ApiError ? error.message : 'Unable to start the workflow.',
-      })
+      }, workflowSessionId)
     } finally {
       loading.value = false
       scrollToBottom()
@@ -1324,13 +1397,14 @@ const send = async () => {
     }))
 
   // Add user message to active chat session
-  chatStore.addMessage({
+  const chatSession = chatStore.addMessage({
     role: 'user',
     content: message,
     images,
     files,
     requestMode: 'chat',
   })
+  const chatSessionId = chatSession?.id || chatStore.activeSessionId
 
   input.value = ''
   attachedImages.value = []
@@ -1347,14 +1421,14 @@ const send = async () => {
 
   try {
     const promptToSend = fullPrompt || (images.length ? 'I have attached an image. Please review it.' : '')
-    await requestChatReply(promptToSend, history, signal)
+    await requestChatReply(promptToSend, history, signal, chatSessionId)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
     }
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to generate a response.'
   } finally {
-    commitStreamingResponse()
+    commitStreamingResponse(chatSessionId)
     activeAbortController = null
     loading.value = false
     scrollToBottom()
@@ -1375,6 +1449,7 @@ onMounted(() => {
   if (chatThreadRef.value) {
     chatThreadRef.value.addEventListener('scroll', handleScroll)
   }
+  window.addEventListener('kairo:new-chat', handleNewChat)
 })
 
 onUnmounted(() => {
@@ -1385,6 +1460,7 @@ onUnmounted(() => {
   if (chatThreadRef.value) {
     chatThreadRef.value.removeEventListener('scroll', handleScroll)
   }
+  window.removeEventListener('kairo:new-chat', handleNewChat)
 })
 </script>
 
