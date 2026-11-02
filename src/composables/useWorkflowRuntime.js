@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, ApiError } from '@/services/api'
 import { createSocketClient, SOCKET_RECONNECT_ATTEMPTS } from '@/services/socket'
 import {
@@ -510,9 +510,13 @@ export function useWorkflowRuntime({
   }
 
   const startActiveWorkflowPolling = () => {
+    const sessionId = String(chatStore.activeSessionId || '')
     currentMessages.value.forEach((message, index) => {
-      if (message?.workflow?.runId && !isTerminalWorkflowStatus(message.workflow.status)) {
-        startWorkflowPolling(index, message.workflow.runId)
+      if (message?.workflow?.runId) {
+        refreshWorkflowMessage(index, message.workflow.runId, sessionId)
+        if (!isTerminalWorkflowStatus(message.workflow.status)) {
+          startWorkflowPolling(index, message.workflow.runId)
+        }
       }
     })
   }
@@ -520,7 +524,11 @@ export function useWorkflowRuntime({
   watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
     if (String(sessionId || '') === String(previousSessionId || '')) return
     stopAllWorkflowPolling()
-    if (sessionId) startActiveWorkflowPolling()
+    if (sessionId) {
+      nextTick(() => {
+        startActiveWorkflowPolling()
+      })
+    }
   })
 
   const skipWorkflowApproval = async (message) => {
