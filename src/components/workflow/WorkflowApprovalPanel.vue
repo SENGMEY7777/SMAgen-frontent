@@ -5,7 +5,7 @@
     :aria-label="approval.taskTitle || 'Approval required before this step can continue.'"
   >
     <div class="workflow-approval-meta">
-      <IconTerminal2 :size="18" />
+      <IconShieldCheck :size="16" />
       <span class="workflow-approval-meta-title">
         {{ approval.taskTitle || 'Approval required before this step can continue.' }}
       </span>
@@ -17,40 +17,22 @@
     </div>
 
     <div class="workflow-choice-list" role="radiogroup" aria-label="Workflow approval choice">
-      <div
+      <label
         v-for="option in options"
         :key="option.value"
-        class="workflow-choice-row"
+        class="workflow-choice"
+        :class="{ selected: approval.choice === option.value }"
       >
-        <label
-          class="workflow-choice"
-          :class="{ selected: approval.choice === option.value }"
-        >
-          <input
-            type="radio"
-            :name="`workflow-approval-${runId}-${messageIndex}`"
-            :value="option.value"
-            :checked="approval.choice === option.value"
-            @change="$emit('update:choice', option.value)"
-          />
-          <span class="workflow-choice-number">{{ option.number }}</span>
-          <span>{{ option.label }}</span>
-        </label>
-        <div
-          v-if="option.value === 'reject'"
-          class="workflow-approval-actions"
-          role="group"
-          aria-label="Approval actions"
-        >
-          <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
-            Skip
-          </button>
-          <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
-            <IconCornerDownLeft v-if="!decisionPending" :size="16" />
-            <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
-          </button>
-        </div>
-      </div>
+        <input
+          type="radio"
+          :name="`workflow-approval-${runId}-${messageIndex}`"
+          :value="option.value"
+          :checked="approval.choice === option.value"
+          @change="$emit('update:choice', option.value)"
+        />
+        <span class="workflow-choice-number">{{ option.number }}</span>
+        <span>{{ option.label }}</span>
+      </label>
     </div>
 
     <textarea
@@ -63,12 +45,21 @@
     ></textarea>
 
     <div v-if="error" class="workflow-card-error">{{ error }}</div>
+    <div class="workflow-approval-actions" role="group" aria-label="Approval actions">
+      <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
+        Skip
+      </button>
+      <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
+        <IconCheck v-if="!decisionPending" :size="15" />
+        <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { IconCornerDownLeft, IconTerminal2 } from '@tabler/icons-vue'
+import { IconCheck, IconShieldCheck } from '@tabler/icons-vue'
 import { highlightCode } from '@/utils/markdown'
 
 const props = defineProps({
@@ -133,39 +124,29 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
 <style scoped>
 .workflow-approval-panel {
-  order: -1;
   width: 100%;
-  max-height: min(520px, calc(100dvh - 190px));
-  overflow-y: auto;
-  margin: 0 0 12px;
-  padding: clamp(18px, 1.5vw, 26px);
-  border: 1px solid #e2e4e8;
-  border-radius: 15px;
+  margin: 18px 0 16px;
+  padding: 18px;
+  border: 1px solid #dbe3ec;
+  border-radius: 16px;
   background: #ffffff;
-  color: #202124;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-  scrollbar-width: none;
-}
-
-.workflow-approval-panel::-webkit-scrollbar {
-  display: none;
+  color: #172033;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.07);
 }
 
 .workflow-approval-meta {
   display: flex;
   align-items: center;
-  gap: clamp(10px, 0.9vw, 15px);
-  color: #202124;
-  font-size: clamp(18px, 1.8vw, 30px);
-  line-height: 1.15;
-  font-weight: 650;
+  gap: 10px;
+  color: #172033;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 600;
 }
 
 .workflow-approval-meta svg {
-  width: clamp(18px, 1.5vw, 26px);
-  height: clamp(18px, 1.5vw, 26px);
   flex: 0 0 auto;
-  color: #5f6368;
+  color: #2563eb;
 }
 
 .workflow-approval-meta-title {
@@ -175,137 +156,92 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
 .workflow-command-box {
   display: grid;
-  gap: clamp(4px, 0.4vw, 7px);
-  margin-top: clamp(14px, 1.2vw, 20px);
-  padding: clamp(12px, 1vw, 17px) clamp(14px, 1.2vw, 20px);
-  border: 1px solid #eceef1;
-  border-radius: clamp(12px, 1.1vw, 18px);
-  background: #f5f6f7;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid #e5eaf0;
+  border-radius: 11px;
+  background: #f8fafc;
 }
 
 .workflow-command-label {
-  color: #000000;
-  font-size: 12px;
-  font-weight: 600;
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .workflow-command-box code {
   display: block;
-  max-height: 180px;
+  max-height: 150px;
   overflow: auto;
-  color: #000000;
+  color: #334155;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: clamp(16px, 1.65vw, 28px);
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.workflow-command-box :deep(.hl-comment) {
-  color: #64748b;
-  font-style: italic;
-}
-
-.workflow-command-box :deep(.hl-string) {
-  color: #65a30d;
-}
-
-.workflow-command-box :deep(.hl-keyword) {
-  color: #db2777;
-  font-weight: 600;
-}
-
-.workflow-command-box :deep(.hl-number) {
-  color: #f472b6;
-}
-
-.workflow-command-box :deep(.hl-fn) {
-  color: #0891b2;
-  font-weight: 600;
-}
-
-.workflow-command-box :deep(.hl-flag),
-.workflow-command-box :deep(.hl-option) {
-  color: #7c3aed;
-}
-
 .workflow-choice-list {
   display: grid;
-  gap: clamp(4px, 0.55vw, 9px);
-  margin-top: clamp(14px, 1.35vw, 22px);
-}
-
-.workflow-choice-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+  gap: 7px;
+  margin-top: 16px;
 }
 
 .workflow-choice {
-  position: relative;
   display: flex;
-  flex: 1 1 auto;
   align-items: center;
-  gap: clamp(10px, 1vw, 16px);
-  min-width: 0;
-  min-height: clamp(50px, 3.7vw, 64px);
-  padding: 9px clamp(12px, 1vw, 17px);
-  border: 1px solid transparent;
-  border-radius: clamp(12px, 1vw, 17px);
-  color: #383b40;
-  font-size: clamp(16px, 1.65vw, 28px);
-  line-height: 1;
+  gap: 10px;
+  min-height: 46px;
+  padding: 9px 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
+  color: #334155;
+  font-size: 13.5px;
+  line-height: 1.35;
   cursor: pointer;
   background: #ffffff;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
-.workflow-choice:hover {
-  border-color: #e2e4e8;
-  background: #f8f9fa;
-}
-
+.workflow-choice:hover,
 .workflow-choice.selected {
-  border-color: #dedfe2;
-  color: #202124;
-  background: #f0f1f2;
+  border-color: #93c5fd;
+  color: #172033;
+  background: #eff6ff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
 }
 
 .workflow-choice input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  clip-path: inset(50%);
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: #2563eb;
 }
 
 .workflow-choice-number {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: clamp(30px, 2.4vw, 40px);
-  height: clamp(30px, 2.4vw, 40px);
-  border-radius: clamp(8px, 0.7vw, 12px);
-  color: #52565c;
-  background: #eceef0;
-  font-size: clamp(16px, 1.5vw, 26px);
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  color: #475569;
+  background: #f1f5f9;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .workflow-choice.selected .workflow-choice-number {
-  color: #35393e;
-  background: #e1e3e6;
+  color: #1d4ed8;
+  background: #dbeafe;
 }
 
-.workflow-choice:has(input:focus-visible) {
-  outline: 3px solid rgba(37, 99, 235, 0.3);
+.workflow-choice input:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
   outline-offset: 2px;
 }
 
@@ -317,7 +253,7 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   border-radius: 10px;
   background: #ffffff;
   color: #172033;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -330,27 +266,27 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex: 0 0 auto;
   gap: 8px;
+  margin-top: 16px;
 }
 
 .workflow-skip-btn {
-  min-height: 42px;
-  padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: #5f6368;
-  font-size: 15px;
-  font-weight: 600;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #d5dce5;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #526174;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .workflow-skip-btn:hover {
-  border-color: #e2e4e8;
-  color: #202124;
-  background: #f5f6f7;
+  border-color: #94a3b8;
+  color: #1e293b;
+  background: #f8fafc;
 }
 
 .workflow-submit-btn {
@@ -358,22 +294,22 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 38px;
+  padding: 0 17px;
   border: 1px solid transparent;
-  border-radius: 11px;
-  background: #1683d8;
+  border-radius: 9px;
+  background: #0b84d8;
   color: #ffffff;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(22, 131, 216, 0.18);
+  box-shadow: 0 4px 10px rgba(11, 132, 216, 0.2);
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .workflow-submit-btn:hover {
-  background: #0873c5;
-  box-shadow: 0 6px 14px rgba(22, 131, 216, 0.24);
+  background: #076eb8;
+  box-shadow: 0 6px 14px rgba(11, 132, 216, 0.25);
   transform: translateY(-1px);
 }
 
@@ -396,16 +332,18 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   border-radius: 6px;
   background: #fef2f2;
   color: #b91c1c;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 @media (max-width: 560px) {
   .workflow-approval-panel {
-    width: 100%;
-    max-height: min(560px, calc(100dvh - 160px));
     margin-top: 14px;
     padding: 14px;
     border-radius: 14px;
+  }
+
+  .workflow-approval-meta {
+    font-size: 14px;
   }
 
   .workflow-choice {
@@ -418,18 +356,13 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
     margin-top: 2px;
   }
 
-  .workflow-choice-row {
-    flex-wrap: wrap;
-  }
-
   .workflow-approval-actions {
-    width: 100%;
-    justify-content: flex-end;
+    justify-content: stretch;
   }
 
   .workflow-skip-btn,
   .workflow-submit-btn {
-    min-height: 40px;
+    flex: 1;
   }
 }
 </style>
