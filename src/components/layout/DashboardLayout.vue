@@ -96,7 +96,7 @@
                   :class="{ active: isProjectActive(project.id) }"
                   type="button"
                   :title="project.workspacePath"
-                  @click="toggleProject(project.id)"
+                  @click="selectProject(project)"
                 >
                   <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="17" :style="{ color: project.color }" />
                   <IconFolder v-else :size="17" :style="{ color: project.color }" />
@@ -418,7 +418,40 @@ const closeMenu = () => {
 }
 
 const isProjectActive = (projectId) => {
-  return route.name === 'projects' && projectsStore.activeProjectId === projectId
+  return projectsStore.activeProjectId === projectId
+}
+
+const selectProject = (project) => {
+  const isAlreadyActive = projectsStore.activeProjectId === project.id
+  projectsStore.activeProjectId = project.id
+
+  if (isAlreadyActive) {
+    toggleProjectHistory(project.id)
+    return
+  }
+
+  // Ensure this project is expanded so its chats show automatically ("show auto")
+  if (collapsedProjectIds.value.has(project.id)) {
+    const next = new Set(collapsedProjectIds.value)
+    next.delete(project.id)
+    collapsedProjectIds.value = next
+    try {
+      localStorage.setItem('collapsed_project_ids', JSON.stringify(Array.from(next)))
+    } catch {}
+  }
+
+  // Auto-select latest chat and show it in the chatbot
+  const items = projectItemsById.value[project.id] || []
+  if (items.length > 0) {
+    const firstItem = items[0]
+    if (firstItem.type === 'chat') {
+      selectChat(firstItem.id)
+    } else {
+      selectWorkflow(firstItem)
+    }
+  } else {
+    startProjectChat(project.id)
+  }
 }
 
 const isItemActive = (item) => {
