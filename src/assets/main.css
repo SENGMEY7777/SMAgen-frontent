@@ -500,6 +500,11 @@
   pointer-events: auto;
 }
 
+.composer-container:has(.workflow-approval-panel) .composer {
+  width: 100%;
+  max-width: none;
+}
+
 .scroll-down-btn {
   position: absolute;
   top: -38px;
