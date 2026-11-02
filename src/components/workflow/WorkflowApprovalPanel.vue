@@ -50,8 +50,8 @@
         Skip
       </button>
       <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
-        <IconCheck v-if="!decisionPending" :size="15" />
         <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
+        <IconCornerDownLeft v-if="!decisionPending" :size="13" class="workflow-submit-enter" />
       </button>
     </div>
   </div>
@@ -59,7 +59,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { IconCheck, IconShieldCheck } from '@tabler/icons-vue'
+import { IconCornerDownLeft, IconShieldCheck } from '@tabler/icons-vue'
 import { highlightCode } from '@/utils/markdown'
 
 const props = defineProps({
@@ -266,63 +266,71 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .workflow-skip-btn {
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid #d5dce5;
-  border-radius: 9px;
-  background: #ffffff;
-  color: #526174;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: color 0.12s ease;
 }
 
 .workflow-skip-btn:hover {
-  border-color: #94a3b8;
-  color: #1e293b;
-  background: #f8fafc;
+  color: #111827;
 }
 
 .workflow-submit-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 38px;
-  padding: 0 17px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: #0b84d8;
+  gap: 5px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: #0284c7;
   color: #ffffff;
+  font-family: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(11, 132, 216, 0.2);
-  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.2);
+  transition: background 0.12s ease, opacity 0.12s ease;
 }
 
 .workflow-submit-btn:hover {
-  background: #076eb8;
-  box-shadow: 0 6px 14px rgba(11, 132, 216, 0.25);
-  transform: translateY(-1px);
+  background: #0369a1;
+}
+
+.workflow-submit-enter {
+  margin-left: 1px;
+  opacity: 0.9;
 }
 
 .workflow-submit-btn:focus-visible,
 .workflow-skip-btn:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline: 2px solid rgba(2, 132, 199, 0.35);
   outline-offset: 2px;
 }
 
 .workflow-submit-btn:disabled,
 .workflow-skip-btn:disabled {
   cursor: wait;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .workflow-card-error {
