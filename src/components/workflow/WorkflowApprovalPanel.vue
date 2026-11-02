@@ -134,7 +134,7 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 <style scoped>
 .workflow-approval-panel {
   order: -1;
-  width: min(770px, 100%);
+  width: 100%;
   max-height: min(520px, calc(100dvh - 190px));
   overflow-y: auto;
   margin: 0 0 12px;
@@ -156,14 +156,14 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   gap: clamp(10px, 0.9vw, 15px);
   color: #202124;
-  font-size: 22px;
-  line-height: 0.5;
+  font-size: clamp(18px, 1.8vw, 30px);
+  line-height: 1.15;
   font-weight: 650;
 }
 
 .workflow-approval-meta svg {
-  width: clamp(18px, 1.5vw, 24px);
-  height: clamp(18px, 1.5vw, 24px);
+  width: clamp(18px, 1.5vw, 26px);
+  height: clamp(18px, 1.5vw, 26px);
   flex: 0 0 auto;
   color: #5f6368;
 }
@@ -197,7 +197,7 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   overflow: auto;
   color: #000000;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 18px;
+  font-size: clamp(16px, 1.65vw, 28px);
   line-height: 1.35;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -251,12 +251,12 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   gap: clamp(10px, 1vw, 16px);
   min-width: 0;
-  min-height: clamp(50px, 3.2vw, 58px);
+  min-height: clamp(50px, 3.7vw, 64px);
   padding: 9px clamp(12px, 1vw, 17px);
   border: 1px solid transparent;
   border-radius: clamp(12px, 1vw, 17px);
   color: #383b40;
-  font-size: 16px;
+  font-size: clamp(16px, 1.65vw, 28px);
   line-height: 1;
   cursor: pointer;
   background: #ffffff;
@@ -290,12 +290,12 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: clamp(30px, 2.2vw, 38px);
-  height: clamp(30px, 2.2vw, 38px);
+  width: clamp(30px, 2.4vw, 40px);
+  height: clamp(30px, 2.4vw, 40px);
   border-radius: clamp(8px, 0.7vw, 12px);
   color: #52565c;
   background: #eceef0;
-  font-size: 16px;
+  font-size: clamp(16px, 1.5vw, 26px);
   font-weight: 700;
 }
 
