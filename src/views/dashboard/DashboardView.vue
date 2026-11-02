@@ -439,7 +439,7 @@ const handleNewChat = () => {
 
 const toggleStreamOpen = (workflow) => {
   if (workflow) {
-    workflow.isStreamOpen = workflow.isStreamOpen === false ? true : false
+    workflow.isStreamOpen = workflow.isStreamOpen !== false ? false : true
   }
 }
 
