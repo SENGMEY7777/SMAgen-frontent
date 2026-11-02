@@ -8,21 +8,7 @@
             <BrandMark />
             <span>KAIRO</span>
           </div>
-          <button
-            class="sidebar-new-chat-icon-btn"
-            type="button"
-            title="New Chat"
-            aria-label="New Chat"
-            @click="newChat"
-          >
-            <IconPlus :size="16" />
-          </button>
         </div>
-
-        <button class="sidebar-new-chat-btn" type="button" @click="newChat">
-          <IconPlus :size="15" />
-          <span>New Chat</span>
-        </button>
 
         <label class="search-box">
           <IconSearch :size="15" />
@@ -197,15 +183,6 @@
         <div v-if="unassignedItems.length" class="side-section">
           <div class="side-label-row">
             <span class="side-label">Chats and tasks</span>
-            <button
-              class="section-action-btn"
-              type="button"
-              title="New Chat"
-              aria-label="New Chat"
-              @click="newChat"
-            >
-              <IconPlus :size="15" />
-            </button>
           </div>
           <div class="recent-list">
             <template v-for="item in unassignedItems" :key="item.id">
@@ -449,7 +426,13 @@ const isItemActive = (item) => {
     return chatStore.activeSessionId === item.id && route.name === 'chat'
   }
   if (item.type === 'workflow') {
-    return route.name === 'run-detail' && String(route.params.runId) === String(item.id)
+    return (
+      (route.name === 'run-detail' && String(route.params.runId) === String(item.id)) ||
+      (route.name === 'chat' && (
+        chatStore.activeSessionId === `chat_workflow_${item.id}` ||
+        chatStore.activeSession?.messages?.some((m) => String(m?.workflow?.runId || '') === String(item.id))
+      ))
+    )
   }
   return false
 }
@@ -818,71 +801,6 @@ const unassignedItems = computed(() => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-}
-
-.sidebar-new-chat-icon-btn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  flex-shrink: 0;
-}
-
-.sidebar-new-chat-icon-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
-  border-color: #d1d5db;
-}
-
-.sidebar-new-chat-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 100%;
-  height: 35px;
-  margin: 4px 0 8px 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #111827;
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
-  user-select: none;
-}
-
-.sidebar-new-chat-btn:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.section-action-btn {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border-radius: 6px;
-  border: 0;
-  background: transparent;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.section-action-btn:hover {
-  background: #e5e7eb;
-  color: #111827;
 }
 
 .sidebar-scrollable {
