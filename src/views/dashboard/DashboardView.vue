@@ -409,12 +409,12 @@ const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse(
 )) || null)
 const hasActiveWorkflowRun = computed(() => Boolean(activeWorkflowMessage.value))
 
-const workflowApprovalOptions = (tool = 'this action') => [
+const workflowApprovalOptions = () => [
   { number: '1', value: 'allow_once', label: 'Yes, allow this time' },
-  { number: '2', value: 'allow_conversation', label: `Yes, and always allow '${tool}' in this conversation` },
-  { number: '3', value: 'allow_project', label: `Yes, and always allow '${tool}' in this project` },
-  { number: '4', value: 'allow_always', label: `Yes, and always allow '${tool}'` },
-  { number: '5', value: 'reject', label: 'No (tell SMAgen what to do instead)' },
+  { number: '2', value: 'allow_conversation', label: 'Yes, and always allow in this conversation' },
+  { number: '3', value: 'allow_project', label: 'Yes, and always allow in this project' },
+  { number: '4', value: 'allow_always', label: 'Yes, and always allow' },
+  { number: '5', value: 'reject', label: 'No (tell the agent what to do instead)' },
 ]
 
 const toggleStreamOpen = (workflow) => {
