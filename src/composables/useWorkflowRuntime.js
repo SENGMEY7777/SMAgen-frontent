@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, ApiError } from '@/services/api'
 import { createSocketClient, SOCKET_RECONNECT_ATTEMPTS } from '@/services/socket'
 import {
@@ -290,11 +290,12 @@ export function useWorkflowRuntime({
     scrollToBottom()
   }
 
-  const stopWorkflowPolling = (runId) => {
-    const poller = workflowPollers.get(String(runId))
+  const stopWorkflowPolling = (runId, sessionId = chatStore.activeSessionId) => {
+    const key = `${sessionId}:${String(runId)}`
+    const poller = workflowPollers.get(key)
     if (poller) {
       window.clearInterval(poller)
-      workflowPollers.delete(String(runId))
+      workflowPollers.delete(key)
     }
   }
 
@@ -368,13 +369,16 @@ export function useWorkflowRuntime({
     }
   }
 
-  const refreshWorkflowMessage = async (index, runId) => {
-    const key = `${chatStore.activeSessionId}:${index}:${runId}`
+  const refreshWorkflowMessage = async (index, runId, sessionId = chatStore.activeSessionId) => {
+    const key = `${sessionId}:${index}:${runId}`
     if (workflowRefreshes.has(key)) return
     workflowRefreshes.add(key)
 
     try {
       const response = await api.getRun(String(runId))
+      // The user may have switched chats while the request was in flight.
+      // Leave the selected chat untouched; it will refresh when selected.
+      if (String(chatStore.activeSessionId || '') !== String(sessionId || '')) return
       const workflowRun = getWorkflowRunPayload(response) || {}
       const currentWorkflow = currentMessages.value[index]?.workflow || {}
       const tasks = mergeWorkflowTasks(currentWorkflow.tasks, getWorkflowTasks(workflowRun))
@@ -404,6 +408,7 @@ export function useWorkflowRuntime({
         const approval = canReuseApproval
           ? existingApproval
           : await findWorkflowApproval(workflowRun, awaitingTask, runId, existingApproval)
+        if (String(chatStore.activeSessionId || '') !== String(sessionId || '')) return
         updateWorkflowMessage(index, {
           status: 'AWAITING_APPROVAL',
           approval,
@@ -446,9 +451,10 @@ export function useWorkflowRuntime({
           connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
           error: workflowError,
         })
-        if (isTerminal) stopWorkflowPolling(runId)
+        if (isTerminal) stopWorkflowPolling(runId, sessionId)
       }
     } catch (error) {
+      if (String(chatStore.activeSessionId || '') !== String(sessionId || '')) return
       if (isConnectionUnavailable(error)) {
         updateWorkflowMessage(index, {
           connectionStatus: 'RECONNECTING',
@@ -470,16 +476,24 @@ export function useWorkflowRuntime({
   }
 
   const startWorkflowPolling = (index, runId) => {
-    const key = String(runId)
+    const sessionId = String(chatStore.activeSessionId || '')
+    if (!sessionId) return
+
+    const key = `${sessionId}:${String(runId)}`
     if (workflowPollers.has(key)) return
 
-    refreshWorkflowMessage(index, runId)
+    refreshWorkflowMessage(index, runId, sessionId)
     const poller = window.setInterval(() => {
-      if (!currentMessages.value[index]?.workflow) {
-        stopWorkflowPolling(runId)
+      const message = currentMessages.value[index]
+      if (
+        String(chatStore.activeSessionId || '') !== sessionId
+        || !message?.workflow
+        || String(message.workflow.runId || '') !== String(runId)
+      ) {
+        stopWorkflowPolling(runId, sessionId)
         return
       }
-      refreshWorkflowMessage(index, runId)
+      refreshWorkflowMessage(index, runId, sessionId)
     }, WORKFLOW_POLL_INTERVAL_MS)
     workflowPollers.set(key, poller)
 
@@ -489,6 +503,25 @@ export function useWorkflowRuntime({
       } catch {}
     }
   }
+
+  const stopAllWorkflowPolling = () => {
+    workflowPollers.forEach((poller) => window.clearInterval(poller))
+    workflowPollers.clear()
+  }
+
+  const startActiveWorkflowPolling = () => {
+    currentMessages.value.forEach((message, index) => {
+      if (message?.workflow?.runId && !isTerminalWorkflowStatus(message.workflow.status)) {
+        startWorkflowPolling(index, message.workflow.runId)
+      }
+    })
+  }
+
+  watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
+    if (String(sessionId || '') === String(previousSessionId || '')) return
+    stopAllWorkflowPolling()
+    if (sessionId) startActiveWorkflowPolling()
+  })
 
   const skipWorkflowApproval = async (message) => {
     await submitWorkflowApproval(message, 'REJECTED', 'Skipped by user')
@@ -690,8 +723,7 @@ export function useWorkflowRuntime({
       window.clearInterval(timerInterval)
       timerInterval = null
     }
-    workflowPollers.forEach((poller) => window.clearInterval(poller))
-    workflowPollers.clear()
+    stopAllWorkflowPolling()
     if (workflowSocket) {
       try {
         workflowSocket.disconnect()
