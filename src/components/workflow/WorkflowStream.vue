@@ -61,11 +61,11 @@
 
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
       <button type="button" class="stream-steps-toggle" @click.stop="toggleStream()">
-        <span>{{ workflow.isStreamOpen ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
-        <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen }" />
+        <span>{{ workflow.isStreamOpen !== false ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
+        <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen !== false }" />
       </button>
 
-      <div v-if="workflow.isStreamOpen" class="stream-steps-list">
+      <div v-if="workflow.isStreamOpen !== false" class="stream-steps-list">
         <div
           v-for="(step, stepIndex) in getWorkflowSteps(workflow)"
           :key="step.id || stepIndex"
