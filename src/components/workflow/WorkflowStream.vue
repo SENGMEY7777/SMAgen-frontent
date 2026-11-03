@@ -61,11 +61,11 @@
 
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
       <button type="button" class="stream-steps-toggle" @click.stop="toggleStream()">
-        <span>{{ workflow.isStreamOpen !== false ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
-        <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen !== false }" />
+        <span>{{ workflow.isStreamOpen ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
+        <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen }" />
       </button>
 
-      <div v-if="workflow.isStreamOpen !== false" class="stream-steps-list">
+      <div v-if="workflow.isStreamOpen" class="stream-steps-list">
         <div
           v-for="(step, stepIndex) in getWorkflowSteps(workflow)"
           :key="step.id || stepIndex"
@@ -137,7 +137,7 @@
                 :aria-label="`Review ${file.path}`"
                 @click="openReview(workflow, file)"
               >
-                <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 {{ file.path }}
               </button>
             </div>
@@ -198,7 +198,7 @@
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
-                <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
                   <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
@@ -311,7 +311,7 @@
               <span class="file-strip-caret">▼</span>
               <span class="file-strip-path">
                 <span class="file-strip-dir">{{ selectedFileDir }}</span>
-                <IconFile :size="15" class="file-language-icon" aria-hidden="true" />
+                <IconFile :size="15" class="file-language-icon" :style="{ color: getFileIconInfo(selectedFileName).color }" aria-hidden="true" />
                 <strong class="file-strip-name">{{ selectedFileName }}</strong>
               </span>
               <div class="file-strip-stats">
@@ -336,7 +336,7 @@
               :class="{ active: String(file.taskId) === String(reviewTaskId) }"
               @click="reviewTaskId = file.taskId"
             >
-              <IconFile :size="13" class="file-language-icon" aria-hidden="true" />
+              <IconFile :size="13" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
               <span>{{ file.path }}</span>
               <span class="pill-stats">+{{ fileStatsById[file.id].additions }} -{{ fileStatsById[file.id].deletions }}</span>
             </button>
@@ -420,7 +420,7 @@
             :aria-label="`Review ${file.path}`"
             @click.stop="openReview(workflow, file, $event)"
           >
-            <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+            <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
             {{ file.path }}
           </button>
         </li>
@@ -431,7 +431,7 @@
       <WorkflowApprovalPanel
         v-if="workflow.approval"
         :approval="workflow.approval"
-        :options="approvalOptions(workflow.approval.actionSummary || workflow.approval.toolInput || workflow.approval.assignedTool)"
+        :options="approvalOptions(workflow.approval.assignedTool)"
         :run-id="workflow.runId"
         :message-index="messageIndex"
         :decision-pending="workflow.decisionPending"
@@ -506,6 +506,7 @@ import {
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
 import { explainWorkflowError } from '@/utils/workflow'
+import { getFileIconInfo } from '@/utils/fileIcons'
 
 const props = defineProps({
   workflow: {
