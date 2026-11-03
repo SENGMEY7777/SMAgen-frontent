@@ -67,23 +67,12 @@
             <button
               class="project-upload-btn"
               type="button"
-              title="Upload local project"
-              aria-label="Upload local project"
-              @click="openProjectUpload"
+              title="Create project"
+              aria-label="Create project"
+              @click="openCreateProjectModal"
             >
               <IconFolderPlus :size="17" />
             </button>
-            <input
-              ref="projectUploadInput"
-              class="project-upload-input"
-              type="file"
-              webkitdirectory
-              directory
-              multiple
-              aria-hidden="true"
-              tabindex="-1"
-              @change="handleProjectUpload"
-            />
           </div>
 
           <div class="project-sidebar-list">
@@ -350,12 +339,17 @@
       @confirm="confirmDeleteProject"
       @cancel="cancelDeleteProject"
     />
+    <CreateProjectModal
+      v-model="isCreateProjectModalOpen"
+      @create="handleCreateProjectModalSubmit"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import {
   IconSearch,
   IconHome,
@@ -460,42 +454,24 @@ const startProjectChat = (projectId) => {
   if (route.name !== 'chat') router.push({ name: 'chat' })
 }
 
-const projectUploadInput = ref(null)
+const isCreateProjectModalOpen = ref(false)
 
-const openProjectUpload = () => {
+const openCreateProjectModal = () => {
   closeMenu()
-  projectUploadInput.value?.click()
+  isCreateProjectModalOpen.value = true
 }
 
-const handleProjectUpload = (event) => {
-  const files = Array.from(event.target.files || [])
-  const firstRelativePath = files[0]?.webkitRelativePath || ''
-  const projectName = firstRelativePath.split('/')[0] || files[0]?.name || ''
-
-  if (!projectName) {
-    event.target.value = ''
-    return
-  }
-
-  const workspacePath = `local://${projectName}`
-  const existingProject = projectsStore.projects.find(
-    (project) => project.name === projectName && project.workspacePath === workspacePath,
-  )
-
-  if (existingProject) {
-    projectsStore.activeProjectId = existingProject.id
-  } else {
-    projectsStore.createProject({
-      name: projectName,
-      description: `Imported from your local computer (${files.length} file${files.length === 1 ? '' : 's'}).`,
-      workspacePath,
-      tags: ['Local', 'Imported'],
-    })
-  }
-
-  event.target.value = ''
+const handleCreateProjectModalSubmit = ({ name, workspacePath, description }) => {
+  projectsStore.createProject({
+    name,
+    workspacePath,
+    description,
+    tags: ['Local'],
+  })
   chatStore.startNewChat()
-  router.push({ name: 'chat' })
+  if (route.name !== 'chat') {
+    router.push({ name: 'chat' })
+  }
 }
 
 const getProjectIdForItem = (item) => {
@@ -653,10 +629,25 @@ const handleMoveToGroup = (item) => {
   closeAllMenus()
 }
 
-const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
+const hiddenWorkflowIds = ref(
+  (JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]')).map(String),
+)
 
-const handleDelete = (item) => {
+const handleDelete = async (item) => {
   if (item.type === 'chat') {
+    const targetSession = chatStore.sessions.find((s) => String(s.id) === String(item.id))
+    const linkedWorkflowIds = (targetSession?.messages || [])
+      .map((m) => m?.workflow?.runId)
+      .filter(Boolean)
+      .map(String)
+
+    linkedWorkflowIds.forEach((runId) => {
+      if (!hiddenWorkflowIds.value.includes(runId)) {
+        hiddenWorkflowIds.value.push(runId)
+      }
+      api.deleteRun(runId).catch(() => {})
+    })
+
     const isCurrentActive = chatStore.activeSessionId === item.id
     chatStore.deleteSession(item.id)
     if (isCurrentActive) {
@@ -664,11 +655,29 @@ const handleDelete = (item) => {
       if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
-    hiddenWorkflowIds.value.push(item.id)
-    try {
-      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
-    } catch {}
+    const strId = String(item.id)
+    if (!hiddenWorkflowIds.value.includes(strId)) {
+      hiddenWorkflowIds.value.push(strId)
+    }
+
+    const matchingChatSession = chatStore.sessions.find((s) =>
+      (s.messages || []).some((m) => String(m?.workflow?.runId) === strId),
+    )
+    if (matchingChatSession) {
+      const isCurrentActive = chatStore.activeSessionId === matchingChatSession.id
+      chatStore.deleteSession(matchingChatSession.id)
+      if (isCurrentActive) {
+        chatStore.startNewChat()
+        if (route.name !== 'chat') router.push({ name: 'chat' })
+      }
+    }
+
+    api.deleteRun(strId).catch(() => {})
   }
+
+  try {
+    localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
+  } catch {}
   closeAllMenus()
 }
 
@@ -687,7 +696,7 @@ const combinedRecentItems = computed(() => {
 
   const workflowItems = props.recentItems
     .filter((r, index, recentItems) => {
-      if (hiddenWorkflowIds.value.includes(r.id)) return false
+      if (hiddenWorkflowIds.value.includes(String(r.id))) return false
       return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
     })
     .filter((r) => !chatLinkedRunIds.has(String(r.id)))
