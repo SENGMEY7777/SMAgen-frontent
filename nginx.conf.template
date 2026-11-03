@@ -5,54 +5,130 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # The official Nginx image expands API_UPSTREAM when the container starts.
-    # Example values: http://host.docker.internal:8082 or https://api.example.com
+    # -----------------------------------------------------------------------
+    # Security Headers
+    # Protects against clickjacking, MIME sniffing, XSS, and data leakage.
+    # -----------------------------------------------------------------------
+    add_header X-Frame-Options              "SAMEORIGIN"                always;
+    add_header X-Content-Type-Options       "nosniff"                   always;
+    add_header X-XSS-Protection            "0"                         always;
+    add_header Referrer-Policy             "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy          "camera=(), microphone=(), geolocation=()" always;
+    add_header Cross-Origin-Opener-Policy  "same-origin"               always;
+    add_header Cross-Origin-Resource-Policy "same-origin"              always;
+    # Content Security Policy — tightened to match actual asset origins.
+    # 'unsafe-inline' is required for Vite's injected style tags.
+    add_header Content-Security-Policy
+        "default-src 'self'; \
+         script-src 'self' 'unsafe-inline'; \
+         style-src 'self' 'unsafe-inline'; \
+         img-src 'self' data: blob:; \
+         font-src 'self' data:; \
+         connect-src 'self' ws: wss:; \
+         object-src 'none'; \
+         frame-ancestors 'self'; \
+         base-uri 'self';"  always;
 
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_proxied any;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json image/svg+xml;
+    # -----------------------------------------------------------------------
+    # Gzip compression
+    # -----------------------------------------------------------------------
+    gzip              on;
+    gzip_vary         on;
+    gzip_min_length   1024;
+    gzip_proxied      any;
+    gzip_comp_level   5;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/javascript
+        application/json
+        image/svg+xml
+        application/wasm;
 
+    # -----------------------------------------------------------------------
+    # Hide Nginx version from error pages and Server header.
+    # -----------------------------------------------------------------------
+    server_tokens off;
+
+    # -----------------------------------------------------------------------
+    # API proxy — forward to Express backend.
+    # The official Nginx image expands API_UPSTREAM at container start.
+    # -----------------------------------------------------------------------
     location /api/ {
-        proxy_pass ${API_UPSTREAM};
-        proxy_http_version 1.1;
-        proxy_set_header Host $proxy_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Origin '';
+        proxy_pass              ${API_UPSTREAM};
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $proxy_host;
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        proxy_set_header        Origin            '';
+        # Timeouts — increase for long-running AI/workflow requests.
+        proxy_connect_timeout   10s;
+        proxy_send_timeout      120s;
+        proxy_read_timeout      120s;
+        # Buffer tuning
+        proxy_buffering         on;
+        proxy_buffer_size       16k;
+        proxy_buffers           8 16k;
     }
 
+    # -----------------------------------------------------------------------
+    # WebSocket proxy (Socket.IO)
+    # -----------------------------------------------------------------------
     location /socket.io/ {
-        proxy_pass ${API_UPSTREAM};
-        proxy_http_version 1.1;
-        proxy_set_header Host $proxy_host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Origin '';
+        proxy_pass              ${API_UPSTREAM};
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $proxy_host;
+        proxy_set_header        Upgrade           $http_upgrade;
+        proxy_set_header        Connection        "upgrade";
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        proxy_set_header        Origin            '';
+        proxy_read_timeout      3600s;
+        proxy_send_timeout      3600s;
     }
 
+    # -----------------------------------------------------------------------
+    # Workspace image serving (generated run artifacts)
+    # -----------------------------------------------------------------------
     location ^~ /workspaces/ {
-        proxy_pass ${API_UPSTREAM};
-        proxy_set_header Host $proxy_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Origin '';
+        proxy_pass          ${API_UPSTREAM};
+        proxy_set_header    Host              $proxy_host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto $scheme;
+        proxy_set_header    Origin            '';
     }
 
-    # Vue Router history fallback.
+    # -----------------------------------------------------------------------
+    # Vue Router — HTML5 history mode fallback
+    # -----------------------------------------------------------------------
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    location ~* \.(?:ico|css|js|gif|jpe?g|png|svg|woff2?|eot|ttf|otf)$ {
-        expires 6M;
+    # -----------------------------------------------------------------------
+    # Static assets — long-lived caching (Vite content-hashed filenames)
+    # -----------------------------------------------------------------------
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|webp|svg|woff2?|eot|ttf|otf|wasm)$ {
+        expires             6M;
+        access_log          off;
+        add_header          Cache-Control "public, max-age=15552000, immutable";
+        # Re-apply security headers (add_header does not inherit in sub-locations)
+        add_header X-Frame-Options              "SAMEORIGIN"            always;
+        add_header X-Content-Type-Options       "nosniff"               always;
+        add_header Cross-Origin-Resource-Policy "same-origin"           always;
+    }
+
+    # -----------------------------------------------------------------------
+    # Deny access to dotfiles (e.g. .env, .git)
+    # -----------------------------------------------------------------------
+    location ~ /\. {
+        deny all;
         access_log off;
-        add_header Cache-Control "public, max-age=15552000, immutable";
+        log_not_found off;
     }
 }

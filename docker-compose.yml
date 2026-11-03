@@ -6,14 +6,18 @@ services:
     env_file:
       - ../Kairo-Backend/.env
     environment:
-      # The backend listens on the internal Docker port. The host port below
-      # remains available for direct health checks and local debugging.
       PORT: 5000
-      NODE_ENV: development
+      # Set to production so Express hardening, error filtering, and
+      # performance optimisations are all active inside the container.
+      NODE_ENV: production
+      # Trust the single Nginx reverse-proxy hop so that express-rate-limit
+      # reads the real client IP from X-Forwarded-For instead of the proxy IP.
+      # "1" means trust exactly one upstream proxy (the Nginx container).
+      TRUST_PROXY: "1"
       DB_HOST: ${DB_HOST:-host.docker.internal}
       DB_PORT: ${DB_PORT:-3306}
-      APP_URL: http://localhost:${FRONTEND_PORT:-8080}
-      CORS_ORIGIN: http://localhost:${FRONTEND_PORT:-8080}
+      APP_URL: http://localhost:${FRONTEND_PORT:-5173}
+      CORS_ORIGIN: http://localhost:${FRONTEND_PORT:-5173}
       # Enable explicit local Desktop output for local development only.
       LOCAL_DESKTOP_OUTPUT: "true"
       # Kairo resolves the Desktop directory from os.homedir().
@@ -30,7 +34,24 @@ services:
       # Map the host Desktop to the container user's Desktop directory.
       # This is intentionally limited to the local Docker development stack.
       - /Users/user/Desktop:/home/appuser/Desktop
+    networks:
+      - kairo-net
     restart: unless-stopped
+    # Limit resource usage so one service cannot starve the other.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    # Keep logs manageable — rotate after 10 MB, keep last 5 files.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     healthcheck:
       test:
         - CMD
@@ -51,15 +72,38 @@ services:
       args:
         VITE_API_BASE_URL: /api/v1
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "${FRONTEND_PORT:-5173}:80"
     environment:
-      # The frontend and backend share the default Compose network.
+      # The frontend and backend share the kairo-net Docker network.
       # Override this only when using a separately deployed backend.
       API_UPSTREAM: ${API_UPSTREAM:-http://kairo-api:5000}
+    # Wait until the API is fully healthy before starting Nginx so that
+    # the first proxied requests are not dropped during API startup.
     depends_on:
       kairo-api:
-        condition: service_started
+        condition: service_healthy
+    networks:
+      - kairo-net
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  # Explicit isolated bridge network — containers can only reach each other
+  # by service name and are not reachable from the host's default bridge.
+  kairo-net:
+    driver: bridge
 
 volumes:
   kairo_workspaces:
