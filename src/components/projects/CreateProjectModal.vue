@@ -22,7 +22,7 @@
             </button>
           </div>
 
-          <!-- Project Name Input with Left Folder Icon (Blue Border Matching Mockup) -->
+          <!-- Project Name Input with Left Folder Icon -->
           <div class="project-name-group" :class="{ 'is-focused': isInputFocused }">
             <div class="project-name-icon-box" aria-hidden="true">
               <IconFolder :size="18" />
@@ -42,79 +42,91 @@
 
           <!-- Source Folders Section -->
           <div class="source-folders-section">
-            <label class="source-folders-label">Source folders</label>
-            <div class="source-folders-card">
+            <div class="source-folders-header">
+              <label class="source-folders-label">Source folders</label>
+              <div class="source-folders-indicator">
+                <IconDeviceLaptop :size="16" />
+                <span>This computer</span>
+              </div>
+            </div>
+
+            <!-- Source Folders Card -->
+            <div
+              class="source-folders-card"
+              :class="{
+                'has-folders': selectedFolders.length > 0,
+                'is-dragover': isDraggingOver,
+              }"
+              @dragover.prevent="isDraggingOver = true"
+              @dragleave.prevent="isDraggingOver = false"
+              @drop="onDropFolder"
+            >
+              <!-- When folders are selected: matches user's second image -->
+              <template v-if="selectedFolders.length > 0">
+                <div
+                  v-for="(folder, index) in selectedFolders"
+                  :key="folder.name + index"
+                  class="folder-row-item"
+                >
+                  <div class="folder-row-left">
+                    <IconFolder :size="18" class="folder-row-icon" />
+                    <span class="folder-row-name">{{ folder.name }}</span>
+                  </div>
+                  <button
+                    class="folder-row-remove-btn"
+                    type="button"
+                    aria-label="Remove folder"
+                    @click="removeFolder(index)"
+                  >
+                    <IconX :size="15" />
+                  </button>
+                </div>
+
+                <!-- Add folder row button -->
+                <button
+                  class="add-folder-row-btn"
+                  type="button"
+                  @click="triggerFolderPick"
+                >
+                  <IconFolderPlus :size="18" class="add-folder-icon" />
+                  <span class="add-folder-label">Add folder</span>
+                </button>
+              </template>
+
               <!-- When no folder is selected yet -->
-              <template v-if="!selectedFolder">
-                <div v-if="!showManualInput" class="source-folders-picker-prompt" role="button" tabindex="0" @click="triggerFolderPick" @keydown.enter="triggerFolderPick">
+              <template v-else>
+                <div
+                  class="source-folders-picker-prompt"
+                  role="button"
+                  tabindex="0"
+                  @click="triggerFolderPick"
+                  @keydown.enter="triggerFolderPick"
+                >
                   <span>Add a folder on <strong>this computer</strong></span>
                   <IconChevronDown :size="14" />
                 </div>
-                <div v-if="!showManualInput" class="source-folders-actions-row">
-                  <button
-                    class="source-folders-add-btn"
-                    type="button"
-                    @click="triggerFolderPick"
-                  >
-                    <IconFolderPlus :size="16" />
-                    <span>Add</span>
-                  </button>
-                  <button
-                    class="source-folders-path-toggle"
-                    type="button"
-                    @click="showManualInput = true"
-                  >
-                    Type path
-                  </button>
-                </div>
-
-                <!-- Manual Path Input Fallback -->
-                <div v-else class="manual-path-box">
-                  <input
-                    ref="manualInputRef"
-                    v-model="manualPathDraft"
-                    type="text"
-                    class="manual-path-input"
-                    placeholder="Folder name or path (e.g. Desktop/Final-Blockchai)"
-                    @keydown.enter.prevent="saveManualPath"
-                  />
-                  <button
-                    class="manual-path-confirm-btn"
-                    type="button"
-                    :disabled="!manualPathDraft.trim()"
-                    @click="saveManualPath"
-                  >
-                    Set
-                  </button>
-                  <button
-                    class="manual-path-cancel-btn"
-                    type="button"
-                    @click="showManualInput = false"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <button
+                  class="source-folders-add-btn"
+                  type="button"
+                  @click="triggerFolderPick"
+                >
+                  <IconFolderPlus :size="16" />
+                  <span>Add</span>
+                </button>
               </template>
 
-              <!-- When folder is selected -->
-              <div v-else class="selected-folder-chip">
-                <div class="selected-folder-info">
-                  <IconFolder :size="17" class="selected-folder-icon" />
-                  <div class="selected-folder-names">
-                    <span class="selected-folder-title">{{ selectedFolder.name }}</span>
-                    <span class="selected-folder-path">{{ selectedFolder.path }}</span>
-                  </div>
-                </div>
-                <button
-                  class="remove-selected-folder-btn"
-                  type="button"
-                  aria-label="Remove folder"
-                  title="Remove folder"
-                  @click="clearSelectedFolder"
-                >
-                  <IconX :size="14" />
-                </button>
-              </div>
+              <!-- Hidden directory input to upload directly from local computer -->
+              <input
+                ref="directoryInputRef"
+                type="file"
+                webkitdirectory
+                directory
+                multiple
+                class="visually-hidden"
+                aria-hidden="true"
+                tabindex="-1"
+                @change="onFolderSelected"
+              />
             </div>
           </div>
 
@@ -130,7 +142,6 @@
             <button
               class="project-modal-submit-btn"
               type="button"
-              :disabled="!projectName.trim()"
               @click="handleCreate"
             >
               Create project
@@ -144,7 +155,13 @@
 
 <script setup>
 import { nextTick, ref, watch } from 'vue'
-import { IconFolder, IconFolderPlus, IconChevronDown, IconX } from '@tabler/icons-vue'
+import {
+  IconFolder,
+  IconFolderPlus,
+  IconChevronDown,
+  IconX,
+  IconDeviceLaptop,
+} from '@tabler/icons-vue'
 
 const props = defineProps({
   modelValue: {
@@ -156,21 +173,19 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'create'])
 
 const projectName = ref('')
-const selectedFolder = ref(null)
+const selectedFolders = ref([])
 const isInputFocused = ref(false)
-const showManualInput = ref(false)
-const manualPathDraft = ref('')
+const isDraggingOver = ref(false)
 const nameInputRef = ref(null)
-const manualInputRef = ref(null)
+const directoryInputRef = ref(null)
 
 watch(
   () => props.modelValue,
   async (isOpen) => {
     if (isOpen) {
       projectName.value = ''
-      selectedFolder.value = null
-      showManualInput.value = false
-      manualPathDraft.value = ''
+      selectedFolders.value = []
+      isDraggingOver.value = false
       await nextTick()
       nameInputRef.value?.focus()
     }
@@ -187,68 +202,84 @@ const handleBackdropClick = (e) => {
   }
 }
 
+const addFolder = (folderName) => {
+  if (!folderName) return
+  if (!selectedFolders.value.some((f) => f.name === folderName)) {
+    selectedFolders.value.push({
+      name: folderName,
+      path: `Desktop/${folderName}`,
+    })
+  }
+}
+
 const triggerFolderPick = async () => {
+  // 1. Try modern File System Access API first (opens macOS Finder directly)
   if (typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function') {
     try {
-      const dirHandle = await window.showDirectoryPicker({ mode: 'read' })
+      const dirHandle = await window.showDirectoryPicker()
       if (dirHandle && dirHandle.name) {
-        selectedFolder.value = {
-          name: dirHandle.name,
-          path: `Desktop/${dirHandle.name}`,
-        }
-        if (!projectName.value.trim()) {
-          projectName.value = dirHandle.name
-        }
+        addFolder(dirHandle.name)
+        return
       }
-      return
     } catch (err) {
       if (err.name === 'AbortError') return
     }
   }
 
-  // Fallback to manual path input without showing any browser upload popup
-  showManualInput.value = true
-  await nextTick()
-  manualInputRef.value?.focus()
+  // 2. Direct native directory picker fallback (opens local computer)
+  directoryInputRef.value?.click()
 }
 
-const saveManualPath = () => {
-  const raw = manualPathDraft.value.trim()
-  if (!raw) return
+const onFolderSelected = (event) => {
+  const files = Array.from(event.target.files || [])
+  if (!files.length) return
 
-  const clean = raw.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
-  const parts = clean.split('/')
-  const folderName = parts[parts.length - 1] || 'Local Project'
-  const workspacePath = clean.includes('/') ? clean : `Desktop/${clean}`
+  const firstRelativePath = files[0]?.webkitRelativePath || ''
+  const folderName = firstRelativePath.split('/')[0] || files[0]?.name || 'Local Project'
 
-  selectedFolder.value = {
-    name: folderName,
-    path: workspacePath,
-  }
-
-  if (!projectName.value.trim()) {
-    projectName.value = folderName
-  }
-
-  showManualInput.value = false
-  manualPathDraft.value = ''
+  addFolder(folderName)
+  event.target.value = ''
 }
 
-const clearSelectedFolder = () => {
-  selectedFolder.value = null
-  showManualInput.value = false
-  manualPathDraft.value = ''
+const onDropFolder = async (e) => {
+  e.preventDefault()
+  isDraggingOver.value = false
+  const items = e.dataTransfer?.items
+  if (!items) return
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (typeof item.getAsFileSystemHandle === 'function') {
+      try {
+        const handle = await item.getAsFileSystemHandle()
+        if (handle && handle.kind === 'directory') {
+          addFolder(handle.name)
+        }
+      } catch {}
+    } else if (item.webkitGetAsEntry) {
+      const entry = item.webkitGetAsEntry()
+      if (entry && entry.isDirectory) {
+        addFolder(entry.name)
+      }
+    }
+  }
+}
+
+const removeFolder = (index) => {
+  selectedFolders.value.splice(index, 1)
 }
 
 const handleCreate = () => {
-  const name = projectName.value.trim()
-  if (!name) return
+  const primaryFolder = selectedFolders.value[0]
+  const name = projectName.value.trim() || primaryFolder?.name || 'My Project'
+  const workspacePath = primaryFolder?.path || `Desktop/${name}`
 
   emit('create', {
     name,
-    workspacePath: selectedFolder.value?.path || `Desktop/${name}`,
-    description: selectedFolder.value
-      ? `Linked from local folder ${selectedFolder.value.name}.`
+    workspacePath,
+    sourceFolders: selectedFolders.value.map((f) => f.name),
+    description: selectedFolders.value.length
+      ? `Linked folders: ${selectedFolders.value.map((f) => f.name).join(', ')}.`
       : 'Project workspace',
   })
 
@@ -270,11 +301,11 @@ const handleCreate = () => {
 }
 
 .project-modal-card {
-  width: min(540px, 94vw);
+  width: min(530px, 94vw);
   background: #ffffff;
   border-radius: 20px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18), 0 2px 10px rgba(0, 0, 0, 0.06);
-  padding: 26px 28px;
+  padding: 24px 28px;
   box-sizing: border-box;
 }
 
@@ -289,7 +320,7 @@ const handleCreate = () => {
 .project-modal-title {
   margin: 0;
   font-size: 22px;
-  font-weight: 650;
+  font-weight: 700;
   color: #18181b;
   letter-spacing: -0.015em;
 }
@@ -318,19 +349,25 @@ const handleCreate = () => {
 .project-name-group {
   display: flex;
   align-items: stretch;
-  border: 1.5px solid #3b82f6;
+  border: 1px solid #e4e4e7;
   border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   overflow: hidden;
+  height: 48px;
+  box-sizing: border-box;
+}
+
+.project-name-group.is-focused {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 
 .project-name-icon-box {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
+  width: 46px;
   flex-shrink: 0;
   border-right: 1px solid #e4e4e7;
   color: #18181b;
@@ -340,7 +377,7 @@ const handleCreate = () => {
 .project-name-input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 0 14px;
   border: none;
   outline: none;
   font-size: 15px;
@@ -349,7 +386,7 @@ const handleCreate = () => {
 }
 
 .project-name-input::placeholder {
-  color: #9ca3af;
+  color: #a1a1aa;
 }
 
 /* Source Folders Section */
@@ -357,12 +394,27 @@ const handleCreate = () => {
   margin-top: 20px;
 }
 
-.source-folders-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 550;
-  color: #18181b;
+.source-folders-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.source-folders-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #18181b;
+  margin: 0;
+}
+
+.source-folders-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #71717a;
+  font-size: 13.5px;
+  font-weight: 450;
 }
 
 .source-folders-card {
@@ -370,14 +422,112 @@ const handleCreate = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 140px;
-  padding: 24px 20px;
+  min-height: 130px;
+  padding: 22px 20px;
   border: 1px solid #e4e4e7;
   border-radius: 14px;
   background: #ffffff;
   box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
+.source-folders-card.is-dragover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.source-folders-card.has-folders {
+  display: block;
+  min-height: auto;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Selected Folder Row (Matching User Second Image) */
+.folder-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  border-bottom: 1px solid #f4f4f5;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.folder-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.folder-row-icon {
+  color: #52525b;
+  flex-shrink: 0;
+}
+
+.folder-row-name {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #18181b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-row-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #a1a1aa;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.folder-row-remove-btn:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+/* Add Folder Row Button */
+.add-folder-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 18px;
+  border: none;
+  background: #ffffff;
+  color: #18181b;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  transition: background 0.15s ease;
+}
+
+.add-folder-row-btn:hover {
+  background: #fafafa;
+}
+
+.add-folder-icon {
+  color: #52525b;
+  flex-shrink: 0;
+}
+
+.add-folder-label {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #18181b;
+}
+
+/* Empty State */
 .source-folders-picker-prompt {
   display: flex;
   align-items: center;
@@ -398,17 +548,11 @@ const handleCreate = () => {
   color: #18181b;
 }
 
-.source-folders-actions-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
 .source-folders-add-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-top: 14px;
   padding: 7px 18px;
   border: 1px solid #e4e4e7;
   border-radius: 9999px;
@@ -425,158 +569,12 @@ const handleCreate = () => {
   border-color: #d4d4d8;
 }
 
-.source-folders-path-toggle {
-  padding: 7px 14px;
-  border: 1px solid transparent;
-  border-radius: 9999px;
-  background: transparent;
-  color: #71717a;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.source-folders-path-toggle:hover {
-  color: #18181b;
-  background: #f4f4f5;
-}
-
-/* Manual Path Box */
-.manual-path-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.manual-path-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid #d4d4d8;
-  border-radius: 9px;
-  background: #ffffff;
-  color: #18181b;
-  font-size: 14px;
-  outline: none;
-}
-
-.manual-path-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-
-.manual-path-confirm-btn {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 9px;
-  background: #18181b;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.manual-path-confirm-btn:hover:not(:disabled) {
-  background: #27272a;
-}
-
-.manual-path-confirm-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.manual-path-cancel-btn {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: #71717a;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-.manual-path-cancel-btn:hover {
-  color: #18181b;
-}
-
-/* Selected Folder Chip */
-.selected-folder-chip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e4e4e7;
-  border-radius: 10px;
-  background: #f9fafb;
-  box-sizing: border-box;
-}
-
-.selected-folder-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.selected-folder-icon {
-  color: #3b82f6;
-  flex-shrink: 0;
-}
-
-.selected-folder-names {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.selected-folder-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #18181b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.selected-folder-path {
-  font-size: 12px;
-  color: #71717a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.remove-selected-folder-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #71717a;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.remove-selected-folder-btn:hover {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
 /* Modal Footer */
 .project-modal-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 14px;
   margin-top: 26px;
 }
 
@@ -586,7 +584,7 @@ const handleCreate = () => {
   border-radius: 10px;
   background: transparent;
   color: #71717a;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
@@ -603,24 +601,22 @@ const handleCreate = () => {
   justify-content: center;
   padding: 10px 22px;
   border: none;
-  border-radius: 11px;
+  border-radius: 14px;
   background: #18181b;
   color: #ffffff;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  transition: background 0.15s ease, transform 0.1s ease;
 }
 
-.project-modal-submit-btn:hover:not(:disabled) {
+.project-modal-submit-btn:hover {
   background: #27272a;
-  transform: translateY(-1px);
 }
 
-.project-modal-submit-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.project-modal-submit-btn:active {
+  transform: scale(0.99);
 }
 
 .visually-hidden {
