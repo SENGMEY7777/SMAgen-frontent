@@ -25,6 +25,7 @@ const views = {
   history: () => import('@/views/dashboard/HistoryView.vue'),
   settings: () => import('@/views/dashboard/SettingsView.vue'),
   auth: () => import('@/views/auth/AuthView.vue'),
+  landing: () => import('@/views/landing/LandingView.vue'),
   notFound: () => import('@/views/NotFoundView.vue'),
 }
 
@@ -33,7 +34,17 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: { name: 'chat' },
+      name: 'home',
+      component: views.landing,
+      meta: { title: 'Schedule Management for Autonomous Agents' },
+    },
+    {
+      path: '/home',
+      redirect: { name: 'home' },
+    },
+    {
+      path: '/landing',
+      redirect: { name: 'home' },
     },
     {
       path: '/chat',
