@@ -46,18 +46,54 @@
             <div class="source-folders-card">
               <!-- When no folder is selected yet -->
               <template v-if="!selectedFolder">
-                <div class="source-folders-picker-prompt" role="button" tabindex="0" @click="triggerFolderPick" @keydown.enter="triggerFolderPick">
+                <div v-if="!showManualInput" class="source-folders-picker-prompt" role="button" tabindex="0" @click="triggerFolderPick" @keydown.enter="triggerFolderPick">
                   <span>Add a folder on <strong>this computer</strong></span>
                   <IconChevronDown :size="14" />
                 </div>
-                <button
-                  class="source-folders-add-btn"
-                  type="button"
-                  @click="triggerFolderPick"
-                >
-                  <IconFolderPlus :size="16" />
-                  <span>Add</span>
-                </button>
+                <div v-if="!showManualInput" class="source-folders-actions-row">
+                  <button
+                    class="source-folders-add-btn"
+                    type="button"
+                    @click="triggerFolderPick"
+                  >
+                    <IconFolderPlus :size="16" />
+                    <span>Add</span>
+                  </button>
+                  <button
+                    class="source-folders-path-toggle"
+                    type="button"
+                    @click="showManualInput = true"
+                  >
+                    Type path
+                  </button>
+                </div>
+
+                <!-- Manual Path Input Fallback -->
+                <div v-else class="manual-path-box">
+                  <input
+                    ref="manualInputRef"
+                    v-model="manualPathDraft"
+                    type="text"
+                    class="manual-path-input"
+                    placeholder="Folder name or path (e.g. Desktop/Final-Blockchai)"
+                    @keydown.enter.prevent="saveManualPath"
+                  />
+                  <button
+                    class="manual-path-confirm-btn"
+                    type="button"
+                    :disabled="!manualPathDraft.trim()"
+                    @click="saveManualPath"
+                  >
+                    Set
+                  </button>
+                  <button
+                    class="manual-path-cancel-btn"
+                    type="button"
+                    @click="showManualInput = false"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </template>
 
               <!-- When folder is selected -->
@@ -79,19 +115,6 @@
                   <IconX :size="14" />
                 </button>
               </div>
-
-              <!-- Hidden directory file input -->
-              <input
-                ref="directoryInputRef"
-                type="file"
-                webkitdirectory
-                directory
-                multiple
-                class="visually-hidden"
-                aria-hidden="true"
-                tabindex="-1"
-                @change="onFolderSelected"
-              />
             </div>
           </div>
 
@@ -135,8 +158,10 @@ const emit = defineEmits(['update:modelValue', 'create'])
 const projectName = ref('')
 const selectedFolder = ref(null)
 const isInputFocused = ref(false)
+const showManualInput = ref(false)
+const manualPathDraft = ref('')
 const nameInputRef = ref(null)
-const directoryInputRef = ref(null)
+const manualInputRef = ref(null)
 
 watch(
   () => props.modelValue,
@@ -144,6 +169,8 @@ watch(
     if (isOpen) {
       projectName.value = ''
       selectedFolder.value = null
+      showManualInput.value = false
+      manualPathDraft.value = ''
       await nextTick()
       nameInputRef.value?.focus()
     }
@@ -160,34 +187,57 @@ const handleBackdropClick = (e) => {
   }
 }
 
-const triggerFolderPick = () => {
-  directoryInputRef.value?.click()
+const triggerFolderPick = async () => {
+  if (typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function') {
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'read' })
+      if (dirHandle && dirHandle.name) {
+        selectedFolder.value = {
+          name: dirHandle.name,
+          path: `Desktop/${dirHandle.name}`,
+        }
+        if (!projectName.value.trim()) {
+          projectName.value = dirHandle.name
+        }
+      }
+      return
+    } catch (err) {
+      if (err.name === 'AbortError') return
+    }
+  }
+
+  // Fallback to manual path input without showing any browser upload popup
+  showManualInput.value = true
+  await nextTick()
+  manualInputRef.value?.focus()
 }
 
-const onFolderSelected = (event) => {
-  const files = Array.from(event.target.files || [])
-  if (!files.length) return
+const saveManualPath = () => {
+  const raw = manualPathDraft.value.trim()
+  if (!raw) return
 
-  const firstRelativePath = files[0]?.webkitRelativePath || ''
-  const folderName = firstRelativePath.split('/')[0] || files[0]?.name || 'Local Project'
-  const workspacePath = `local://${folderName}`
+  const clean = raw.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  const parts = clean.split('/')
+  const folderName = parts[parts.length - 1] || 'Local Project'
+  const workspacePath = clean.includes('/') ? clean : `Desktop/${clean}`
 
   selectedFolder.value = {
     name: folderName,
     path: workspacePath,
-    fileCount: files.length,
   }
 
-  // If project name is empty, auto-populate it with the picked folder name
   if (!projectName.value.trim()) {
     projectName.value = folderName
   }
 
-  event.target.value = ''
+  showManualInput.value = false
+  manualPathDraft.value = ''
 }
 
 const clearSelectedFolder = () => {
   selectedFolder.value = null
+  showManualInput.value = false
+  manualPathDraft.value = ''
 }
 
 const handleCreate = () => {
@@ -196,9 +246,9 @@ const handleCreate = () => {
 
   emit('create', {
     name,
-    workspacePath: selectedFolder.value?.path || `local://${name}`,
+    workspacePath: selectedFolder.value?.path || `Desktop/${name}`,
     description: selectedFolder.value
-      ? `Imported from your local computer (${selectedFolder.value.fileCount} files).`
+      ? `Linked from local folder ${selectedFolder.value.name}.`
       : 'Project workspace',
   })
 
@@ -348,11 +398,17 @@ const handleCreate = () => {
   color: #18181b;
 }
 
+.source-folders-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .source-folders-add-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 14px;
   padding: 7px 18px;
   border: 1px solid #e4e4e7;
   border-radius: 9999px;
@@ -367,6 +423,84 @@ const handleCreate = () => {
 .source-folders-add-btn:hover {
   background: #e4e4e7;
   border-color: #d4d4d8;
+}
+
+.source-folders-path-toggle {
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: transparent;
+  color: #71717a;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.source-folders-path-toggle:hover {
+  color: #18181b;
+  background: #f4f4f5;
+}
+
+/* Manual Path Box */
+.manual-path-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.manual-path-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #18181b;
+  font-size: 14px;
+  outline: none;
+}
+
+.manual-path-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.manual-path-confirm-btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 9px;
+  background: #18181b;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.manual-path-confirm-btn:hover:not(:disabled) {
+  background: #27272a;
+}
+
+.manual-path-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manual-path-cancel-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #71717a;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.manual-path-cancel-btn:hover {
+  color: #18181b;
 }
 
 /* Selected Folder Chip */
