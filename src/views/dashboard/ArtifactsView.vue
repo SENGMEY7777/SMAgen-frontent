@@ -36,7 +36,17 @@
               type="button"
               @click="selectedFile = file"
             >
-              <IconFileText :size="14" />
+              <span
+                class="file-icon-badge"
+                :style="{
+                  color: getFileIconInfo(file.fileName).color,
+                  backgroundColor: getFileIconInfo(file.fileName).bg,
+                  borderColor: getFileIconInfo(file.fileName).border
+                }"
+              >
+                <IconCode v-if="['vue','js','ts','jsx','tsx','py','html','css','sql','sh'].includes(getFileIconInfo(file.fileName).ext)" :size="13" />
+                <IconFileText v-else :size="13" />
+              </span>
               <div class="file-info">
                 <span class="file-name" :title="file.fileName">{{ file.fileName }}</span>
                 <small class="file-meta">{{ file.taskTitle }} · {{ formatDate(file.createdAt) }}</small>
@@ -50,7 +60,20 @@
           <div v-if="selectedFile" class="viewer-content">
             <div class="viewer-header">
               <div class="viewer-meta-info">
-                <h2>{{ selectedFile.fileName }}</h2>
+                <div class="viewer-title-row">
+                  <span
+                    class="file-icon-badge lg"
+                    :style="{
+                      color: getFileIconInfo(selectedFile.fileName).color,
+                      backgroundColor: getFileIconInfo(selectedFile.fileName).bg,
+                      borderColor: getFileIconInfo(selectedFile.fileName).border
+                    }"
+                  >
+                    <IconCode v-if="['vue','js','ts','jsx','tsx','py','html','css','sql','sh'].includes(getFileIconInfo(selectedFile.fileName).ext)" :size="16" />
+                    <IconFileText v-else :size="16" />
+                  </span>
+                  <h2>{{ selectedFile.fileName }}</h2>
+                </div>
                 <p>Task: {{ selectedFile.taskTitle }} · Tool: {{ selectedFile.tool }}</p>
               </div>
               <button class="secondary-btn sm" type="button" @click="copyCode">
@@ -70,9 +93,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock, IconFolder, IconFileText, IconCopy, IconCheck } from '@tabler/icons-vue'
+import { IconClock, IconFolder, IconFileText, IconCopy, IconCheck, IconCode } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate } from '@/utils/formatters'
+import { getFileIconInfo } from '@/utils/fileIcons'
 
 const runs = ref([])
 const loading = ref(true)
@@ -237,7 +261,7 @@ onMounted(load)
 
 .file-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding: 8px 10px;
   border-radius: 8px;
@@ -247,6 +271,36 @@ onMounted(load)
   text-align: left;
   transition: background 0.12s ease;
   width: 100%;
+}
+
+.file-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.12s ease;
+}
+
+.file-icon-badge.lg {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.file-row:hover .file-icon-badge {
+  transform: scale(1.08);
+}
+
+.viewer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
 }
 
 .file-row:hover {
