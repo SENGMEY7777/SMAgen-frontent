@@ -56,7 +56,7 @@ const router = createRouter({
       path: '/overview',
       name: 'overview',
       component: views.overview,
-      meta: { ...dashboardMeta, title: 'Dashboard' },
+      meta: { ...dashboardMeta },
     },
     {
       path: '/dashboard',
@@ -190,7 +190,8 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  const title = to.meta.title ? `${to.meta.title} · ${appTitle}` : appTitle
+  const hasSpecificTitle = to.meta.title && to.meta.title.toLowerCase() !== 'dashboard'
+  const title = hasSpecificTitle ? `${to.meta.title} · ${appTitle}` : appTitle
   document.title = title
 })
 
