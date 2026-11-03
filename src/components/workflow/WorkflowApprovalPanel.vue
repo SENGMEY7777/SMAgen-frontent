@@ -23,9 +23,10 @@
 
     <div class="workflow-choice-list" role="radiogroup" aria-label="Workflow approval choice">
       <div
-        v-for="option in options"
+        v-for="(option, index) in options"
         :key="option.value"
         class="workflow-choice-row"
+        :class="{ 'has-actions': option.number === 5 || index === options.length - 1 }"
       >
         <label
           class="workflow-choice"
@@ -41,6 +42,22 @@
           <span class="workflow-choice-number">{{ option.number }}</span>
           <span>{{ option.label }}</span>
         </label>
+
+        <!-- Feature buttons placed directly on Row Option 5 -->
+        <div
+          v-if="option.number === 5 || index === options.length - 1"
+          class="workflow-approval-actions"
+          role="group"
+          aria-label="Approval actions"
+        >
+          <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
+            Skip
+          </button>
+          <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
+            <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
+            <IconCornerDownLeft :size="13" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -53,29 +70,13 @@
       @input="$emit('update:rejectionReason', $event.target.value)"
     ></textarea>
 
-    <!-- Dedicated action button row dropped below Option 5 and textarea -->
-    <div class="workflow-approval-footer">
-      <div
-        class="workflow-approval-actions"
-        role="group"
-        aria-label="Approval actions"
-      >
-        <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
-          Skip
-        </button>
-        <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
-          <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
-        </button>
-      </div>
-    </div>
-
     <div v-if="error" class="workflow-card-error">{{ error }}</div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { IconTerminal2 } from '@tabler/icons-vue'
+import { IconTerminal2, IconCornerDownLeft } from '@tabler/icons-vue'
 import { highlightCode } from '@/utils/markdown'
 
 const props = defineProps({
@@ -351,39 +352,39 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-.workflow-approval-footer {
+.workflow-choice-row.has-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  margin-top: clamp(12px, 1vw, 16px);
-  width: 100%;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .workflow-approval-actions {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
-  gap: 10px;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .workflow-skip-btn {
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 14px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: #5f6368;
+  color: #71717a;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .workflow-skip-btn:hover {
-  border-color: #e2e4e8;
-  color: #202124;
-  background: #f5f6f7;
+  border-color: #e4e4e7;
+  color: #18181b;
+  background: #f4f4f5;
 }
 
 .workflow-submit-btn {
@@ -391,28 +392,28 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 40px;
+  padding: 0 16px;
   border: 1px solid transparent;
   border-radius: 11px;
-  background: #1683d8;
+  background: #09090b;
   color: #ffffff;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(22, 131, 216, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .workflow-submit-btn:hover {
-  background: #0873c5;
-  box-shadow: 0 6px 14px rgba(22, 131, 216, 0.24);
+  background: #27272a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   transform: translateY(-1px);
 }
 
 .workflow-submit-btn:focus-visible,
 .workflow-skip-btn:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline: 3px solid rgba(0, 0, 0, 0.22);
   outline-offset: 2px;
 }
 
