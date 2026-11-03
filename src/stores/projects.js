@@ -4,56 +4,29 @@ import { defineStore } from 'pinia'
 const PROJECTS_STORAGE_KEY = 'kairo_projects'
 const ACTIVE_PROJECT_STORAGE_KEY = 'kairo_active_project_id'
 
-const DEFAULT_PROJECTS = [
-  {
-    id: 'proj_default_smagen',
-    name: 'SMAgen Core Workspace',
-    description: 'Main AI workflow orchestration, DAG generation, and agent runtime codebase.',
-    color: '#3b82f6',
-    workspacePath: '/Users/user/Documents/Project/SMAgen',
-    tags: ['Core', 'Agent', 'Vue3'],
-    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    linkedItems: [],
-  },
-  {
-    id: 'proj_workflow_desktop',
-    name: 'Run Workflow Desktop',
-    description: 'Autonomous desktop directory management and Java background founder generator.',
-    color: '#10b981',
-    workspacePath: '~/Desktop/Run Workflow',
-    tags: ['Desktop', 'Java', 'Automation'],
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    linkedItems: [],
-  },
-  {
-    id: 'proj_cloud_services',
-    name: 'Production Cloud API',
-    description: 'High-concurrency microservices, telemetry monitoring, and secure tool executors.',
-    color: '#8b5cf6',
-    workspacePath: '/api/v1/orchestrator',
-    tags: ['API', 'Security', 'Telemetry'],
-    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    linkedItems: [],
-  },
-]
+const STATIC_PROJECT_IDS = new Set([
+  'proj_default_smagen',
+  'proj_workflow_desktop',
+  'proj_cloud_services',
+])
 
 const readStorage = () => {
   try {
     const raw = localStorage.getItem(PROJECTS_STORAGE_KEY)
-    if (!raw) return DEFAULT_PROJECTS
+    if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_PROJECTS
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((p) => p && p.id && !STATIC_PROJECT_IDS.has(p.id))
   } catch {
-    return DEFAULT_PROJECTS
+    return []
   }
 }
 
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref(readStorage())
-  const activeProjectId = ref(localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) || null)
+  const storedActiveId = localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY)
+  const initialActiveId = storedActiveId && !STATIC_PROJECT_IDS.has(storedActiveId) ? storedActiveId : null
+  const activeProjectId = ref(initialActiveId)
 
   watch(
     projects,
