@@ -34,8 +34,8 @@ import logoUrl from '@/assets/logo-kairo.png'
   display: block;
 }
 
-.brand:hover .brand-mark {
+/* .brand:hover .brand-mark {
   transform: scale(1.08);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1);
-}
+} */
 </style>
