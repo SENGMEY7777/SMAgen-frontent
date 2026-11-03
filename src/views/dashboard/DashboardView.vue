@@ -11,9 +11,11 @@
       />
 
       <div v-if="!currentMessages.length" class="hero">
-        <div class="orb"></div>
+        <div class="kairo-hero-logo" aria-hidden="true">
+          <img :src="logoKairoUrl" alt="KAIRO Logo" class="kairo-hero-logo-img" />
+        </div>
         <h1>{{ timeGreeting }}, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
-        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
+        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let KAIRO help you move faster.</p>
         <div class="prompt-suggestions">
           <button type="button" @click="startPrompt('Help me understand this project and suggest the next best step.')">
             Understand my project
@@ -339,6 +341,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import logoKairoUrl from '@/assets/logo-kairo.png'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import WorkflowStream from '@/components/workflow/WorkflowStream.vue'
 import {
@@ -1388,6 +1391,33 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+
+.kairo-hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 24px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #09090b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  cursor: pointer;
+}
+
+.kairo-hero-logo:hover {
+  transform: scale(1.06) translateY(-2px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.kairo-hero-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 
 .composer-input {
   width: 50% !important;
