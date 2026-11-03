@@ -26,7 +26,7 @@
         v-for="(option, index) in options"
         :key="option.value"
         class="workflow-choice-row"
-        :class="{ 'has-actions': option.number === 5 || index === options.length - 1 }"
+        :class="{ 'has-actions': String(option.number) === '5' || option.value === 'reject' || index === options.length - 1 }"
       >
         <label
           class="workflow-choice"
@@ -40,12 +40,12 @@
             @change="$emit('update:choice', option.value)"
           />
           <span class="workflow-choice-number">{{ option.number }}</span>
-          <span>{{ option.label }}</span>
+          <span class="workflow-choice-text">{{ option.label }}</span>
         </label>
 
         <!-- Feature buttons placed directly on Row Option 5 -->
         <div
-          v-if="option.number === 5 || index === options.length - 1"
+          v-if="String(option.number) === '5' || option.value === 'reject' || index === options.length - 1"
           class="workflow-approval-actions"
           role="group"
           aria-label="Approval actions"
@@ -66,7 +66,7 @@
       class="workflow-rejection-input"
       rows="2"
       :value="approval.rejectionReason"
-      placeholder="Tell SMAgen what to do instead…"
+      placeholder="Tell KAIRO what to do instead…"
       @input="$emit('update:rejectionReason', $event.target.value)"
     ></textarea>
 
@@ -287,6 +287,7 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   cursor: pointer;
   background: #ffffff;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  margin-top: -15px !important;
 }
 
 .workflow-choice:hover {
@@ -323,6 +324,14 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   background: #eceef0;
   font-size: 16px;
   font-weight: 700;
+  line-height: 1;
+}
+
+.workflow-choice-text {
+  display: inline-flex;
+  align-items: center;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .workflow-choice.selected .workflow-choice-number {
@@ -357,6 +366,10 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.workflow-choice-row.has-actions .workflow-approval-actions {
+  margin-top: -15px !important;
 }
 
 .workflow-approval-actions {
