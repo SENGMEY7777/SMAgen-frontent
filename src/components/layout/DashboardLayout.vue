@@ -98,12 +98,6 @@
                   :title="project.workspacePath"
                   @click="selectProject(project)"
                 >
-                  <IconChevronDown
-                    :size="14"
-                    class="project-expand-icon"
-                    :class="{ 'rotate-minus-90': !isProjectExpanded(project.id) }"
-                    @click.stop="toggleProjectHistory(project.id)"
-                  />
                   <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="16" :style="{ color: project.color }" />
                   <IconFolder v-else :size="16" :style="{ color: project.color }" />
                   <span>{{ project.name }}</span>
@@ -428,7 +422,13 @@ const isProjectActive = (projectId) => {
 }
 
 const selectProject = (project) => {
+  const isAlreadyActive = projectsStore.activeProjectId === project.id
   projectsStore.activeProjectId = project.id
+
+  if (isAlreadyActive) {
+    toggleProjectHistory(project.id)
+    return
+  }
 
   // ALWAYS ensure this project is expanded when clicking it
   if (collapsedProjectIds.value.has(project.id)) {
@@ -1029,22 +1029,6 @@ const unassignedItems = computed(() => {
 .project-sidebar-project.active {
   background: transparent;
   color: #111827;
-}
-
-.project-expand-icon {
-  flex: 0 0 auto;
-  color: #9ca3af;
-  margin-right: -4px;
-  cursor: pointer;
-  transition: transform 0.15s ease, color 0.15s ease;
-}
-
-.project-expand-icon:hover {
-  color: #111827;
-}
-
-.project-expand-icon.rotate-minus-90 {
-  transform: rotate(-90deg);
 }
 
 .project-sidebar-project svg {
