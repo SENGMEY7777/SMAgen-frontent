@@ -189,10 +189,8 @@ router.beforeEach((to) => {
   return true
 })
 
-router.afterEach((to) => {
-  const hasSpecificTitle = to.meta.title && to.meta.title.toLowerCase() !== 'dashboard'
-  const title = hasSpecificTitle ? `${to.meta.title} · ${appTitle}` : appTitle
-  document.title = title
+router.afterEach(() => {
+  document.title = appTitle
 })
 
 export const isInternalRedirect = (value) => {
