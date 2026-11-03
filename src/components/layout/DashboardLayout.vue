@@ -3,11 +3,9 @@
     <aside class="sidebar" :class="{ open: mobileOpen }">
       <!-- Fixed Sidebar Header -->
       <div class="sidebar-header">
-        <div class="sidebar-brand-row">
-          <div class="brand">
-            <BrandMark />
-            <span>KAIRO</span>
-          </div>
+        <div class="brand">
+          <BrandMark />
+          <span>KAIRO</span>
         </div>
 
         <label class="search-box">
@@ -96,10 +94,10 @@
                   :class="{ active: isProjectActive(project.id) }"
                   type="button"
                   :title="project.workspacePath"
-                  @click="selectProject(project)"
+                  @click="toggleProject(project.id)"
                 >
-                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="16" :style="{ color: project.color }" />
-                  <IconFolder v-else :size="16" :style="{ color: project.color }" />
+                  <IconFolderOpen v-if="isProjectExpanded(project.id)" :size="17" :style="{ color: project.color }" />
+                  <IconFolder v-else :size="17" :style="{ color: project.color }" />
                   <span>{{ project.name }}</span>
                 </button>
                 <div class="project-sidebar-actions" :class="{ active: activeProjectMenuId === project.id }">
@@ -125,7 +123,7 @@
                 </div>
               </div>
 
-              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" :class="{ 'drop-up': projectMenuOpensUp }" @click.stop>
+              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" @click.stop>
                 <button class="project-dropdown-item" type="button" @click.stop="copyProjectName(project)">
                   <IconCopy :size="16" />
                   <span>Copy Project Name</span>
@@ -163,16 +161,16 @@
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
                     </button>
-                    <button
+                    <RouterLink
                       v-else
                       class="project-sidebar-item-link"
-                      type="button"
-                      :title="`Open chat: ${item.title}`"
-                      @click="selectWorkflow(item)"
+                      :to="`/runs/${item.id}`"
+                      :title="item.title"
+                      @click="closeMenu"
                     >
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
-                    </button>
+                    </RouterLink>
                   </div>
                 </div>
               </Transition>
@@ -216,16 +214,16 @@
                   <span class="recent-title">{{ item.title }}</span>
                 </button>
 
-                <!-- Workflow item: open its conversation in Chat, not the DAG canvas. -->
-                <button
+                <!-- Workflow Item Link -->
+                <RouterLink
                   v-else
                   class="recent-link"
-                  type="button"
-                  :title="`Open chat: ${item.title}`"
-                  @click="selectWorkflow(item)"
+                  :to="`/runs/${item.id}`"
+                  :title="item.title"
+                  @click="closeMenu"
                 >
                   <span class="recent-title">{{ item.title }}</span>
-                </button>
+                </RouterLink>
 
                 <!-- 3-Dots Button -->
                 <button
@@ -240,7 +238,7 @@
                 </button>
 
                 <!-- Floating Dropdown Menu Card -->
-                <div v-if="activeMenuId === item.id" class="item-dropdown-menu" :class="{ 'drop-up': menuOpensUp }" @click.stop>
+                <div v-if="activeMenuId === item.id" class="item-dropdown-menu" @click.stop>
                   <button class="dropdown-item" type="button" @click.stop="handlePin(item)">
                     <IconPin :size="15" />
                     <span class="dropdown-label">{{ item.pinned ? 'Unpin' : 'Pin' }}</span>
@@ -284,13 +282,15 @@
           @click="router.push('/settings'); closeMenu()"
           title="Account Settings"
         >
-          <span class="avatar">
+          <span class="avatar" :class="{ 'has-img': auth.avatar && !avatarError }">
             <img
-              class="avatar-image"
-              :class="{ 'avatar-image-default': auth.usesDefaultAvatar }"
-              :src="auth.avatarUrl"
-              alt=""
+              v-if="auth.avatar && !avatarError"
+              :src="auth.avatar"
+              :alt="auth.displayName"
+              class="avatar-img"
+              @error="avatarError = true"
             />
+            <span v-else>{{ auth.initials }}</span>
           </span>
           <span class="account-copy">
             <span class="account-name">{{ auth.displayName }}</span>
@@ -322,17 +322,20 @@
           </button>
           <button
             class="avatar header-avatar"
+            :class="{ 'has-img': auth.avatar && !avatarError }"
             type="button"
             aria-label="Open settings"
             title="Settings"
             @click="router.push('/settings')"
           >
             <img
-              class="avatar-image"
-              :class="{ 'avatar-image-default': auth.usesDefaultAvatar }"
-              :src="auth.avatarUrl"
-              alt=""
+              v-if="auth.avatar && !avatarError"
+              :src="auth.avatar"
+              :alt="auth.displayName"
+              class="avatar-img"
+              @error="avatarError = true"
             />
+            <span v-else>{{ auth.initials }}</span>
           </button>
         </div>
       </header>
@@ -351,7 +354,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   IconSearch,
@@ -399,6 +402,11 @@ const projectsStore = useProjectsStore()
 const mobileOpen = ref(false)
 const pendingApprovalsCount = ref(0)
 const collapsedProjectIds = ref(new Set())
+const avatarError = ref(false)
+
+watch(() => auth.avatar, () => {
+  avatarError.value = false
+})
 
 const fetchApprovalsCount = async () => {
   if (auth.isPrivileged) {
@@ -418,40 +426,7 @@ const closeMenu = () => {
 }
 
 const isProjectActive = (projectId) => {
-  return projectsStore.activeProjectId === projectId
-}
-
-const selectProject = (project) => {
-  const isAlreadyActive = projectsStore.activeProjectId === project.id
-  projectsStore.activeProjectId = project.id
-
-  if (isAlreadyActive) {
-    toggleProjectHistory(project.id)
-    return
-  }
-
-  // ALWAYS ensure this project is expanded when clicking it
-  if (collapsedProjectIds.value.has(project.id)) {
-    const next = new Set(collapsedProjectIds.value)
-    next.delete(project.id)
-    collapsedProjectIds.value = next
-    try {
-      localStorage.setItem('collapsed_project_ids', JSON.stringify(Array.from(next)))
-    } catch {}
-  }
-
-  // Auto-select latest chat and show it in the chatbot
-  const items = projectItemsById.value[project.id] || []
-  if (items.length > 0) {
-    const firstItem = items[0]
-    if (firstItem.type === 'chat') {
-      selectChat(firstItem.id)
-    } else {
-      selectWorkflow(firstItem)
-    }
-  } else {
-    startProjectChat(project.id)
-  }
+  return route.name === 'projects' && projectsStore.activeProjectId === projectId
 }
 
 const isItemActive = (item) => {
@@ -459,13 +434,7 @@ const isItemActive = (item) => {
     return chatStore.activeSessionId === item.id && route.name === 'chat'
   }
   if (item.type === 'workflow') {
-    return (
-      (route.name === 'run-detail' && String(route.params.runId) === String(item.id)) ||
-      (route.name === 'chat' && (
-        chatStore.activeSessionId === `chat_workflow_${item.id}` ||
-        chatStore.activeSession?.messages?.some((m) => String(m?.workflow?.runId || '') === String(item.id))
-      ))
-    )
+    return route.name === 'run-detail' && String(route.params.runId) === String(item.id)
   }
   return false
 }
@@ -530,8 +499,6 @@ const handleProjectUpload = (event) => {
 }
 
 const getProjectIdForItem = (item) => {
-  if (item.projectId) return item.projectId
-
   const explicitlyLinkedProject = projectsStore.projects.find((project) =>
     project.linkedItems?.some((linkedItemId) => String(linkedItemId) === String(item.id)),
   )
@@ -550,7 +517,6 @@ const getProjectIdForItem = (item) => {
 const newChat = () => {
   projectsStore.activeProjectId = null
   chatStore.startNewChat()
-  window.dispatchEvent(new CustomEvent('kairo:new-chat'))
   closeMenu()
   if (route.name !== 'chat') {
     router.push({ name: 'chat' })
@@ -562,39 +528,7 @@ const selectChat = (sessionId) => {
   const projId = getProjectIdForItem({ id: sessionId, type: 'chat' })
   projectsStore.activeProjectId = projId || null
   if (projId && collapsedProjectIds.value.has(projId)) {
-    const next = new Set(collapsedProjectIds.value)
-    next.delete(projId)
-    collapsedProjectIds.value = next
-    try {
-      localStorage.setItem('collapsed_project_ids', JSON.stringify(Array.from(next)))
-    } catch {}
-  }
-  closeMenu()
-  if (route.name !== 'chat') {
-    router.push({ name: 'chat' })
-  }
-}
-
-const selectWorkflow = (item) => {
-  const projectId = getProjectIdForItem(item)
-  const session = chatStore.ensureWorkflowSession({
-    runId: item.id,
-    title: item.title,
-    status: item.status,
-    projectId,
-    createdAt: item.updatedAt,
-  })
-
-  if (!session) return
-
-  projectsStore.activeProjectId = session.projectId || projectId || null
-  if (projectsStore.activeProjectId && collapsedProjectIds.value.has(projectsStore.activeProjectId)) {
-    const next = new Set(collapsedProjectIds.value)
-    next.delete(projectsStore.activeProjectId)
-    collapsedProjectIds.value = next
-    try {
-      localStorage.setItem('collapsed_project_ids', JSON.stringify(Array.from(next)))
-    } catch {}
+    toggleProjectHistory(projId)
   }
   closeMenu()
   if (route.name !== 'chat') {
@@ -616,8 +550,6 @@ const formatRecentTime = (timestamp) => {
 
 const activeMenuId = ref(null)
 const activeProjectMenuId = ref(null)
-const menuOpensUp = ref(false)
-const projectMenuOpensUp = ref(false)
 const projectToDelete = ref(null)
 const renamingId = ref(null)
 const renameDraft = ref('')
@@ -630,17 +562,7 @@ const deleteProjectMessage = computed(() => {
 
 const toggleProjectMenu = (projectId, event) => {
   event?.stopPropagation()
-  if (activeProjectMenuId.value === projectId) {
-    activeProjectMenuId.value = null
-    return
-  }
-  if (event?.currentTarget) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    projectMenuOpensUp.value = (window.innerHeight - rect.bottom) < 260
-  } else {
-    projectMenuOpensUp.value = false
-  }
-  activeProjectMenuId.value = projectId
+  activeProjectMenuId.value = activeProjectMenuId.value === projectId ? null : projectId
 }
 
 const copyProjectName = async (project) => {
@@ -684,17 +606,7 @@ const deleteProject = (project) => {
 
 const toggleMenu = (id, event) => {
   event?.stopPropagation()
-  if (activeMenuId.value === id) {
-    activeMenuId.value = null
-    return
-  }
-  if (event?.currentTarget) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    menuOpensUp.value = (window.innerHeight - rect.bottom) < 260
-  } else {
-    menuOpensUp.value = false
-  }
-  activeMenuId.value = id
+  activeMenuId.value = activeMenuId.value === id ? null : id
 }
 
 const closeAllMenus = () => {
@@ -779,25 +691,13 @@ const combinedRecentItems = computed(() => {
       return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
     })
     .filter((r) => !chatLinkedRunIds.has(String(r.id)))
-    .map((r) => {
-      const rawDate = r.created_at || r.updatedAt || 0
-      let ts = new Date(rawDate).getTime()
-      // Guard against future timestamps caused by server/DB timezone discrepancies
-      if (!Number.isNaN(ts) && ts > Date.now()) {
-        const offsetMs = (new Date()).getTimezoneOffset() * 60000
-        const corrected = ts + offsetMs
-        ts = corrected > Date.now() ? Date.now() - 1000 : corrected
-      }
-      return {
-        id: r.id,
-        title: r.goal_prompt || r.title || 'Workflow run',
-        type: 'workflow',
-        status: r.status || r.run_status || r.state || 'COMPLETED',
-        projectId: r.projectId || r.project_id || null,
-        pinned: false,
-        updatedAt: Number.isNaN(ts) ? 0 : ts,
-      }
-    })
+    .map((r) => ({
+      id: r.id,
+      title: r.goal_prompt || r.title || 'Workflow run',
+      type: 'workflow',
+      pinned: false,
+      updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
+    }))
 
   const chatItems = chatStore.sessions
     .map((s) => ({
@@ -839,13 +739,6 @@ const unassignedItems = computed(() => {
   padding: 0 12px 6px 12px;
 }
 
-.sidebar-brand-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
 .sidebar-scrollable {
   flex: 1 1 auto;
   min-height: 0;
@@ -853,7 +746,7 @@ const unassignedItems = computed(() => {
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0 3px 28px 12px;
+  padding: 0 3px 14px 12px;
   display: flex;
   flex-direction: column;
 }
@@ -1055,12 +948,6 @@ const unassignedItems = computed(() => {
   background: #ffffff;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
   animation: menuIn 0.12s ease-out;
-}
-
-.project-dropdown-menu.drop-up {
-  top: auto;
-  bottom: 34px;
-  animation: menuInUp 0.12s ease-out;
 }
 
 .project-dropdown-item {
@@ -1293,19 +1180,8 @@ const unassignedItems = computed(() => {
   animation: menuIn 0.12s ease-out;
 }
 
-.item-dropdown-menu.drop-up {
-  top: auto;
-  bottom: calc(100% + 2px);
-  animation: menuInUp 0.12s ease-out;
-}
-
 @keyframes menuIn {
   from { opacity: 0; transform: scale(0.96) translateY(-4px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-@keyframes menuInUp {
-  from { opacity: 0; transform: scale(0.96) translateY(4px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
@@ -1376,20 +1252,5 @@ const unassignedItems = computed(() => {
   padding: 10px 12px 0 12px;
   border-top: 1px solid #e5e7eb;
   background: #fbfcfd;
-}
-
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.new-chat-btn {
-  white-space: nowrap;
-  flex-shrink: 0;
-  cursor: pointer;
-  border: none;
-  user-select: none;
 }
 </style>
