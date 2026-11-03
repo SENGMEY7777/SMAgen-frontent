@@ -317,10 +317,10 @@
         </div>
 
         <div class="chat-footer-bar">
-          <span class="footer-disclaimer">SMAgen is AI and can make mistakes. Please double-check responses.</span>
+          <span class="footer-disclaimer">KAIRO is AI and can make mistakes. Please double-check responses.</span>
           <div class="footer-model-badge">
             <span class="status-dot"></span>
-            <span>SMAgen Pro</span>
+            <span>KAIRO Pro</span>
           </div>
         </div>
       </div>
@@ -416,7 +416,7 @@ const workflowApprovalOptions = (tool = 'this action') => [
   { number: '2', value: 'allow_conversation', label: `Yes, and always allow '${tool}' in this conversation` },
   { number: '3', value: 'allow_project', label: `Yes, and always allow '${tool}' in this project` },
   { number: '4', value: 'allow_always', label: `Yes, and always allow '${tool}'` },
-  { number: '5', value: 'reject', label: 'No (tell SMAgen what to do instead)' },
+  { number: '5', value: 'reject', label: 'No (tell KAIRO what to do instead)' },
 ]
 
 const toggleStreamOpen = (workflow) => {
@@ -1407,10 +1407,10 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.kairo-hero-logo:hover {
+/* .kairo-hero-logo:hover {
   transform: scale(1.06) translateY(-2px);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
-}
+} */
 
 .kairo-hero-logo-img {
   width: 100%;
