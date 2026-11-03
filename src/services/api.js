@@ -313,6 +313,7 @@ export const api = {
   cancelWorkflow: (runId) => request(`/workflows/runs/${runId}/cancel`, json('POST', {})),
   listRuns: () => request('/workflows/runs'),
   getRun: (runId) => request(`/workflows/runs/${runId}`),
+  deleteRun: (runId) => request(`/workflows/runs/${runId}`, { method: 'DELETE' }),
 
   listApprovals: (runId = '') => request(`/admin/approvals/pending${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`),
   getApproval: (id) => request(`/admin/approvals/${id}`),
@@ -320,3 +321,4 @@ export const api = {
 }
 
 export const apiBaseUrl = API_BASE_URL
+export default api
