@@ -1162,6 +1162,37 @@ const sendAiPrompt = async () => {
   }
 }
 
+const REFLECTION_LOG_LABELS = {
+  self_healing_started: 'Self-healing started: analyzing the failed task',
+  self_healing_required: 'Self-healing: preparing a safe repair',
+  self_healing_llm_retry: 'Self-healing: retrying repair analysis',
+  self_healing_retry_count_updated: 'Self-healing: updating retry status',
+  node_error_trace: 'Self-healing: collecting the failed task error',
+  node_retrying: 'Self-healing: retrying the failed task',
+  self_healing_skipped: 'Self-healing: automatic repair skipped',
+}
+
+const formatReflectionLogMessage = (eventName, payload, stringifyValue) => {
+  const event = String(eventName || '').toLowerCase()
+  const label = REFLECTION_LOG_LABELS[event]
+  if (!label) return ''
+
+  const data = payload && typeof payload === 'object' ? payload : {}
+  const trace = data.errorTrace && typeof data.errorTrace === 'object' ? data.errorTrace : {}
+  const error = data.error?.message
+    || data.error
+    || data.reason
+    || trace.error?.message
+    || trace.message
+    || trace.reflectionError?.message
+    || ''
+  const retryNumber = Number(data.retryNumber || data.retry_number || 0)
+  const maxRetries = Number(data.maxRetries || data.max_retries || 0)
+  const retrySuffix = retryNumber && maxRetries ? ` (${retryNumber}/${maxRetries})` : ''
+
+  return `${label}${retrySuffix}${error ? ` — ${stringifyValue(error)}` : ''}`
+}
+
 const formatLogMessage = (rawMessage, payload = null, eventName = '') => {
   if (!rawMessage && !payload && !eventName) return ''
   const stringifyValue = (value) => {
@@ -1173,10 +1204,19 @@ const formatLogMessage = (rawMessage, payload = null, eventName = '') => {
     }
   }
 
+  const directReflectionMessage = formatReflectionLogMessage(eventName, payload, stringifyValue)
+  if (directReflectionMessage) return directReflectionMessage
+
   if (typeof rawMessage !== 'string') return stringifyValue(rawMessage || payload || eventName)
   try {
     const parsed = JSON.parse(rawMessage)
     if (parsed && typeof parsed === 'object') {
+      const parsedReflectionMessage = formatReflectionLogMessage(
+        parsed.event || eventName,
+        parsed.payload || payload,
+        stringifyValue,
+      )
+      if (parsedReflectionMessage) return parsedReflectionMessage
       if (parsed.payload?.message) return stringifyValue(parsed.payload.message)
       if (parsed.payload?.error) return `Error: ${stringifyValue(parsed.payload.error)}`
       if (parsed.event) {
@@ -1198,6 +1238,13 @@ const refreshEvents = [
   'task_started',
   'task_completed',
   'task_failed',
+  'self_healing_started',
+  'self_healing_required',
+  'self_healing_llm_retry',
+  'self_healing_retry_count_updated',
+  'self_healing_skipped',
+  'node_error_trace',
+  'node_retrying',
   'approval_required',
   'workflow_completed',
   'workflow_failed',
