@@ -54,7 +54,8 @@
                   @submit-approval="submitWorkflowApproval(message)"
                   @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
-                  @open-run="router.push(`/runs/${$event}`)"
+                  @open-run="openWorkflowDestination"
+                  @open-workflow="openWorkflowDestination"
                 />
 
                 <template v-else>
@@ -380,6 +381,15 @@ const auth = useAuthStore()
 const chatStore = useChatStore()
 const projectsStore = useProjectsStore()
 
+const openWorkflowDestination = (runId) => {
+  if (runId) {
+    router.push(`/runs/${runId}`)
+    return
+  }
+
+  router.push('/workflows')
+}
+
 const chatThreadRef = ref(null)
 const showScrollButton = ref(false)
 const textareaRef = ref(null)
@@ -615,6 +625,10 @@ const getCurrentWorkingText = (workflow) => {
     return reconnectAttempt
       ? `Waiting for internet connection · Reconnecting ${reconnectAttempt}/${Number(workflow?.connectionMaxAttempts) || 5}`
       : 'Waiting for internet connection · Reconnecting…'
+  }
+  const currentActivity = String(workflow?.currentActivity || '').trim()
+  if (currentActivity) {
+    return currentActivity
   }
   const runningTask = (workflow?.tasks || []).find((t) => getWorkflowTaskStatus(t) === 'RUNNING')
   if (runningTask) {
