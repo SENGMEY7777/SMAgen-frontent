@@ -24,12 +24,14 @@ services:
       HOME: /home/appuser
     # Docker already supervises and restarts this service. Running Node
     # directly avoids PM2 writing runtime files under the unprivileged user.
-    command: ["node", "app.js"]
+    command: ["node", "--watch", "app.js"]
     ports:
       - "${BACKEND_PORT:-8082}:5000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - ../Kairo-Backend:/app
+      - /app/node_modules
       - kairo_workspaces:/app/workspaces
       # Map the host Desktop to the container user's Desktop directory.
       # This is intentionally limited to the local Docker development stack.
