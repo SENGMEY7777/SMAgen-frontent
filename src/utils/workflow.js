@@ -194,9 +194,9 @@ export const explainWorkflowError = (value) => {
     }
   } else if (/self-healing reflection failed|reflection.*gemini|automatic repair was unavailable|gemini service is temporarily unavailable/.test(fingerprint)) {
     explanation = {
-      title: 'The task failed and automatic repair was unavailable',
-      message: 'A workflow task could not finish. KAIRO could not generate a safe correction because the Gemini repair service was temporarily unavailable, so dependent tasks were stopped safely.',
-      nextStep: 'Open View steps to inspect the failed task, then try again when the Gemini service is available.',
+      title: 'Automatic repair could not complete',
+      message: 'KAIRO could not generate a safe correction for this task. Transient Gemini failures are retried with bounded backoff; if the service remains unavailable, the failed task and only its dependent tasks stop safely. Files completed before the failure are kept.',
+      nextStep: 'Retry when Gemini is available. If it happens again, open the failed task details and correct the original command, path, or project target.',
     }
   } else if (code === 'LLM_TIMEOUT' || /timed out|timeout/.test(fingerprint)) {
     explanation = {
