@@ -67,12 +67,23 @@
             <button
               class="project-upload-btn"
               type="button"
-              title="Create project"
-              aria-label="Create project"
-              @click="openCreateProjectModal"
+              title="Upload local project"
+              aria-label="Upload local project"
+              @click="openProjectUpload"
             >
               <IconFolderPlus :size="17" />
             </button>
+            <input
+              ref="projectUploadInput"
+              class="project-upload-input"
+              type="file"
+              webkitdirectory
+              directory
+              multiple
+              aria-hidden="true"
+              tabindex="-1"
+              @change="handleProjectUpload"
+            />
           </div>
 
           <div class="project-sidebar-list">
@@ -150,16 +161,16 @@
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
                     </button>
-                    <RouterLink
+                    <button
                       v-else
                       class="project-sidebar-item-link"
-                      :to="`/runs/${item.id}`"
+                      type="button"
                       :title="item.title"
-                      @click="closeMenu"
+                      @click="selectWorkflowHistory(item)"
                     >
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
-                    </RouterLink>
+                    </button>
                   </div>
                 </div>
               </Transition>
@@ -204,15 +215,15 @@
                 </button>
 
                 <!-- Workflow Item Link -->
-                <RouterLink
+                <button
                   v-else
                   class="recent-link"
-                  :to="`/runs/${item.id}`"
+                  type="button"
                   :title="item.title"
-                  @click="closeMenu"
+                  @click="selectWorkflowHistory(item)"
                 >
                   <span class="recent-title">{{ item.title }}</span>
-                </RouterLink>
+                </button>
 
                 <!-- 3-Dots Button -->
                 <button
@@ -298,11 +309,11 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
-          <!-- <div class="model-picker">
+          <div class="model-picker">
             <span class="model-dot"><IconSparkles :size="12" /></span>
             <span>KAIRO 4o</span>
             <IconChevronDown :size="13" />
-          </div> -->
+          </div>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
@@ -339,17 +350,12 @@
       @confirm="confirmDeleteProject"
       @cancel="cancelDeleteProject"
     />
-    <CreateProjectModal
-      v-model="isCreateProjectModalOpen"
-      @create="handleCreateProjectModalSubmit"
-    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import {
   IconSearch,
   IconHome,
@@ -423,12 +429,24 @@ const isProjectActive = (projectId) => {
   return route.name === 'projects' && projectsStore.activeProjectId === projectId
 }
 
+const getChatSessionForWorkflow = (runId) => {
+  return chatStore.sessions.find((session) =>
+    session.messages?.some((message) => String(message?.workflow?.runId) === String(runId)),
+  ) || null
+}
+
 const isItemActive = (item) => {
   if (item.type === 'chat') {
     return chatStore.activeSessionId === item.id && route.name === 'chat'
   }
   if (item.type === 'workflow') {
-    return route.name === 'run-detail' && String(route.params.runId) === String(item.id)
+    const linkedSession = item.chatSessionId
+      ? chatStore.sessions.find((session) => String(session.id) === String(item.chatSessionId))
+      : getChatSessionForWorkflow(item.id)
+    return (
+      (route.name === 'chat' && linkedSession && chatStore.activeSessionId === linkedSession.id)
+      || (route.name === 'run-detail' && String(route.params.runId) === String(item.id))
+    )
   }
   return false
 }
@@ -454,24 +472,42 @@ const startProjectChat = (projectId) => {
   if (route.name !== 'chat') router.push({ name: 'chat' })
 }
 
-const isCreateProjectModalOpen = ref(false)
+const projectUploadInput = ref(null)
 
-const openCreateProjectModal = () => {
+const openProjectUpload = () => {
   closeMenu()
-  isCreateProjectModalOpen.value = true
+  projectUploadInput.value?.click()
 }
 
-const handleCreateProjectModalSubmit = ({ name, workspacePath, description }) => {
-  projectsStore.createProject({
-    name,
-    workspacePath,
-    description,
-    tags: ['Local'],
-  })
-  chatStore.startNewChat()
-  if (route.name !== 'chat') {
-    router.push({ name: 'chat' })
+const handleProjectUpload = (event) => {
+  const files = Array.from(event.target.files || [])
+  const firstRelativePath = files[0]?.webkitRelativePath || ''
+  const projectName = firstRelativePath.split('/')[0] || files[0]?.name || ''
+
+  if (!projectName) {
+    event.target.value = ''
+    return
   }
+
+  const workspacePath = `local://${projectName}`
+  const existingProject = projectsStore.projects.find(
+    (project) => project.name === projectName && project.workspacePath === workspacePath,
+  )
+
+  if (existingProject) {
+    projectsStore.activeProjectId = existingProject.id
+  } else {
+    projectsStore.createProject({
+      name: projectName,
+      description: `Imported from your local computer (${files.length} file${files.length === 1 ? '' : 's'}).`,
+      workspacePath,
+      tags: ['Local', 'Imported'],
+    })
+  }
+
+  event.target.value = ''
+  chatStore.startNewChat()
+  router.push({ name: 'chat' })
 }
 
 const getProjectIdForItem = (item) => {
@@ -484,9 +520,7 @@ const getProjectIdForItem = (item) => {
     return chatStore.sessions.find((session) => String(session.id) === String(item.id))?.projectId || null
   }
 
-  const linkedSession = chatStore.sessions.find((session) =>
-    session.messages?.some((message) => String(message?.workflow?.runId) === String(item.id)),
-  )
+  const linkedSession = getChatSessionForWorkflow(item.id)
   return linkedSession?.projectId || null
 }
 
@@ -499,9 +533,9 @@ const newChat = () => {
   }
 }
 
-const selectChat = (sessionId) => {
+const selectChat = (sessionId, fallbackProjectId = null) => {
   chatStore.selectSession(sessionId)
-  const projId = getProjectIdForItem({ id: sessionId, type: 'chat' })
+  const projId = getProjectIdForItem({ id: sessionId, type: 'chat' }) || fallbackProjectId
   projectsStore.activeProjectId = projId || null
   if (projId && collapsedProjectIds.value.has(projId)) {
     toggleProjectHistory(projId)
@@ -510,6 +544,24 @@ const selectChat = (sessionId) => {
   if (route.name !== 'chat') {
     router.push({ name: 'chat' })
   }
+}
+
+const selectWorkflowHistory = (item) => {
+  const linkedSession = item.chatSessionId
+    ? chatStore.sessions.find((session) => String(session.id) === String(item.chatSessionId))
+    : getChatSessionForWorkflow(item.id)
+
+  if (linkedSession) {
+    // A workflow history entry is a shortcut to its conversation. Keep the
+    // run detail available through the explicit workflow controls instead.
+    selectChat(linkedSession.id, getProjectIdForItem(item))
+    return
+  }
+
+  // Older runs may not have a persisted chat session. Preserve access to the
+  // run rather than making the history item disappear.
+  closeMenu()
+  router.push({ name: 'run-detail', params: { runId: item.id } })
 }
 
 const formatRecentTime = (timestamp) => {
@@ -629,25 +681,10 @@ const handleMoveToGroup = (item) => {
   closeAllMenus()
 }
 
-const hiddenWorkflowIds = ref(
-  (JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]')).map(String),
-)
+const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
 
-const handleDelete = async (item) => {
+const handleDelete = (item) => {
   if (item.type === 'chat') {
-    const targetSession = chatStore.sessions.find((s) => String(s.id) === String(item.id))
-    const linkedWorkflowIds = (targetSession?.messages || [])
-      .map((m) => m?.workflow?.runId)
-      .filter(Boolean)
-      .map(String)
-
-    linkedWorkflowIds.forEach((runId) => {
-      if (!hiddenWorkflowIds.value.includes(runId)) {
-        hiddenWorkflowIds.value.push(runId)
-      }
-      api.deleteRun(runId).catch(() => {})
-    })
-
     const isCurrentActive = chatStore.activeSessionId === item.id
     chatStore.deleteSession(item.id)
     if (isCurrentActive) {
@@ -655,29 +692,11 @@ const handleDelete = async (item) => {
       if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
-    const strId = String(item.id)
-    if (!hiddenWorkflowIds.value.includes(strId)) {
-      hiddenWorkflowIds.value.push(strId)
-    }
-
-    const matchingChatSession = chatStore.sessions.find((s) =>
-      (s.messages || []).some((m) => String(m?.workflow?.runId) === strId),
-    )
-    if (matchingChatSession) {
-      const isCurrentActive = chatStore.activeSessionId === matchingChatSession.id
-      chatStore.deleteSession(matchingChatSession.id)
-      if (isCurrentActive) {
-        chatStore.startNewChat()
-        if (route.name !== 'chat') router.push({ name: 'chat' })
-      }
-    }
-
-    api.deleteRun(strId).catch(() => {})
+    hiddenWorkflowIds.value.push(item.id)
+    try {
+      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
+    } catch {}
   }
-
-  try {
-    localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
-  } catch {}
   closeAllMenus()
 }
 
@@ -686,24 +705,18 @@ if (typeof window !== 'undefined') {
 }
 
 const combinedRecentItems = computed(() => {
-  // A workflow prompt is also persisted as a chat session. Prefer the chat
-  // entry in the sidebar so clicking the conversation opens Chat, not Canvas.
-  const chatLinkedRunIds = new Set(
-    chatStore.sessions
-      .flatMap((session) => (session.messages || []).map((message) => message?.workflow?.runId).filter(Boolean))
-      .map((runId) => String(runId)),
-  )
-
+  // Keep every workflow run in history, including runs that also have a chat
+  // session. Selecting one opens the chat first through selectWorkflowHistory.
   const workflowItems = props.recentItems
     .filter((r, index, recentItems) => {
-      if (hiddenWorkflowIds.value.includes(String(r.id))) return false
+      if (hiddenWorkflowIds.value.includes(r.id)) return false
       return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
     })
-    .filter((r) => !chatLinkedRunIds.has(String(r.id)))
     .map((r) => ({
       id: r.id,
       title: r.goal_prompt || r.title || 'Workflow run',
       type: 'workflow',
+      chatSessionId: getChatSessionForWorkflow(r.id)?.id || null,
       pinned: false,
       updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
     }))
@@ -730,13 +743,42 @@ const projectItemsById = computed(() => {
   const groups = Object.fromEntries(projectsStore.projects.map((project) => [project.id, []]))
   combinedRecentItems.value.forEach((item) => {
     const projectId = getProjectIdForItem(item)
-    if (projectId && groups[projectId]) groups[projectId].push(item)
+    if (!projectId || !groups[projectId]) return
+
+    // Deduplicate: if a workflow has a linked chat session already in the group, skip it
+    if (item.type === 'workflow' && item.chatSessionId) {
+      const alreadyHasChat = groups[projectId].some(
+        (existing) => existing.type === 'chat' && String(existing.id) === String(item.chatSessionId),
+      )
+      if (alreadyHasChat) return
+    }
+
+    // Deduplicate: if a chat is already represented by a workflow entry, skip it
+    if (item.type === 'chat') {
+      const alreadyHasWorkflow = groups[projectId].some(
+        (existing) => existing.type === 'workflow' && String(existing.chatSessionId) === String(item.id),
+      )
+      if (alreadyHasWorkflow) return
+    }
+
+    groups[projectId].push(item)
   })
   return groups
 })
 
 const unassignedItems = computed(() => {
-  return combinedRecentItems.value.filter((item) => !getProjectIdForItem(item))
+  const items = combinedRecentItems.value.filter((item) => !getProjectIdForItem(item))
+  // Deduplicate: remove chats that are already represented by a linked workflow
+  const seen = new Set()
+  return items.filter((item) => {
+    if (item.type === 'workflow' && item.chatSessionId) {
+      seen.add(String(item.chatSessionId))
+    }
+    if (item.type === 'chat' && seen.has(String(item.id))) {
+      return false
+    }
+    return true
+  })
 })
 </script>
 
