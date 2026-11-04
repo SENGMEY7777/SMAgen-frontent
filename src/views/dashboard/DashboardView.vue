@@ -891,7 +891,8 @@ const extractWorkflowDestination = (message) => {
       return `Downloads/${path}`
     }
     if (action === 'createdesktopfile' || action === 'createdesktopfiles' || action === 'deletedesktoppath' || action === 'renamedesktoppath') {
-      const rootFolder = path.split('/')[0]
+      let rootFolder = path.split('/')[0]
+      rootFolder = rootFolder.split(/\.\s*Create or update/i)[0].split(/\s*\[Follow-up/i)[0].split(/\.\s*Do not choose/i)[0].trim().replace(/[.,;!?]+$/, '')
       if (rootFolder && rootFolder !== '.' && rootFolder !== '..') {
         return `Desktop/${rootFolder}`
       }
