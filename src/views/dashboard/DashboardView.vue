@@ -935,27 +935,38 @@ const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const directDestination = extractLocalDestination(goalPrompt)
   if (directDestination) return directDestination
 
-  // 1. Check conversation context messages (most recent first)
-  for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
-    const message = contextMessages[index]
-    const workflowDestination = extractWorkflowDestination(message)
-    if (workflowDestination) return workflowDestination
-    if (message?.role === 'user') {
-      const destination = extractLocalDestination(message.content)
-      if (destination) return destination
-    }
+  const promptText = String(goalPrompt || '').trim()
+  const hasUrl = /https?:\/\/[^\s]+/i.test(promptText)
+
+  // Standalone URL review or API inspection requests must not inherit unrelated local projects
+  if (hasUrl) {
+    return ''
   }
 
-  // 2. Check active project from sidebar (remember project folder)
-  const activeProj = projectsStore?.activeProject
-  if (activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
-    const workspacePath = String(activeProj.workspacePath || '').trim()
-    if (/desktop[\\/]/i.test(workspacePath)) {
-      const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
-      if (sub) return `Desktop/${sub}`
+  // Only inherit previous project folder when the prompt actually requests continuation
+  if (requestsPreviousLocalDestination(promptText)) {
+    // 1. Check conversation context messages (most recent first)
+    for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
+      const message = contextMessages[index]
+      const workflowDestination = extractWorkflowDestination(message)
+      if (workflowDestination) return workflowDestination
+      if (message?.role === 'user') {
+        const destination = extractLocalDestination(message.content)
+        if (destination) return destination
+      }
     }
-    const folder = normalizeLocalFolderName(activeProj.name)
-    if (folder) return `Desktop/${folder}`
+
+    // 2. Check active project from sidebar (remember project folder)
+    const activeProj = projectsStore?.activeProject
+    if (activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
+      const workspacePath = String(activeProj.workspacePath || '').trim()
+      if (/desktop[\\/]/i.test(workspacePath)) {
+        const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
+        if (sub) return `Desktop/${sub}`
+      }
+      const folder = normalizeLocalFolderName(activeProj.name)
+      if (folder) return `Desktop/${folder}`
+    }
   }
 
   return ''
