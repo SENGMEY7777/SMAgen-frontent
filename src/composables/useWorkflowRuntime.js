@@ -14,6 +14,15 @@ import {
 } from '@/utils/workflow'
 
 const WORKFLOW_POLL_INTERVAL_MS = 4000
+const REFLECTION_EVENTS = new Set([
+  'self_healing_started',
+  'self_healing_required',
+  'self_healing_llm_retry',
+  'self_healing_retry_count_updated',
+  'self_healing_skipped',
+  'node_error_trace',
+  'node_retrying',
+])
 
 export function useWorkflowRuntime({
   chatStore,
@@ -55,6 +64,49 @@ export function useWorkflowRuntime({
   const getEventData = (payload, eventName) => {
     if (eventName === 'telemetry') return payload?.payload || payload || {}
     return payload?.payload && payload?.event === eventName ? payload.payload : (payload || {})
+  }
+
+  const getReflectionErrorMessage = (data) => {
+    const trace = data?.errorTrace && typeof data.errorTrace === 'object' ? data.errorTrace : {}
+    const value = data?.error?.message
+      || data?.error
+      || data?.reason
+      || trace.error?.message
+      || trace.message
+      || trace.reflectionError?.message
+      || ''
+    return value ? stringifyWorkflowValue(value) : ''
+  }
+
+  const getReflectionActivity = (eventName, data) => {
+    if (!REFLECTION_EVENTS.has(eventName)) return ''
+
+    const retryNumber = Number(data?.retryNumber || data?.retry_number || 0)
+    const maxRetries = Number(data?.maxRetries || data?.max_retries || 0)
+    const retrySuffix = retryNumber && maxRetries ? ` (${retryNumber}/${maxRetries})` : ''
+    const messages = {
+      self_healing_started: 'Self-healing started: analyzing the failed task',
+      self_healing_required: 'Self-healing: preparing a safe repair',
+      self_healing_llm_retry: `Self-healing: retrying repair analysis${retrySuffix}`,
+      self_healing_retry_count_updated: 'Self-healing: updating retry status',
+      node_error_trace: 'Self-healing: collecting the failed task error',
+      node_retrying: 'Self-healing: retrying the failed task',
+      self_healing_skipped: 'Self-healing: automatic repair skipped',
+    }
+    const message = messages[eventName] || 'Self-healing update'
+    const error = getReflectionErrorMessage(data)
+    return error ? `${message} — ${error}` : message
+  }
+
+  const getLatestReflectionActivity = (logs = []) => {
+    for (let index = logs.length - 1; index >= 0; index -= 1) {
+      const entry = logs[index]
+      const eventName = String(entry?.event || '').toLowerCase()
+      if (!REFLECTION_EVENTS.has(eventName)) continue
+      const activity = getReflectionActivity(eventName, entry?.payload || entry?.details || entry)
+      if (activity) return activity
+    }
+    return ''
   }
 
   const getTaskKey = (task) => {
@@ -156,7 +208,8 @@ export function useWorkflowRuntime({
     if (eventName === 'workflow_cancelled' || eventName === 'run_cancelled') return 'CANCELLED'
     if (eventName === 'workflow_failed') return 'FAILED'
     if (eventName === 'approval_required' || eventName === 'node_awaiting_approval') return 'AWAITING_APPROVAL'
-    if (eventName === 'run_started' || eventName === 'node_running' || eventName === 'node_retrying') return 'RUNNING'
+    if (REFLECTION_EVENTS.has(eventName) && eventName !== 'self_healing_skipped') return 'RUNNING'
+    if (eventName === 'run_started' || eventName === 'node_running' || eventName === 'node_retrying' || eventName === 'self_healing_llm_retry') return 'RUNNING'
     if (eventName === 'run_status_changed') {
       if (rawStatus === 'WAITING' || rawStatus === 'WAITING_APPROVAL') return 'AWAITING_APPROVAL'
       if (rawStatus) return rawStatus
@@ -166,9 +219,13 @@ export function useWorkflowRuntime({
 
   const getEventTask = (eventName, data, runId) => {
     const task = data?.task && typeof data.task === 'object' ? data.task : {}
-    const taskId = data?.taskId || data?.task_id || task.id || task.taskId
-    const nodeKey = data?.nodeKey || data?.node_key || task.nodeKey || task.node_key
-    const taskStatus = eventName === 'node_running'
+    const trace = data?.errorTrace && typeof data.errorTrace === 'object' ? data.errorTrace : {}
+    const isReflectionEvent = REFLECTION_EVENTS.has(eventName)
+    const taskId = data?.taskId || data?.task_id || task.id || task.taskId || trace.taskId || trace.task_id
+    const nodeKey = data?.nodeKey || data?.node_key || task.nodeKey || task.node_key || trace.nodeKey || trace.node_key
+    const taskStatus = isReflectionEvent
+      ? 'RUNNING'
+      : (eventName === 'node_running'
       ? 'RUNNING'
       : (eventName === 'node_success' || eventName === 'node_completed'
         ? 'SUCCESS'
@@ -176,9 +233,9 @@ export function useWorkflowRuntime({
           ? 'FAILED'
           : (eventName === 'node_skipped'
             ? 'SKIPPED'
-            : (eventName === 'approval_required' || eventName === 'node_awaiting_approval' ? 'AWAITING_APPROVAL' : ''))))
+            : (eventName === 'approval_required' || eventName === 'node_awaiting_approval' ? 'AWAITING_APPROVAL' : '')))))
 
-    if (!taskId && !nodeKey && !task.title && !data?.title) return null
+    if (!taskId && !nodeKey && !task.title && !data?.title && !isReflectionEvent) return null
 
     const nextTask = {
       ...task,
@@ -189,13 +246,25 @@ export function useWorkflowRuntime({
     if (taskId) nextTask.task_id = taskId
     if (nodeKey) nextTask.node_key = nodeKey
 
-    const title = data?.title || data?.taskTitle || task.title || task.instruction || nodeKey
+    const title = data?.title
+      || data?.taskTitle
+      || task.title
+      || task.instruction
+      || trace.taskTitle
+      || trace.task_title
+      || nodeKey
+      || (isReflectionEvent ? getReflectionActivity(eventName, data) : '')
     if (title) nextTask.title = title
 
-    const instruction = data?.instruction || task.instruction
+    const instruction = data?.instruction || task.instruction || trace.message
     if (instruction) nextTask.instruction = instruction
 
-    const assignedTool = data?.assignedTool || data?.assigned_tool || task.assignedTool || task.assigned_tool
+    const assignedTool = data?.assignedTool
+      || data?.assigned_tool
+      || task.assignedTool
+      || task.assigned_tool
+      || trace.assignedTool
+      || trace.assigned_tool
     if (assignedTool) nextTask.assigned_tool = assignedTool
 
     const toolInput = data?.toolInput ?? data?.tool_input ?? task.toolInput ?? task.tool_input
@@ -207,7 +276,7 @@ export function useWorkflowRuntime({
     const output = data?.outputData ?? data?.stdout ?? task.output
     if (output !== undefined) nextTask.output = output
 
-    const errorMessage = data?.error || data?.reason || task.error_message
+    const errorMessage = data?.error || data?.reason || task.error_message || getReflectionErrorMessage(data)
     if (errorMessage) nextTask.error_message = errorMessage
 
     nextTask.status = taskStatus || task.status || data?.status || 'PENDING'
@@ -259,6 +328,19 @@ export function useWorkflowRuntime({
       tasks: nextTasks,
     }
 
+    const reflectionActivity = getReflectionActivity(event, data)
+    if (reflectionActivity) {
+      nextWorkflow.currentActivity = reflectionActivity
+      nextWorkflow.currentActivityEvent = event
+      nextWorkflow.currentActivityAt = payload?.createdAt
+        || payload?.created_at
+        || new Date().toISOString()
+    }
+    if (event === 'run_started' || event === 'node_running') {
+      nextWorkflow.currentActivity = ''
+      nextWorkflow.currentActivityEvent = ''
+    }
+
     if (nextStatus) nextWorkflow.status = nextStatus
     if (event === 'approval_required') {
       nextWorkflow.approval = getEventApproval(data, workflow.approval, runId)
@@ -282,6 +364,8 @@ export function useWorkflowRuntime({
       )
       nextWorkflow.completedAt = data?.completedAt || data?.completed_at || workflow.completedAt || new Date().toISOString()
       nextWorkflow.approval = null
+      nextWorkflow.currentActivity = ''
+      nextWorkflow.currentActivityEvent = ''
       nextWorkflow.connectionStatus = 'CONNECTED'
       nextWorkflow.connectionAttempt = 0
     }
@@ -413,6 +497,8 @@ export function useWorkflowRuntime({
           connectionAttempt: connectionLost ? latestReconnectAttempt : 0,
           connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
           error: workflowError,
+          currentActivity: currentWorkflow.currentActivity || getLatestReflectionActivity(logs),
+          currentActivityEvent: currentWorkflow.currentActivityEvent || '',
         })
       } else {
         const refreshedStatus = deriveWorkflowStatus(workflowStatus, tasks)
@@ -423,6 +509,9 @@ export function useWorkflowRuntime({
           ? currentWorkflow.status
           : refreshedStatus
         const isTerminal = isTerminalWorkflowStatus(status)
+        const currentActivity = isTerminal
+          ? ''
+          : (getLatestReflectionActivity(logs) || currentWorkflow.currentActivity || '')
         let completedAt = currentWorkflow.completedAt || workflowRun.completed_at || workflowRun.completedAt || null
         let finalSeconds = currentWorkflow.finalSeconds || null
 
@@ -445,6 +534,8 @@ export function useWorkflowRuntime({
           connectionAttempt: 0,
           connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
           error: workflowError,
+          currentActivity,
+          currentActivityEvent: isTerminal ? '' : (currentWorkflow.currentActivityEvent || ''),
         })
         if (isTerminal) stopWorkflowPolling(runId)
       }
@@ -610,6 +701,7 @@ export function useWorkflowRuntime({
         'node_error_trace',
         'self_healing_started',
         'self_healing_required',
+        'self_healing_llm_retry',
         'self_healing_retry_count_updated',
         'self_healing_skipped',
         'telemetry',
