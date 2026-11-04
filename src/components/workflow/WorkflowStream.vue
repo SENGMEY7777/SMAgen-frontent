@@ -444,7 +444,7 @@
       />
     </Teleport>
 
-    <div v-if="workflow.runId" class="workflow-subtle-footer">
+    <div v-if="workflow.runId && !workflowErrorExplanation" class="workflow-subtle-footer">
       <button type="button" class="workflow-subtle-run-btn" @click="$emit('open-run', workflow.runId)">
         Open full workflow run <IconArrowRight :size="12" />
       </button>
@@ -467,6 +467,16 @@
           <summary>Technical details</summary>
           <code>{{ workflowErrorExplanation.technicalDetail }}</code>
         </details>
+        <div class="workflow-card-error-actions">
+          <button
+            type="button"
+            class="workflow-error-open-btn"
+            @click="$emit('open-workflow', workflow.runId || null)"
+          >
+            {{ workflow.runId ? 'Open workflow run' : 'Open workflows' }}
+            <IconArrowRight :size="12" />
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -559,6 +569,7 @@ const emit = defineEmits([
   'update-approval-choice',
   'update-approval-rejection',
   'open-run',
+  'open-workflow',
 ])
 
 const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
@@ -2179,6 +2190,31 @@ const highlightCode = (value) => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   line-height: 1.4;
+}
+
+.workflow-card-error-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.workflow-error-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #991b1b;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.workflow-error-open-btn:hover {
+  color: #7f1d1d;
+  text-decoration: underline;
 }
 
 .workflow-completion-response {
