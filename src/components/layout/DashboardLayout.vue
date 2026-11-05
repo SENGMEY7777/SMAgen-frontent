@@ -430,22 +430,30 @@ const isProjectActive = (projectId) => {
 }
 
 const getChatSessionForWorkflow = (runId) => {
-  return chatStore.sessions.find((session) =>
-    session.messages?.some((message) => String(message?.workflow?.runId) === String(runId)),
-  ) || null
+  if (!runId) return null
+  return (
+    chatStore.sessions.find((session) =>
+      session.messages?.some(
+        (message) => message?.workflow?.runId && String(message.workflow.runId) === String(runId),
+      ),
+    ) || null
+  )
 }
 
 const isItemActive = (item) => {
-  if (item.type === 'chat') {
-    return chatStore.activeSessionId === item.id && route.name === 'chat'
-  }
-  if (item.type === 'workflow') {
-    const linkedSession = item.chatSessionId
-      ? chatStore.sessions.find((session) => String(session.id) === String(item.chatSessionId))
-      : getChatSessionForWorkflow(item.id)
+  if (!item || !item.id) return false
+  if (route.name === 'chat') {
     return (
-      (route.name === 'chat' && linkedSession && chatStore.activeSessionId === linkedSession.id)
-      || (route.name === 'run-detail' && String(route.params.runId) === String(item.id))
+      item.type === 'chat' &&
+      Boolean(chatStore.activeSessionId) &&
+      String(chatStore.activeSessionId) === String(item.id)
+    )
+  }
+  if (route.name === 'run-detail') {
+    return (
+      item.type === 'workflow' &&
+      Boolean(route.params.runId) &&
+      String(route.params.runId) === String(item.id)
     )
   }
   return false
@@ -744,37 +752,34 @@ const projectItemsById = computed(() => {
   combinedRecentItems.value.forEach((item) => {
     const projectId = getProjectIdForItem(item)
     if (!projectId || !groups[projectId]) return
-
-    // Deduplicate: if a workflow has a linked chat session already in the group, skip it
-    if (item.type === 'workflow' && item.chatSessionId) {
-      const alreadyHasChat = groups[projectId].some(
-        (existing) => existing.type === 'chat' && String(existing.id) === String(item.chatSessionId),
-      )
-      if (alreadyHasChat) return
-    }
-
-    // Deduplicate: if a chat is already represented by a workflow entry, skip it
-    if (item.type === 'chat') {
-      const alreadyHasWorkflow = groups[projectId].some(
-        (existing) => existing.type === 'workflow' && String(existing.chatSessionId) === String(item.id),
-      )
-      if (alreadyHasWorkflow) return
-    }
-
     groups[projectId].push(item)
   })
+
+  // Deduplicate each project's items: if a chat session is present, omit redundant workflow run entry
+  for (const projectId of Object.keys(groups)) {
+    const projectItems = groups[projectId]
+    const existingChatIds = new Set(
+      projectItems.filter((item) => item.type === 'chat').map((item) => String(item.id)),
+    )
+    groups[projectId] = projectItems.filter((item) => {
+      if (item.type === 'workflow' && item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
+        return false
+      }
+      return true
+    })
+  }
   return groups
 })
 
 const unassignedItems = computed(() => {
   const items = combinedRecentItems.value.filter((item) => !getProjectIdForItem(item))
-  // Deduplicate: remove chats that are already represented by a linked workflow
-  const seen = new Set()
+  const existingChatIds = new Set(
+    items.filter((item) => item.type === 'chat').map((item) => String(item.id)),
+  )
+
+  // Deduplicate: if a chat session is already shown, omit the redundant workflow item linking to it
   return items.filter((item) => {
-    if (item.type === 'workflow' && item.chatSessionId) {
-      seen.add(String(item.chatSessionId))
-    }
-    if (item.type === 'chat' && seen.has(String(item.id))) {
+    if (item.type === 'workflow' && item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
       return false
     }
     return true
