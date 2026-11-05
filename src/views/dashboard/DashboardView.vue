@@ -938,22 +938,27 @@ const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const promptText = String(goalPrompt || '').trim()
   const hasUrl = /https?:\/\/[^\s]+/i.test(promptText)
 
-  // If the user has an active project selected and requests modification/fixing, use that active project
+  // If the user has an active project selected, only inherit it if the project name actually matches the URL domain!
   const activeProj = projectsStore?.activeProject
   if (hasUrl && activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
     const hasModifyIntent = /\b(?:modify|fix|update|edit|change|add|code|implement|deploy)\b/i.test(promptText)
     if (hasModifyIntent) {
-      const workspacePath = String(activeProj.workspacePath || '').trim()
-      if (/desktop[\\/]/i.test(workspacePath)) {
-        const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
-        if (sub) return `Desktop/${sub}`
+      const normProj = String(activeProj.name).toLowerCase().replace(/[^a-z0-9]/g, '')
+      const urlMatches = promptText.match(/https?:\/\/([a-z0-9_-]+)/i)
+      const urlDomain = urlMatches ? urlMatches[1].toLowerCase().replace(/[^a-z0-9]/g, '') : ''
+      if (urlDomain && (normProj.includes(urlDomain) || urlDomain.includes(normProj))) {
+        const workspacePath = String(activeProj.workspacePath || '').trim()
+        if (/desktop[\\/]/i.test(workspacePath)) {
+          const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
+          if (sub) return `Desktop/${sub}`
+        }
+        const folder = normalizeLocalFolderName(activeProj.name)
+        if (folder) return `Desktop/${folder}`
       }
-      const folder = normalizeLocalFolderName(activeProj.name)
-      if (folder) return `Desktop/${folder}`
     }
   }
 
-  // Standalone URL review without an active project must not inherit unrelated local projects
+  // A prompt with a URL must NEVER inherit an unrelated active or previous local project
   if (hasUrl) {
     return ''
   }
