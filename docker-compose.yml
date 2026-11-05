@@ -36,6 +36,9 @@ services:
       # Map the host Desktop to the container user's Desktop directory.
       # This is intentionally limited to the local Docker development stack.
       - /Users/user/Desktop:/home/appuser/Desktop
+      # Map host SSH keys and git config so git operations and pushes work seamlessly inside container
+      - /Users/user/.ssh:/home/appuser/.ssh:ro
+      - /Users/user/.gitconfig:/home/appuser/.gitconfig:ro
     networks:
       - kairo-net
     restart: unless-stopped
