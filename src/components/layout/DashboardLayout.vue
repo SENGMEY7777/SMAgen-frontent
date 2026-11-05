@@ -776,11 +776,19 @@ const unassignedItems = computed(() => {
   const existingChatIds = new Set(
     items.filter((item) => item.type === 'chat').map((item) => String(item.id)),
   )
+  const existingChatTitles = new Set(
+    items.filter((item) => item.type === 'chat').map((item) => String(item.title || '').trim().toLowerCase()),
+  )
 
-  // Deduplicate: if a chat session is already shown, omit the redundant workflow item linking to it
+  // Deduplicate: if a chat session is already shown, omit redundant workflow items
   return items.filter((item) => {
-    if (item.type === 'workflow' && item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
-      return false
+    if (item.type === 'workflow') {
+      if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
+        return false
+      }
+      if (existingChatTitles.has(String(item.title || '').trim().toLowerCase())) {
+        return false
+      }
     }
     return true
   })
@@ -1123,13 +1131,12 @@ const unassignedItems = computed(() => {
   transition: background 0.12s ease;
 }
 
-.recent-row:hover,
-.recent-row:focus-within {
-  background: #f3f4f6;
+.recent-row:hover {
+  background: #f4f4f5;
 }
 
 .recent-row.active-chat {
-  background: #f3f4f6;
+  background: #ececee;
 }
 
 .item-circle {
