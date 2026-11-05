@@ -183,7 +183,7 @@
             <span class="side-label">Chats and tasks</span>
           </div>
           <div class="recent-list">
-            <template v-for="item in unassignedItems" :key="item.id">
+            <template v-for="item in unassignedItems" :key="`${item.type}-${item.id}`">
               <div
                 class="recent-row"
                 :class="{ 'active-chat': isItemActive(item), 'is-pinned': item.pinned }"
@@ -786,7 +786,11 @@ const unassignedItems = computed(() => {
       if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
         return false
       }
-      if (existingChatTitles.has(String(item.title || '').trim().toLowerCase())) {
+      const normTitle = String(item.title || '').trim().toLowerCase()
+      if (existingChatTitles.has(normTitle)) {
+        return false
+      }
+      if ([...existingChatTitles].some((ct) => ct && (ct.includes(normTitle) || normTitle.includes(ct)))) {
         return false
       }
     }
