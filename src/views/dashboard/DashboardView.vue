@@ -881,20 +881,30 @@ const extractWorkflowDestination = (message) => {
     const task = tasks[index]
     const input = task?.toolInput || task?.tool_input || {}
     const action = String(input.action || '').toLowerCase().replace(/[_-]/g, '')
-    const path = String(input.path || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
-    if (!path || path.includes('..') || path.startsWith('~')) continue
+    const rawPath = String(input.path || input.cwd || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    if (!rawPath || rawPath.includes('..') || rawPath.startsWith('~')) continue
 
-    if (action === 'createdesktopdirectory' || action === 'exportworkspacetodesktop') {
-      return `Desktop/${path}`
+    const cleanPath = rawPath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[~\\/]*downloads[\\/]+/i, '')
+
+    if (action === 'exportworkspacetodownloads' || /^downloads[\\/]/i.test(rawPath)) {
+      return `Downloads/${cleanPath}`
     }
-    if (action === 'exportworkspacetodownloads') {
-      return `Downloads/${path}`
-    }
-    if (action === 'createdesktopfile' || action === 'createdesktopfiles' || action === 'deletedesktoppath' || action === 'renamedesktoppath') {
-      let rootFolder = path.split('/')[0]
-      rootFolder = rootFolder.split(/\.\s*Create or update/i)[0].split(/\s*\[Follow-up/i)[0].split(/\.\s*Do not choose/i)[0].trim().replace(/[.,;!?]+$/, '')
-      if (rootFolder && rootFolder !== '.' && rootFolder !== '..') {
-        return `Desktop/${rootFolder}`
+
+    if (
+      action.includes('desktop')
+      || action === 'update'
+      || action === 'create'
+      || action === 'write'
+      || task?.assignedTool === 'executeCommand'
+      || /^desktop[\\/]/i.test(rawPath)
+    ) {
+      let projectDir = cleanPath
+      if (/\.[a-z0-9]+$/i.test(projectDir)) {
+        projectDir = projectDir.substring(0, projectDir.lastIndexOf('/'))
+      }
+      projectDir = projectDir.split(/\.\s*Create or update/i)[0].split(/\s*\[Follow-up/i)[0].split(/\.\s*Do not choose/i)[0].trim().replace(/[.,;!?]+$/, '')
+      if (projectDir && projectDir !== '.' && projectDir !== '..') {
+        return `Desktop/${projectDir}`
       }
     }
   }
@@ -918,10 +928,10 @@ const requestsPreviousLocalDestination = (text) => {
   if (explicitlyReferencesPreviousProject) return true
 
   // Short feature follow-ups commonly omit the project name (for example,
-  // "add MVC + Service layer", "please remove gitkeep"). Carry the last workflow
+  // "add MVC + Service layer", "please remove gitkeep", "please push to github"). Carry the last workflow
   // destination only when the prompt clearly modifies existing work and does
   // not request a new project, folder, or explicit destination.
-  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build)\b/i.test(value)
+  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build|push|deploy|commit|publish|upload)\b/i.test(value)
   const requestsNewTarget = /\b(?:new|another|different)\s+(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:create|setup|set\s+up|initialize|scaffold|start)\b[\s\S]{0,60}\b(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:folder|directory|project)\s+(?:name|named|called)\b/i.test(value)
