@@ -309,11 +309,6 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
-          <div class="model-picker">
-            <span class="model-dot"><IconSparkles :size="12" /></span>
-            <span>KAIRO 4o</span>
-            <IconChevronDown :size="13" />
-          </div>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">

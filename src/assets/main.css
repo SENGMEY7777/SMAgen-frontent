@@ -301,7 +301,7 @@
   gap: 10px;
 }
 
-.model-picker {
+/* .model-picker {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -319,7 +319,7 @@
 .model-picker:hover {
   border-color: #d1d5db;
   background: #f9fafb;
-}
+} */
 
 .model-dot {
   display: grid;
