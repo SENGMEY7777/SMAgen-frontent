@@ -938,7 +938,22 @@ const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const promptText = String(goalPrompt || '').trim()
   const hasUrl = /https?:\/\/[^\s]+/i.test(promptText)
 
-  // Standalone URL review or API inspection requests must not inherit unrelated local projects
+  // If the user has an active project selected and requests modification/fixing, use that active project
+  const activeProj = projectsStore?.activeProject
+  if (hasUrl && activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
+    const hasModifyIntent = /\b(?:modify|fix|update|edit|change|add|code|implement|deploy)\b/i.test(promptText)
+    if (hasModifyIntent) {
+      const workspacePath = String(activeProj.workspacePath || '').trim()
+      if (/desktop[\\/]/i.test(workspacePath)) {
+        const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
+        if (sub) return `Desktop/${sub}`
+      }
+      const folder = normalizeLocalFolderName(activeProj.name)
+      if (folder) return `Desktop/${folder}`
+    }
+  }
+
+  // Standalone URL review without an active project must not inherit unrelated local projects
   if (hasUrl) {
     return ''
   }
