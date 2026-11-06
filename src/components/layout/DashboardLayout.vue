@@ -755,6 +755,49 @@ const combinedRecentItems = computed(() => {
   return merged
 })
 
+const normalizeTitle = (title) => String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+const deduplicateSidebarItems = (items) => {
+  if (!Array.isArray(items)) return []
+
+  // 1. Identify all chat sessions present in this list
+  const chatItems = items.filter((item) => item.type === 'chat')
+  const existingChatIds = new Set(chatItems.map((c) => String(c.id)))
+  const existingChatTitles = new Set(chatItems.map((c) => normalizeTitle(c.title)).filter(Boolean))
+
+  // 2. Omit any workflow run that is already represented by a chat session (by linked ID or identical title)
+  const nonRedundant = items.filter((item) => {
+    if (item.type === 'workflow') {
+      if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
+        return false
+      }
+      const norm = normalizeTitle(item.title)
+      if (norm && existingChatTitles.has(norm)) {
+        return false
+      }
+    }
+    return true
+  })
+
+  // 3. Deduplicate multiple identical entries in the same section (keep the most recent one)
+  const seenIds = new Set()
+  const seenTitles = new Set()
+
+  return nonRedundant.filter((item) => {
+    const idKey = `${item.type}:${item.id}`
+    if (seenIds.has(idKey)) return false
+    seenIds.add(idKey)
+
+    const normTitle = normalizeTitle(item.title)
+    if (normTitle) {
+      if (seenTitles.has(normTitle)) return false
+      seenTitles.add(normTitle)
+    }
+
+    return true
+  })
+}
+
 const projectItemsById = computed(() => {
   const groups = Object.fromEntries(projectsStore.projects.map((project) => [project.id, []]))
   combinedRecentItems.value.forEach((item) => {
@@ -763,35 +806,16 @@ const projectItemsById = computed(() => {
     groups[projectId].push(item)
   })
 
-  // Deduplicate each project's items: if a chat session is present, omit redundant workflow run entry
+  // Apply strict deduplication per project
   for (const projectId of Object.keys(groups)) {
-    const projectItems = groups[projectId]
-    const existingChatIds = new Set(
-      projectItems.filter((item) => item.type === 'chat').map((item) => String(item.id)),
-    )
-    groups[projectId] = projectItems.filter((item) => {
-      if (item.type === 'workflow' && item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
-        return false
-      }
-      return true
-    })
+    groups[projectId] = deduplicateSidebarItems(groups[projectId])
   }
   return groups
 })
 
 const unassignedItems = computed(() => {
   const items = combinedRecentItems.value.filter((item) => !getProjectIdForItem(item))
-  const existingChatIds = new Set(
-    items.filter((item) => item.type === 'chat').map((item) => String(item.id)),
-  )
-
-  // Deduplicate: if a chat session is already shown, omit the redundant workflow item linking to it
-  return items.filter((item) => {
-    if (item.type === 'workflow' && item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
-      return false
-    }
-    return true
-  })
+  return deduplicateSidebarItems(items)
 })
 </script>
 
@@ -1131,13 +1155,13 @@ const unassignedItems = computed(() => {
   transition: background 0.12s ease;
 }
 
-.recent-row:hover,
-.recent-row:focus-within {
-  background: #f3f4f6;
+.recent-row:hover {
+  background: #f4f4f5;
 }
 
 .recent-row.active-chat {
-  background: #f3f4f6;
+  background: #ececee;
+  font-weight: 500;
 }
 
 .item-circle {
