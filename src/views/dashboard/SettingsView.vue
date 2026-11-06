@@ -22,13 +22,13 @@
               @keydown.enter="triggerFileInput"
               @keydown.space.prevent="triggerFileInput"
             >
-              <span class="avatar large-avatar" :class="{ 'has-img': auth.avatar && !avatarError }">
+              <span class="avatar large-avatar" :class="{ 'has-img': avatarSrc && !avatarError }">
                 <img
-                  v-if="auth.avatar && !avatarError"
-                  :src="auth.avatar"
+                  v-if="avatarSrc && !avatarError"
+                  :src="avatarSrc"
                   :alt="auth.displayName"
                   class="avatar-img"
-                  @error="avatarError = true"
+                  @error="handleAvatarError"
                 />
                 <span v-else>{{ auth.initials }}</span>
               </span>
@@ -127,10 +127,25 @@ const fileInputRef = ref(null)
 const avatarError = ref(false)
 const avatarSuccess = ref('')
 const avatarErrorMsg = ref('')
+const avatarSrc = ref(auth.avatar || auth.defaultAvatar)
 
-watch(() => auth.avatar, () => {
-  avatarError.value = false
-})
+watch(
+  () => auth.avatar,
+  (val) => {
+    avatarSrc.value = val || auth.defaultAvatar
+    avatarError.value = false
+  },
+  { immediate: true },
+)
+
+const handleAvatarError = () => {
+  if (avatarSrc.value !== auth.defaultAvatar) {
+    avatarSrc.value = auth.defaultAvatar
+    avatarError.value = false
+  } else {
+    avatarError.value = true
+  }
+}
 
 const triggerFileInput = () => {
   fileInputRef.value?.click()
