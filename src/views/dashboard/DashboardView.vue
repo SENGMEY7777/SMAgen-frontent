@@ -97,10 +97,11 @@
                   <img
                     v-for="(img, imgIdx) in message.images"
                     :key="imgIdx"
-                    :src="img"
+                    :src="resolveImageSource(img)"
                     alt="User uploaded attachment"
                     class="message-thumbnail"
-                    @click="previewImageUrl = img"
+                    @click="previewImageUrl = resolveImageSource(img)"
+                    @error="(e) => { e.target.style.opacity = '0.5'; }"
                   />
                 </div>
 
@@ -744,6 +745,12 @@ watch([currentMessages, loading], () => {
   scrollToBottom()
 }, { deep: true })
 
+const resolveImageSource = (img) => {
+  if (!img) return ''
+  if (typeof img === 'string') return img
+  return img.dataUrl || img.url || img.src || ''
+}
+
 // Upload and Paste Handling for Images and Code/Document Files
 const processUploadedFile = (file) => {
   if (!file) return
@@ -751,12 +758,43 @@ const processUploadedFile = (file) => {
   if (isImg) {
     const reader = new FileReader()
     reader.onload = (e) => {
-      attachedImages.value.push({
-        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        name: file.name || 'Pasted Image',
-        dataUrl: e.target.result,
-        size: file.size,
-      })
+      const rawDataUrl = e.target.result
+      const img = new Image()
+      img.onload = () => {
+        const MAX_DIM = 1200
+        let { width, height } = img
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width)
+            width = MAX_DIM
+          } else {
+            width = Math.round((width * MAX_DIM) / height)
+            height = MAX_DIM
+          }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, width, height)
+        const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85)
+
+        attachedImages.value.push({
+          id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name || 'Pasted Image',
+          dataUrl: optimizedDataUrl,
+          size: file.size,
+        })
+      }
+      img.onerror = () => {
+        attachedImages.value.push({
+          id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name || 'Pasted Image',
+          dataUrl: rawDataUrl,
+          size: file.size,
+        })
+      }
+      img.src = rawDataUrl
     }
     reader.readAsDataURL(file)
   } else {
@@ -845,12 +883,16 @@ const normalizeLocalFolderName = (value) => {
 
 const extractLocalDestination = (text) => {
   const value = String(text || '').replace(/\s+/g, ' ').trim()
-  if (!value || !/\b(?:desktop|downloads?|local\s+computer|local\s+folder)\b/i.test(value)) return ''
+  if (!value) return ''
 
-  const pathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
-  if (pathMatch) {
-    const path = pathMatch[2].replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
-    return path ? `${/^downloads?$/i.test(pathMatch[1]) ? 'Downloads' : 'Desktop'}/${path}` : ''
+  const directPathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
+    || value.match(/\b(Api-Productions[/\\][A-Za-z0-9._-]+)\b/i)
+  if (directPathMatch) {
+    if (directPathMatch[0].startsWith('Api-Productions')) {
+      return `Desktop/${directPathMatch[0].replace(/\\/g, '/')}`
+    }
+    const path = directPathMatch[2]?.replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
+    return path ? `${/^downloads?$/i.test(directPathMatch[1]) ? 'Downloads' : 'Desktop'}/${path}` : ''
   }
 
   const quotedFolder = value.match(/\b(?:folder|directory|project)\s+(?:name(?:\s+is)?|named|called)\s*["“']([^"”']+)["”']/i)
@@ -874,10 +916,12 @@ const extractWorkflowDestination = (message) => {
     if (action === 'createdesktopdirectory' || action === 'exportworkspacetodesktop') {
       const segments = path.split('/').filter(Boolean)
       let projPath = path
-      if (segments.length > 2 && segments[0].toLowerCase().includes('production')) {
+      if (segments.length >= 2 && segments[0].toLowerCase().includes('production')) {
+        projPath = `${segments[0]}/${segments[1]}`
+      } else if (segments.length > 2 && !segments[0].toLowerCase().includes('desktop')) {
         projPath = `${segments[0]}/${segments[1]}`
       } else if (segments.length > 1 && !segments[0].toLowerCase().includes('desktop')) {
-        projPath = segments[0]
+        projPath = segments.slice(0, 2).join('/')
       }
       return `Desktop/${projPath}`
     }
@@ -885,7 +929,14 @@ const extractWorkflowDestination = (message) => {
       return `Downloads/${path}`
     }
     if (action === 'createdesktopfile' || action === 'createdesktopfiles' || action === 'deletedesktoppath' || action === 'renamedesktoppath') {
-      const rootFolder = path.split('/')[0]
+      const segments = path.split('/').filter(Boolean)
+      if (segments.length >= 2 && segments[0].toLowerCase().includes('production')) {
+        return `Desktop/${segments[0]}/${segments[1]}`
+      }
+      if (segments.length >= 2 && !segments[0].toLowerCase().includes('desktop')) {
+        return `Desktop/${segments[0]}/${segments[1]}`
+      }
+      const rootFolder = segments[0]
       if (rootFolder && rootFolder !== '.' && rootFolder !== '..') {
         return `Desktop/${rootFolder}`
       }
