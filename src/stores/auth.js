@@ -1,12 +1,22 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { api, ApiError } from '@/services/api'
+import defaultAvatarImg from '@/assets/default-avatar.jpg'
 
 const TOKEN_KEY = 'omni_token'
 const USER_KEY = 'omni_user'
 const ROLE_KEY = 'omni_role'
 const AVATAR_KEY = 'omni_user_avatar'
-const DEFAULT_AVATAR_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1a87AXvPKKu16P1lg-M-m7WVFNJwxmHQ22QEZw5_r6CqLI551y9Cr2P-U&s=10'
+const DEFAULT_AVATAR_URL = defaultAvatarImg
+
+const cleanAvatarUrl = (url) => {
+  if (!url || typeof url !== 'string') return ''
+  const trimmed = url.trim()
+  if (!trimmed || trimmed.includes('user-avatar') || trimmed.includes('default-avatar.svg')) {
+    return ''
+  }
+  return trimmed
+}
 
 const readJson = (key, fallback = null) => {
   try {
@@ -29,22 +39,23 @@ export const useAuthStore = defineStore('auth', () => {
   const displayName = computed(() => user.value?.full_name || user.value?.fullName || user.value?.email?.split('@')[0] || 'Developer')
   const initials = computed(() => displayName.value.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'OM')
   const hasCustomAvatar = computed(() => {
-    return Boolean(
-      customAvatar.value ||
-      user.value?.avatar ||
-      user.value?.avatar_url ||
-      user.value?.avatarUrl ||
-      user.value?.photoURL
+    const custom = (
+      cleanAvatarUrl(customAvatar.value) ||
+      cleanAvatarUrl(user.value?.avatar) ||
+      cleanAvatarUrl(user.value?.avatar_url) ||
+      cleanAvatarUrl(user.value?.avatarUrl) ||
+      cleanAvatarUrl(user.value?.photoURL)
     )
+    return Boolean(custom)
   })
 
   const avatar = computed(() => {
     return (
-      customAvatar.value ||
-      user.value?.avatar ||
-      user.value?.avatar_url ||
-      user.value?.avatarUrl ||
-      user.value?.photoURL ||
+      cleanAvatarUrl(customAvatar.value) ||
+      cleanAvatarUrl(user.value?.avatar) ||
+      cleanAvatarUrl(user.value?.avatar_url) ||
+      cleanAvatarUrl(user.value?.avatarUrl) ||
+      cleanAvatarUrl(user.value?.photoURL) ||
       DEFAULT_AVATAR_URL
     )
   })
