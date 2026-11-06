@@ -155,6 +155,7 @@ export const useAuthStore = defineStore('auth', () => {
     isPrivileged,
     displayName,
     initials,
+    userInitials: initials,
     avatar,
     hasCustomAvatar,
     defaultAvatar: DEFAULT_AVATAR_URL,
