@@ -158,7 +158,7 @@ const parseStreamPayload = (payload) => {
 }
 
 const streamChat = async (message, history = [], options = {}) => {
-  const { signal, onChunk, projectContext, localDestination, headers: optionHeaders = {} } = options
+  const { signal, onChunk, projectContext, localDestination, images = [], headers: optionHeaders = {} } = options
   const headers = new Headers(optionHeaders)
   headers.set('Content-Type', 'application/json')
   headers.set('Accept', 'text/event-stream, application/x-ndjson, text/plain, application/json')
@@ -169,6 +169,7 @@ const streamChat = async (message, history = [], options = {}) => {
   const extraPayload = {
     ...(projectContext ? { projectContext } : {}),
     ...(localDestination ? { localDestination } : {}),
+    ...(images && images.length > 0 ? { images } : {}),
   }
 
   let response
@@ -297,10 +298,11 @@ export const api = {
   createAdminApiKey: () => request('/admin/auth/api-keys', json('POST', {})),
 
   chat: (message, history = [], options = {}) => {
-    const { projectContext, localDestination, ...restOptions } = options
+    const { projectContext, localDestination, images = [], ...restOptions } = options
     const extra = {
       ...(projectContext ? { projectContext } : {}),
       ...(localDestination ? { localDestination } : {}),
+      ...(images && images.length > 0 ? { images } : {}),
     }
     return request('/chat', { ...json('POST', chatBody(message, history, extra)), ...restOptions })
   },
