@@ -859,14 +859,21 @@ const copyUserMessage = async (content, index) => {
   } catch {}
 }
 
-const formatPromptWithFiles = (text, files = []) => {
-  if (!files || files.length === 0) return text
-  const filesContentPrompt = files
-    .map((f) => `### Uploaded File: \`${f.name}\`\n\`\`\`${f.ext || ''}\n${f.content}\n\`\`\``)
-    .join('\n\n')
-  return text
-    ? `${text}\n\n${filesContentPrompt}`
-    : `I have uploaded the following file(s). Please review, inspect, and analyze:\n\n${filesContentPrompt}`
+const formatPromptWithFiles = (text, files = [], images = []) => {
+  const trimmed = String(text || '').trim()
+  let result = trimmed
+  if (files && files.length > 0) {
+    const filesContentPrompt = files
+      .map((f) => `### Uploaded File: \`${f.name}\`\n\`\`\`${f.ext || ''}\n${f.content}\n\`\`\``)
+      .join('\n\n')
+    result = result
+      ? `${result}\n\n${filesContentPrompt}`
+      : `I have uploaded the following file(s). Please review, inspect, and analyze:\n\n${filesContentPrompt}`
+  }
+  if (!result && images && images.length > 0) {
+    result = 'Review and inspect the attached image, and execute the requested workflow steps.'
+  }
+  return result || 'Execute requested workflow tasks'
 }
 
 const normalizeLocalFolderName = (value) => {
@@ -1119,9 +1126,10 @@ const addWorkflowPlaceholder = (goalPrompt) => {
 
 const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = []) => {
   workflowStopRequested = false
-  const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
+  const safeGoalPrompt = String(goalPrompt || '').trim() || 'Review project and execute requested workflow tasks'
+  const localDestination = inferWorkflowLocalDestination(safeGoalPrompt, contextMessages)
   const response = await api.runWorkflow({
-    goalPrompt,
+    goalPrompt: safeGoalPrompt,
     ...(localDestination ? { localDestination } : {}),
   })
   const runId = getWorkflowRunId(response)
@@ -1341,6 +1349,12 @@ const send = async () => {
     }
   }
 
+  if (!fullPrompt && images.length > 0) {
+    const previousMessages = currentMessages.value.slice().reverse().filter((m) => m.content && m.content.trim())
+    const recentContext = previousMessages[0]?.content ? ` regarding "${previousMessages[0].content.slice(0, 100)}"` : ''
+    fullPrompt = `Review and inspect the uploaded image${recentContext}, and execute the necessary workflow tasks.`
+  }
+
   if (requestMode === 'workflow') {
     chatStore.addMessage({
       role: 'user',
@@ -1350,7 +1364,7 @@ const send = async () => {
       requestMode: 'workflow',
     })
 
-    const goalPrompt = message || (files.length ? 'Run a workflow using the uploaded file(s).' : 'Run workflow')
+    const goalPrompt = message || (files.length ? 'Run a workflow using the uploaded file(s).' : (images.length ? 'Review uploaded image and execute workflow' : 'Run workflow'))
     const workflowMessageIndex = addWorkflowPlaceholder(goalPrompt)
 
     input.value = ''
@@ -1362,7 +1376,8 @@ const send = async () => {
     try {
       // The current user message and the workflow placeholder are both already
       // in the store; only earlier messages should provide follow-up context.
-      await startWorkflowRun(workflowMessageIndex, fullPrompt, currentMessages.value.slice(0, -2))
+      const promptToRun = fullPrompt || goalPrompt
+      await startWorkflowRun(workflowMessageIndex, promptToRun, currentMessages.value.slice(0, -2))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
