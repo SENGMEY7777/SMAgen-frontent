@@ -76,7 +76,24 @@ export const useChatStore = defineStore('chat', () => {
     (val) => {
       try {
         localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(val))
-      } catch {}
+      } catch {
+        try {
+          // If storage quota exceeded due to large images, keep sessions persisted safely
+          const sanitized = (val || []).map((s) => ({
+            ...s,
+            messages: (s.messages || []).map((m) => {
+              if (m.images && m.images.length) {
+                return {
+                  ...m,
+                  images: m.images.map((img) => (typeof img === 'string' && img.length > 5000 ? img.slice(0, 100) : img)),
+                }
+              }
+              return m
+            }),
+          }))
+          localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(sanitized))
+        } catch {}
+      }
     },
     { deep: true }
   )
