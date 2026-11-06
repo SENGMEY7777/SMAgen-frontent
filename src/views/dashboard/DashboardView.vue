@@ -11,11 +11,9 @@
       />
 
       <div v-if="!currentMessages.length" class="hero">
-        <div class="kairo-hero-logo" aria-hidden="true">
-          <img :src="logoKairoUrl" alt="KAIRO Logo" class="kairo-hero-logo-img" />
-        </div>
+        <div class="orb"></div>
         <h1>{{ timeGreeting }}, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
-        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let KAIRO help you move faster.</p>
+        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
         <div class="prompt-suggestions">
           <button type="button" @click="startPrompt('Help me understand this project and suggest the next best step.')">
             Understand my project
@@ -54,8 +52,7 @@
                   @submit-approval="submitWorkflowApproval(message)"
                   @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
-                  @open-run="openWorkflowDestination"
-                  @open-workflow="openWorkflowDestination"
+                  @open-run="router.push(`/runs/${$event}`)"
                 />
 
                 <template v-else>
@@ -318,10 +315,10 @@
         </div>
 
         <div class="chat-footer-bar">
-          <span class="footer-disclaimer">KAIRO is AI and can make mistakes. Please double-check responses.</span>
+          <span class="footer-disclaimer">SMAgen is AI and can make mistakes. Please double-check responses.</span>
           <div class="footer-model-badge">
             <span class="status-dot"></span>
-            <span>KAIRO Pro</span>
+            <span>SMAgen Pro</span>
           </div>
         </div>
       </div>
@@ -342,7 +339,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import logoKairoUrl from '@/assets/logo-kairo.png'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import WorkflowStream from '@/components/workflow/WorkflowStream.vue'
 import {
@@ -381,15 +377,6 @@ const auth = useAuthStore()
 const chatStore = useChatStore()
 const projectsStore = useProjectsStore()
 
-const openWorkflowDestination = (runId) => {
-  if (runId) {
-    router.push(`/runs/${runId}`)
-    return
-  }
-
-  router.push('/workflows')
-}
-
 const chatThreadRef = ref(null)
 const showScrollButton = ref(false)
 const textareaRef = ref(null)
@@ -426,7 +413,7 @@ const workflowApprovalOptions = (tool = 'this action') => [
   { number: '2', value: 'allow_conversation', label: `Yes, and always allow '${tool}' in this conversation` },
   { number: '3', value: 'allow_project', label: `Yes, and always allow '${tool}' in this project` },
   { number: '4', value: 'allow_always', label: `Yes, and always allow '${tool}'` },
-  { number: '5', value: 'reject', label: 'No (tell KAIRO what to do instead)' },
+  { number: '5', value: 'reject', label: 'No (tell SMAgen what to do instead)' },
 ]
 
 const toggleStreamOpen = (workflow) => {
@@ -881,30 +868,26 @@ const extractWorkflowDestination = (message) => {
     const task = tasks[index]
     const input = task?.toolInput || task?.tool_input || {}
     const action = String(input.action || '').toLowerCase().replace(/[_-]/g, '')
-    const rawPath = String(input.path || input.cwd || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
-    if (!rawPath || rawPath.includes('..') || rawPath.startsWith('~')) continue
+    const path = String(input.path || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    if (!path || path.includes('..') || path.startsWith('~')) continue
 
-    const cleanPath = rawPath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[~\\/]*downloads[\\/]+/i, '')
-
-    if (action === 'exportworkspacetodownloads' || /^downloads[\\/]/i.test(rawPath)) {
-      return `Downloads/${cleanPath}`
-    }
-
-    if (
-      action.includes('desktop')
-      || action === 'update'
-      || action === 'create'
-      || action === 'write'
-      || task?.assignedTool === 'executeCommand'
-      || /^desktop[\\/]/i.test(rawPath)
-    ) {
-      let projectDir = cleanPath
-      if (/\.[a-z0-9]+$/i.test(projectDir)) {
-        projectDir = projectDir.substring(0, projectDir.lastIndexOf('/'))
+    if (action === 'createdesktopdirectory' || action === 'exportworkspacetodesktop') {
+      const segments = path.split('/').filter(Boolean)
+      let projPath = path
+      if (segments.length > 2 && segments[0].toLowerCase().includes('production')) {
+        projPath = `${segments[0]}/${segments[1]}`
+      } else if (segments.length > 1 && !segments[0].toLowerCase().includes('desktop')) {
+        projPath = segments[0]
       }
-      projectDir = projectDir.split(/\.\s*Create or update/i)[0].split(/\s*\[Follow-up/i)[0].split(/\.\s*Do not choose/i)[0].trim().replace(/[.,;!?]+$/, '')
-      if (projectDir && projectDir !== '.' && projectDir !== '..') {
-        return `Desktop/${projectDir}`
+      return `Desktop/${projPath}`
+    }
+    if (action === 'exportworkspacetodownloads') {
+      return `Downloads/${path}`
+    }
+    if (action === 'createdesktopfile' || action === 'createdesktopfiles' || action === 'deletedesktoppath' || action === 'renamedesktoppath') {
+      const rootFolder = path.split('/')[0]
+      if (rootFolder && rootFolder !== '.' && rootFolder !== '..') {
+        return `Desktop/${rootFolder}`
       }
     }
   }
@@ -928,10 +911,10 @@ const requestsPreviousLocalDestination = (text) => {
   if (explicitlyReferencesPreviousProject) return true
 
   // Short feature follow-ups commonly omit the project name (for example,
-  // "add MVC + Service layer", "please remove gitkeep", "please push to github"). Carry the last workflow
+  // "add MVC + Service layer", "please remove gitkeep"). Carry the last workflow
   // destination only when the prompt clearly modifies existing work and does
   // not request a new project, folder, or explicit destination.
-  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build|push|deploy|commit|publish|upload)\b/i.test(value)
+  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build)\b/i.test(value)
   const requestsNewTarget = /\b(?:new|another|different)\s+(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:create|setup|set\s+up|initialize|scaffold|start)\b[\s\S]{0,60}\b(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:folder|directory|project)\s+(?:name|named|called)\b/i.test(value)
@@ -945,58 +928,27 @@ const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const directDestination = extractLocalDestination(goalPrompt)
   if (directDestination) return directDestination
 
-  const promptText = String(goalPrompt || '').trim()
-  const hasUrl = /https?:\/\/[^\s]+/i.test(promptText)
+  // 1. Check conversation context messages (most recent first)
+  for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
+    const message = contextMessages[index]
+    const workflowDestination = extractWorkflowDestination(message)
+    if (workflowDestination) return workflowDestination
+    if (message?.role === 'user') {
+      const destination = extractLocalDestination(message.content)
+      if (destination) return destination
+    }
+  }
 
-  // If the user has an active project selected, only inherit it if the project name actually matches the URL domain!
+  // 2. Check active project from sidebar (remember project folder)
   const activeProj = projectsStore?.activeProject
-  if (hasUrl && activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
-    const hasModifyIntent = /\b(?:modify|fix|update|edit|change|add|code|implement|deploy)\b/i.test(promptText)
-    if (hasModifyIntent) {
-      const normProj = String(activeProj.name).toLowerCase().replace(/[^a-z0-9]/g, '')
-      const urlMatches = promptText.match(/https?:\/\/([a-z0-9_-]+)/i)
-      const urlDomain = urlMatches ? urlMatches[1].toLowerCase().replace(/[^a-z0-9]/g, '') : ''
-      if (urlDomain && (normProj.includes(urlDomain) || urlDomain.includes(normProj))) {
-        const workspacePath = String(activeProj.workspacePath || '').trim()
-        if (/desktop[\\/]/i.test(workspacePath)) {
-          const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
-          if (sub) return `Desktop/${sub}`
-        }
-        const folder = normalizeLocalFolderName(activeProj.name)
-        if (folder) return `Desktop/${folder}`
-      }
+  if (activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
+    const workspacePath = String(activeProj.workspacePath || '').trim()
+    if (/desktop[\\/]/i.test(workspacePath)) {
+      const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
+      if (sub) return `Desktop/${sub}`
     }
-  }
-
-  // A prompt with a URL must NEVER inherit an unrelated active or previous local project
-  if (hasUrl) {
-    return ''
-  }
-
-  // Only inherit previous project folder when the prompt actually requests continuation
-  if (requestsPreviousLocalDestination(promptText)) {
-    // 1. Check conversation context messages (most recent first)
-    for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
-      const message = contextMessages[index]
-      const workflowDestination = extractWorkflowDestination(message)
-      if (workflowDestination) return workflowDestination
-      if (message?.role === 'user') {
-        const destination = extractLocalDestination(message.content)
-        if (destination) return destination
-      }
-    }
-
-    // 2. Check active project from sidebar (remember project folder)
-    const activeProj = projectsStore?.activeProject
-    if (activeProj && activeProj.name && activeProj.id !== 'proj_default_smagen') {
-      const workspacePath = String(activeProj.workspacePath || '').trim()
-      if (/desktop[\\/]/i.test(workspacePath)) {
-        const sub = workspacePath.replace(/^[~\\/]*desktop[\\/]+/i, '').replace(/^[\\/]+/, '')
-        if (sub) return `Desktop/${sub}`
-      }
-      const folder = normalizeLocalFolderName(activeProj.name)
-      if (folder) return `Desktop/${folder}`
-    }
+    const folder = normalizeLocalFolderName(activeProj.name)
+    if (folder) return `Desktop/${folder}`
   }
 
   return ''
@@ -1447,33 +1399,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-
-.kairo-hero-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 76px;
-  height: 76px;
-  margin-bottom: 24px;
-  border-radius: 20px;
-  overflow: hidden;
-  background: #09090b;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
-  cursor: pointer;
-}
-
-/* .kairo-hero-logo:hover {
-  transform: scale(1.06) translateY(-2px);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
-} */
-
-.kairo-hero-logo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
 
 .composer-input {
   width: 50% !important;
