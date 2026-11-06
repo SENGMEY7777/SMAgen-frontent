@@ -183,7 +183,7 @@
             <span class="side-label">Chats and tasks</span>
           </div>
           <div class="recent-list">
-            <template v-for="item in unassignedItems" :key="`${item.type}-${item.id}`">
+            <template v-for="item in unassignedItems" :key="item.id">
               <div
                 class="recent-row"
                 :class="{ 'active-chat': isItemActive(item), 'is-pinned': item.pinned }"
@@ -282,13 +282,13 @@
           @click="router.push('/settings'); closeMenu()"
           title="Account Settings"
         >
-          <span class="avatar" :class="{ 'has-img': auth.avatar && !avatarError }">
+          <span class="avatar" :class="{ 'has-img': avatarSrc && !avatarError }">
             <img
-              v-if="auth.avatar && !avatarError"
-              :src="auth.avatar"
+              v-if="avatarSrc && !avatarError"
+              :src="avatarSrc"
               :alt="auth.displayName"
               class="avatar-img"
-              @error="avatarError = true"
+              @error="handleAvatarError"
             />
             <span v-else>{{ auth.initials }}</span>
           </span>
@@ -317,18 +317,18 @@
           </button>
           <button
             class="avatar header-avatar"
-            :class="{ 'has-img': auth.avatar && !avatarError }"
+            :class="{ 'has-img': avatarSrc && !avatarError }"
             type="button"
             aria-label="Open settings"
             title="Settings"
             @click="router.push('/settings')"
           >
             <img
-              v-if="auth.avatar && !avatarError"
-              :src="auth.avatar"
+              v-if="avatarSrc && !avatarError"
+              :src="avatarSrc"
               :alt="auth.displayName"
               class="avatar-img"
-              @error="avatarError = true"
+              @error="handleAvatarError"
             />
             <span v-else>{{ auth.initials }}</span>
           </button>
@@ -373,8 +373,6 @@ import {
   IconTrash,
   IconSettings,
   IconMenu2,
-  IconSparkles,
-  IconChevronDown,
   IconPlus,
 } from '@tabler/icons-vue'
 import BrandMark from '@/components/branding/BrandMark.vue'
@@ -398,10 +396,25 @@ const mobileOpen = ref(false)
 const pendingApprovalsCount = ref(0)
 const collapsedProjectIds = ref(new Set())
 const avatarError = ref(false)
+const avatarSrc = ref(auth.avatar || auth.defaultAvatar)
 
-watch(() => auth.avatar, () => {
-  avatarError.value = false
-})
+watch(
+  () => auth.avatar,
+  (val) => {
+    avatarSrc.value = val || auth.defaultAvatar
+    avatarError.value = false
+  },
+  { immediate: true },
+)
+
+const handleAvatarError = () => {
+  if (avatarSrc.value !== auth.defaultAvatar) {
+    avatarSrc.value = auth.defaultAvatar
+    avatarError.value = false
+  } else {
+    avatarError.value = true
+  }
+}
 
 const fetchApprovalsCount = async () => {
   if (auth.isPrivileged) {
@@ -771,23 +784,11 @@ const unassignedItems = computed(() => {
   const existingChatIds = new Set(
     items.filter((item) => item.type === 'chat').map((item) => String(item.id)),
   )
-  const existingChatTitles = new Set(
-    items.filter((item) => item.type === 'chat').map((item) => String(item.title || '').trim().toLowerCase()),
-  )
 
-  // Deduplicate: if a chat session is already shown, omit redundant workflow items
+  // Deduplicate: if a chat session is already shown, omit the redundant workflow item linking to it
   return items.filter((item) => {
-    if (item.type === 'workflow') {
-      if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
-        return false
-      }
-      const normTitle = String(item.title || '').trim().toLowerCase()
-      if (existingChatTitles.has(normTitle)) {
-        return false
-      }
-      if ([...existingChatTitles].some((ct) => ct && (ct.includes(normTitle) || normTitle.includes(ct)))) {
-        return false
-      }
+    if (item.type === 'workflow' && item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
+      return false
     }
     return true
   })
@@ -1130,12 +1131,13 @@ const unassignedItems = computed(() => {
   transition: background 0.12s ease;
 }
 
-.recent-row:hover {
-  background: #f4f4f5;
+.recent-row:hover,
+.recent-row:focus-within {
+  background: #f3f4f6;
 }
 
 .recent-row.active-chat {
-  background: #ececee;
+  background: #f3f4f6;
 }
 
 .item-circle {
