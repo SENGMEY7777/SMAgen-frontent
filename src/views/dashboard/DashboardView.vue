@@ -11,9 +11,11 @@
       />
 
       <div v-if="!currentMessages.length" class="hero">
-        <div class="orb"></div>
+        <div class="kairo-hero-logo" aria-hidden="true">
+          <img :src="logoKairoUrl" alt="KAIRO Logo" class="kairo-hero-logo-img" />
+        </div>
         <h1>{{ timeGreeting }}, <strong>{{ auth.displayName }}</strong><br />How Can I <span>Assist You Today?</span></h1>
-        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let SMAgen help you move faster.</p>
+        <p class="hero-subtitle">Ask anything, upload an image or code file, plan a workflow, or let KAIRO help you move faster.</p>
         <div class="prompt-suggestions">
           <button type="button" @click="startPrompt('Help me understand this project and suggest the next best step.')">
             Understand my project
@@ -97,11 +99,10 @@
                   <img
                     v-for="(img, imgIdx) in message.images"
                     :key="imgIdx"
-                    :src="resolveImageSource(img)"
+                    :src="img"
                     alt="User uploaded attachment"
                     class="message-thumbnail"
-                    @click="previewImageUrl = resolveImageSource(img)"
-                    @error="(e) => { e.target.style.opacity = '0.5'; }"
+                    @click="previewImageUrl = img"
                   />
                 </div>
 
@@ -316,10 +317,10 @@
         </div>
 
         <div class="chat-footer-bar">
-          <span class="footer-disclaimer">SMAgen is AI and can make mistakes. Please double-check responses.</span>
+          <span class="footer-disclaimer">KAIRO is AI and can make mistakes. Please double-check responses.</span>
           <div class="footer-model-badge">
             <span class="status-dot"></span>
-            <span>SMAgen Pro</span>
+            <span>KAIRO Pro</span>
           </div>
         </div>
       </div>
@@ -340,6 +341,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import logoKairoUrl from '@/assets/logo-kairo.png'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import WorkflowStream from '@/components/workflow/WorkflowStream.vue'
 import {
@@ -745,12 +747,6 @@ watch([currentMessages, loading], () => {
   scrollToBottom()
 }, { deep: true })
 
-const resolveImageSource = (img) => {
-  if (!img) return ''
-  if (typeof img === 'string') return img
-  return img.dataUrl || img.url || img.src || ''
-}
-
 // Upload and Paste Handling for Images and Code/Document Files
 const processUploadedFile = (file) => {
   if (!file) return
@@ -758,43 +754,12 @@ const processUploadedFile = (file) => {
   if (isImg) {
     const reader = new FileReader()
     reader.onload = (e) => {
-      const rawDataUrl = e.target.result
-      const img = new Image()
-      img.onload = () => {
-        const MAX_DIM = 1200
-        let { width, height } = img
-        if (width > MAX_DIM || height > MAX_DIM) {
-          if (width > height) {
-            height = Math.round((height * MAX_DIM) / width)
-            width = MAX_DIM
-          } else {
-            width = Math.round((width * MAX_DIM) / height)
-            height = MAX_DIM
-          }
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0, width, height)
-        const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85)
-
-        attachedImages.value.push({
-          id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          name: file.name || 'Pasted Image',
-          dataUrl: optimizedDataUrl,
-          size: file.size,
-        })
-      }
-      img.onerror = () => {
-        attachedImages.value.push({
-          id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          name: file.name || 'Pasted Image',
-          dataUrl: rawDataUrl,
-          size: file.size,
-        })
-      }
-      img.src = rawDataUrl
+      attachedImages.value.push({
+        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: file.name || 'Pasted Image',
+        dataUrl: e.target.result,
+        size: file.size,
+      })
     }
     reader.readAsDataURL(file)
   } else {
@@ -859,21 +824,14 @@ const copyUserMessage = async (content, index) => {
   } catch {}
 }
 
-const formatPromptWithFiles = (text, files = [], images = []) => {
-  const trimmed = String(text || '').trim()
-  let result = trimmed
-  if (files && files.length > 0) {
-    const filesContentPrompt = files
-      .map((f) => `### Uploaded File: \`${f.name}\`\n\`\`\`${f.ext || ''}\n${f.content}\n\`\`\``)
-      .join('\n\n')
-    result = result
-      ? `${result}\n\n${filesContentPrompt}`
-      : `I have uploaded the following file(s). Please review, inspect, and analyze:\n\n${filesContentPrompt}`
-  }
-  if (!result && images && images.length > 0) {
-    result = 'Review and inspect the attached image, and execute the requested workflow steps.'
-  }
-  return result || 'Execute requested workflow tasks'
+const formatPromptWithFiles = (text, files = []) => {
+  if (!files || files.length === 0) return text
+  const filesContentPrompt = files
+    .map((f) => `### Uploaded File: \`${f.name}\`\n\`\`\`${f.ext || ''}\n${f.content}\n\`\`\``)
+    .join('\n\n')
+  return text
+    ? `${text}\n\n${filesContentPrompt}`
+    : `I have uploaded the following file(s). Please review, inspect, and analyze:\n\n${filesContentPrompt}`
 }
 
 const normalizeLocalFolderName = (value) => {
@@ -890,16 +848,12 @@ const normalizeLocalFolderName = (value) => {
 
 const extractLocalDestination = (text) => {
   const value = String(text || '').replace(/\s+/g, ' ').trim()
-  if (!value) return ''
+  if (!value || !/\b(?:desktop|downloads?|local\s+computer|local\s+folder)\b/i.test(value)) return ''
 
-  const directPathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
-    || value.match(/\b(Api-Productions[/\\][A-Za-z0-9._-]+)\b/i)
-  if (directPathMatch) {
-    if (directPathMatch[0].startsWith('Api-Productions')) {
-      return `Desktop/${directPathMatch[0].replace(/\\/g, '/')}`
-    }
-    const path = directPathMatch[2]?.replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
-    return path ? `${/^downloads?$/i.test(directPathMatch[1]) ? 'Downloads' : 'Desktop'}/${path}` : ''
+  const pathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
+  if (pathMatch) {
+    const path = pathMatch[2].replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
+    return path ? `${/^downloads?$/i.test(pathMatch[1]) ? 'Downloads' : 'Desktop'}/${path}` : ''
   }
 
   const quotedFolder = value.match(/\b(?:folder|directory|project)\s+(?:name(?:\s+is)?|named|called)\s*["“']([^"”']+)["”']/i)
@@ -923,12 +877,10 @@ const extractWorkflowDestination = (message) => {
     if (action === 'createdesktopdirectory' || action === 'exportworkspacetodesktop') {
       const segments = path.split('/').filter(Boolean)
       let projPath = path
-      if (segments.length >= 2 && segments[0].toLowerCase().includes('production')) {
-        projPath = `${segments[0]}/${segments[1]}`
-      } else if (segments.length > 2 && !segments[0].toLowerCase().includes('desktop')) {
+      if (segments.length > 2 && segments[0].toLowerCase().includes('production')) {
         projPath = `${segments[0]}/${segments[1]}`
       } else if (segments.length > 1 && !segments[0].toLowerCase().includes('desktop')) {
-        projPath = segments.slice(0, 2).join('/')
+        projPath = segments[0]
       }
       return `Desktop/${projPath}`
     }
@@ -936,14 +888,7 @@ const extractWorkflowDestination = (message) => {
       return `Downloads/${path}`
     }
     if (action === 'createdesktopfile' || action === 'createdesktopfiles' || action === 'deletedesktoppath' || action === 'renamedesktoppath') {
-      const segments = path.split('/').filter(Boolean)
-      if (segments.length >= 2 && segments[0].toLowerCase().includes('production')) {
-        return `Desktop/${segments[0]}/${segments[1]}`
-      }
-      if (segments.length >= 2 && !segments[0].toLowerCase().includes('desktop')) {
-        return `Desktop/${segments[0]}/${segments[1]}`
-      }
-      const rootFolder = segments[0]
+      const rootFolder = path.split('/')[0]
       if (rootFolder && rootFolder !== '.' && rootFolder !== '..') {
         return `Desktop/${rootFolder}`
       }
@@ -1051,7 +996,7 @@ const commitStreamingResponse = () => {
   streamingContent.value = ''
 }
 
-const requestChatReply = async (prompt, history, signal, images = []) => {
+const requestChatReply = async (prompt, history, signal) => {
   streamingContent.value = ''
   let receivedChunk = false
 
@@ -1066,7 +1011,6 @@ const requestChatReply = async (prompt, history, signal, images = []) => {
   try {
     await api.chatStream(prompt, history, {
       signal,
-      images,
       projectContext,
       localDestination: localDest,
       onChunk: (chunk) => {
@@ -1081,7 +1025,7 @@ const requestChatReply = async (prompt, history, signal, images = []) => {
 
     // Preserve the existing history-validation fallback for older API deployments.
     if (history.length > 0 && !receivedChunk) {
-      const response = await api.chat(prompt, [], { signal, images, projectContext, localDestination: localDest })
+      const response = await api.chat(prompt, [], { signal, projectContext, localDestination: localDest })
       streamingContent.value = response?.data?.message || 'I could not generate a response.'
       return
     }
@@ -1125,13 +1069,11 @@ const addWorkflowPlaceholder = (goalPrompt) => {
   return workflowMessageIndex
 }
 
-const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = [], images = []) => {
+const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = []) => {
   workflowStopRequested = false
-  const safeGoalPrompt = String(goalPrompt || '').trim() || 'Review project and execute requested workflow tasks'
-  const localDestination = inferWorkflowLocalDestination(safeGoalPrompt, contextMessages)
+  const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
   const response = await api.runWorkflow({
-    goalPrompt: safeGoalPrompt,
-    ...(images && images.length > 0 ? { images } : {}),
+    goalPrompt,
     ...(localDestination ? { localDestination } : {}),
   })
   const runId = getWorkflowRunId(response)
@@ -1192,7 +1134,7 @@ const submitEditUserMessage = async (index) => {
     const workflowMessageIndex = addWorkflowPlaceholder(newText)
 
     try {
-      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index), originalMessage?.images || [])
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1207,8 +1149,8 @@ const submitEditUserMessage = async (index) => {
   }
 
   try {
-    const fullPrompt = formatPromptWithFiles(newText, messageFiles, originalMessage?.images || [])
-    await requestChatReply(fullPrompt, history, signal, originalMessage?.images || [])
+    const fullPrompt = formatPromptWithFiles(newText, messageFiles)
+    await requestChatReply(fullPrompt, history, signal)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
@@ -1239,7 +1181,7 @@ const retryUserMessage = async (index) => {
     const workflowMessageIndex = addWorkflowPlaceholder(message.content)
     try {
       const workflowPrompt = formatPromptWithFiles(message.content, messageFiles)
-      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index), message?.images || [])
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1272,8 +1214,8 @@ const retryUserMessage = async (index) => {
   scrollToBottom()
 
   try {
-    const fullPrompt = formatPromptWithFiles(message.content, message.files || [], message?.images || [])
-    await requestChatReply(fullPrompt, history, signal, message?.images || [])
+    const fullPrompt = formatPromptWithFiles(message.content, message.files || [])
+    await requestChatReply(fullPrompt, history, signal)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
@@ -1351,12 +1293,6 @@ const send = async () => {
     }
   }
 
-  if (!fullPrompt && images.length > 0) {
-    const previousMessages = currentMessages.value.slice().reverse().filter((m) => m.content && m.content.trim())
-    const recentContext = previousMessages[0]?.content ? ` regarding "${previousMessages[0].content.slice(0, 100)}"` : ''
-    fullPrompt = `Review and inspect the uploaded image${recentContext}, and execute the necessary workflow tasks.`
-  }
-
   if (requestMode === 'workflow') {
     chatStore.addMessage({
       role: 'user',
@@ -1366,7 +1302,7 @@ const send = async () => {
       requestMode: 'workflow',
     })
 
-    const goalPrompt = message || (files.length ? 'Run a workflow using the uploaded file(s).' : (images.length ? 'Review uploaded image and execute workflow' : 'Run workflow'))
+    const goalPrompt = message || (files.length ? 'Run a workflow using the uploaded file(s).' : 'Run workflow')
     const workflowMessageIndex = addWorkflowPlaceholder(goalPrompt)
 
     input.value = ''
@@ -1378,8 +1314,7 @@ const send = async () => {
     try {
       // The current user message and the workflow placeholder are both already
       // in the store; only earlier messages should provide follow-up context.
-      const promptToRun = fullPrompt || goalPrompt
-      await startWorkflowRun(workflowMessageIndex, promptToRun, currentMessages.value.slice(0, -2), images)
+      await startWorkflowRun(workflowMessageIndex, fullPrompt, currentMessages.value.slice(0, -2))
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1424,8 +1359,8 @@ const send = async () => {
   const signal = activeAbortController.signal
 
   try {
-    const promptToSend = fullPrompt || (images.length ? 'I have attached an image. Please review and analyze it.' : '')
-    await requestChatReply(promptToSend, history, signal, images)
+    const promptToSend = fullPrompt || (images.length ? 'I have attached an image. Please review it.' : '')
+    await requestChatReply(promptToSend, history, signal)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
@@ -1467,6 +1402,33 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+
+.kairo-hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 24px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #09090b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  cursor: pointer;
+}
+
+.kairo-hero-logo:hover {
+  transform: scale(1.06) translateY(-2px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.kairo-hero-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 
 .composer-input {
   width: 50% !important;
