@@ -74,15 +74,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: build-stage
       args:
         VITE_API_BASE_URL: /api/v1
     ports:
-      - "${FRONTEND_PORT:-5173}:80"
+      - "${FRONTEND_PORT:-5173}:5173"
+    working_dir: /app
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    volumes:
+      - .:/app
+      - kairo_frontend_node_modules:/app/node_modules
     environment:
-      # The frontend and backend share the kairo-net Docker network.
-      # Override this only when using a separately deployed backend.
-      API_UPSTREAM: ${API_UPSTREAM:-http://kairo-api:5000}
-    # Wait until the API is fully healthy before starting Nginx so that
+      # Vite proxies browser API and Socket.IO traffic to the backend service.
+      VITE_API_PROXY_TARGET: http://kairo-api:5000
+      # Polling keeps file updates reliable through Docker Desktop bind mounts.
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "500"
+    # Wait until the API is fully healthy before starting Vite so that
     # the first proxied requests are not dropped during API startup.
     depends_on:
       kairo-api:
@@ -94,10 +102,10 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 128M
+          memory: 512M
         reservations:
           cpus: "0.05"
-          memory: 32M
+          memory: 128M
     logging:
       driver: json-file
       options:
@@ -112,4 +120,6 @@ networks:
 
 volumes:
   kairo_workspaces:
+    driver: local
+  kairo_frontend_node_modules:
     driver: local
