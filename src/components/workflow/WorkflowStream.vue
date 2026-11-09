@@ -198,7 +198,6 @@
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
-                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
                   <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
