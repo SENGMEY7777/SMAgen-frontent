@@ -54,7 +54,8 @@
                   @submit-approval="submitWorkflowApproval(message)"
                   @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
-                  @open-run="router.push(`/runs/${$event}`)"
+                  @open-run="openWorkflowDestination"
+                  @open-workflow="openWorkflowDestination"
                 />
 
                 <template v-else>
@@ -379,6 +380,14 @@ const router = useRouter()
 const auth = useAuthStore()
 const chatStore = useChatStore()
 const projectsStore = useProjectsStore()
+
+const openWorkflowDestination = (runId) => {
+  if (runId && String(runId).trim() && String(runId) !== 'null' && String(runId) !== 'undefined') {
+    router.push(`/runs/${runId}`)
+    return
+  }
+  router.push('/workflows')
+}
 
 const chatThreadRef = ref(null)
 const showScrollButton = ref(false)
