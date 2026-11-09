@@ -524,6 +524,41 @@
                 </div>
               </div>
             </div>
+
+            <!-- ADDITIONAL TASKS CHAIN ON CANVAS (Tasks 3+) -->
+            <div v-if="tasks.length > 2" class="zyn-additional-tasks">
+              <div class="tasks-chain-title">
+                ADDITIONAL WORKFLOW STEPS ({{ tasks.length - 2 }} MORE)
+              </div>
+              <div class="extra-tasks-flex">
+                <div
+                  v-for="(task, idx) in tasks.slice(2)"
+                  :key="task.id || task.node_key || idx"
+                  class="zyn-mini-node"
+                  :class="{
+                    'awaiting': isTaskAwaiting(task),
+                    'failed': isTaskFailed(task),
+                    'completed': isTaskSuccessful(task),
+                  }"
+                  @click="isTaskAwaiting(task) ? openReview(task) : null"
+                >
+                  <div class="mini-node-head">
+                    <span class="mini-index">{{ idx + 3 }}</span>
+                    <span class="circle-check-icon">
+                      <component :is="taskStatusIcon(task)" :size="12" />
+                    </span>
+                    <strong class="mini-node-title">{{ task.title || task.instruction || `Task ${idx + 3}` }}</strong>
+                    <span class="data-pill-badge" :class="{ 'awaiting-pill': isTaskAwaiting(task), 'failed-pill': isTaskFailed(task) }">
+                      {{ taskStatusLabel(task) }}
+                    </span>
+                  </div>
+                  <div class="mini-node-body">
+                    <small v-if="task.assigned_tool">Tool: {{ task.assigned_tool }}</small>
+                    <p v-if="task.instruction">{{ task.instruction }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- FLOATING BOTTOM CANVAS TOOLBAR -->
@@ -681,6 +716,7 @@ import {
   IconUpload,
   IconDownload,
   IconLayoutSidebar,
+  IconLoader2,
 } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
@@ -734,6 +770,16 @@ let socket
 const tasks = computed(() => {
   return getWorkflowTasks(run.value)
 })
+const completedTasks = computed(() => {
+  return tasks.value.filter((task) => isTaskSuccessful(task))
+})
+const taskStatusClass = (task) => {
+  if (isTaskAwaiting(task)) return 'status-awaiting'
+  if (isTaskFailed(task)) return 'status-failed'
+  if (isTaskSuccessful(task)) return 'status-success'
+  if (taskStatus(task) === 'RUNNING') return 'status-running'
+  return 'status-pending'
+}
 const logs = computed(() => {
   return getWorkflowLogs(run.value).map(normalizeWorkflowLog)
 })
@@ -1739,9 +1785,9 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1 1 auto;
   height: 100%;
-  background-color: #fafbfc;
-  background-image: radial-gradient(#d1d5db 1.2px, transparent 1.2px);
-  background-size: 20px 20px;
+  background-color: #f8fafc;
+  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -1799,29 +1845,29 @@ onBeforeUnmount(() => {
 
 /* Visual Node Cards */
 .zyn-node-card {
-  width: 250px;
+  width: 260px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
   overflow: hidden;
   position: relative;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .zyn-node-card:hover {
-  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.12);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   transform: translateY(-2px);
 }
 
 .zyn-node-card.awaiting {
-  border-color: #f97316;
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
 }
 
 .zyn-node-card.failed {
-  border-color: #fca5a5;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+  border-color: #f87171;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
 
 .retry-workflow-btn {
@@ -1836,9 +1882,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
-  background: linear-gradient(90deg, #6d28d9, #7c3aed);
-  color: #ffffff;
+  padding: 10px 14px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  color: #0f172a;
 }
 
 .node-title-group {
@@ -1850,25 +1897,28 @@ onBeforeUnmount(() => {
 .node-header-icon-square {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .node-header-icon-square.play-bg {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  background: #eff6ff;
+  color: #2563eb;
 }
 
 .node-header-icon-square.action-bg {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  background: #f8fafc;
+  color: #475569;
 }
 
 .node-header-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
 }
 
 .node-header-actions {
@@ -1880,18 +1930,19 @@ onBeforeUnmount(() => {
 .node-circle-tool {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.85);
+  color: #94a3b8;
   cursor: pointer;
   border-radius: 50%;
+  transition: all 0.15s ease;
 }
 
 .node-circle-tool:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 /* Card Body */
@@ -1929,13 +1980,13 @@ onBeforeUnmount(() => {
 }
 
 .data-pill-badge {
-  font-size: 9.5px;
-  font-weight: 700;
-  background: #f1f5f9;
-  color: #475569;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  font-size: 10px;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #16a34a;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
 }
 
 .circle-check-icon.awaiting-icon {
@@ -2097,17 +2148,19 @@ onBeforeUnmount(() => {
 .node-add-btn {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  background: #7c3aed;
-  color: #ffffff;
-  border: none;
-  border-radius: 5px;
+  width: 20px;
+  height: 20px;
+  background: #ffffff;
+  color: #64748b;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 50%;
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .node-add-btn:hover {
+  border-color: #475569;
+  color: #0f172a;
   transform: scale(1.1);
 }
 
@@ -2121,6 +2174,11 @@ onBeforeUnmount(() => {
 .zyn-connecting-svg {
   width: 100%;
   height: 100%;
+}
+
+.zyn-connecting-svg path {
+  stroke: #64748b;
+  stroke-width: 1.5px;
 }
 
 .zyn-branch-label {
@@ -2155,7 +2213,7 @@ onBeforeUnmount(() => {
   place-items: center;
   width: 20px;
   height: 20px;
-  background: #7c3aed;
+  background: #475569;
   color: #ffffff;
   border-radius: 50%;
 }
@@ -2176,7 +2234,7 @@ onBeforeUnmount(() => {
   place-items: center;
   width: 14px;
   height: 14px;
-  background: #7c3aed;
+  background: #475569;
   color: #ffffff;
   border-radius: 4px;
   font-size: 9px;
@@ -2219,9 +2277,16 @@ onBeforeUnmount(() => {
 .zyn-mini-node {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 10px 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+  transition: all 0.15s ease;
+}
+
+.zyn-mini-node:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
 .mini-node-head {
