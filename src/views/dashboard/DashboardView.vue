@@ -382,11 +382,18 @@ const chatStore = useChatStore()
 const projectsStore = useProjectsStore()
 
 const openWorkflowDestination = (runId) => {
-  if (runId && String(runId).trim() && String(runId) !== 'null' && String(runId) !== 'undefined') {
-    router.push(`/runs/${runId}`)
+  let targetRunId = runId
+  if (!targetRunId || String(targetRunId) === 'null' || String(targetRunId) === 'undefined') {
+    targetRunId = activeWorkflowMessage.value?.workflow?.runId
+  }
+  if (!targetRunId) {
+    targetRunId = runs.value?.[0]?.id
+  }
+  if (targetRunId && String(targetRunId).trim() && String(targetRunId) !== 'null' && String(targetRunId) !== 'undefined') {
+    router.push(`/runs/${targetRunId}`)
     return
   }
-  router.push('/workflows')
+  router.push('/runs/demo')
 }
 
 const chatThreadRef = ref(null)
