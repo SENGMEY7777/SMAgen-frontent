@@ -23,7 +23,7 @@ export const getFileIconInfo = (filename = '') => {
     case 'js':
     case 'mjs':
     case 'cjs':
-      return { ext, color: '#eab308', bg: '#fefce8', border: '#fef08a', label: 'JS' }
+      return { ext, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'JS' }
     case 'ts':
     case 'mts':
     case 'cts':
@@ -32,7 +32,7 @@ export const getFileIconInfo = (filename = '') => {
     case 'tsx':
       return { ext, color: '#0ea5e9', bg: '#f0f9ff', border: '#bae6fd', label: ext.toUpperCase() }
     case 'json':
-      return { ext, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', label: 'JSON' }
+      return { ext, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'JSON' }
     case 'html':
     case 'htm':
       return { ext, color: '#f97316', bg: '#fff7ed', border: '#fed7aa', label: 'HTML' }
