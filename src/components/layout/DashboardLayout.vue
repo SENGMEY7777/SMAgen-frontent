@@ -697,9 +697,27 @@ const handleMoveToGroup = (item) => {
   closeAllMenus()
 }
 
-const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
+const readHiddenWorkflowIds = () => {
+  try {
+    const value = JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]')
+    return Array.isArray(value) ? value.map((id) => String(id)) : []
+  } catch {
+    return []
+  }
+}
 
-const handleDelete = (item) => {
+const hiddenWorkflowIds = ref(readHiddenWorkflowIds())
+
+const hideWorkflowRun = (runId) => {
+  const runIdAsString = String(runId)
+  hiddenWorkflowIds.value = [...new Set([...hiddenWorkflowIds.value, runIdAsString])]
+
+  try {
+    localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
+  } catch {}
+}
+
+const handleDelete = async (item) => {
   if (item.type === 'chat') {
     const isCurrentActive = chatStore.activeSessionId === item.id
     chatStore.deleteSession(item.id)
@@ -708,10 +726,17 @@ const handleDelete = (item) => {
       if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
-    hiddenWorkflowIds.value.push(item.id)
     try {
-      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
-    } catch {}
+      await api.deleteRun(item.id)
+      hideWorkflowRun(item.id)
+
+      if (route.name === 'run-detail' && String(route.params.runId) === String(item.id)) {
+        router.replace({ name: 'chat' })
+      }
+    } catch (error) {
+      const message = error?.message || 'Unable to delete this workflow run. Please try again.'
+      window.alert(message)
+    }
   }
   closeAllMenus()
 }
@@ -725,7 +750,7 @@ const combinedRecentItems = computed(() => {
   // session. Selecting one opens the chat first through selectWorkflowHistory.
   const workflowItems = props.recentItems
     .filter((r, index, recentItems) => {
-      if (hiddenWorkflowIds.value.includes(r.id)) return false
+      if (hiddenWorkflowIds.value.includes(String(r.id))) return false
       return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
     })
     .map((r) => ({
@@ -755,43 +780,50 @@ const combinedRecentItems = computed(() => {
   return merged
 })
 
-const normalizeTitle = (title) => String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')
+const normalizeTitle = (title) => String(title || '')
+  .trim()
+  .replace(/^(?:goal|workflow|chat)\s*:\s*/i, '')
+  .replace(/(?:…|\.\.\.)$/, '')
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
 
 const deduplicateSidebarItems = (items) => {
   if (!Array.isArray(items)) return []
 
-  // 1. Identify all chat sessions present in this list
+  // A workflow started from chat is represented by that chat. Prefer the
+  // explicit run/chat link; for old locally persisted chats, fall back to one
+  // title match. A title can only claim one run so intentional re-runs remain
+  // visible in history.
   const chatItems = items.filter((item) => item.type === 'chat')
   const existingChatIds = new Set(chatItems.map((c) => String(c.id)))
-  const existingChatTitles = new Set(chatItems.map((c) => normalizeTitle(c.title)).filter(Boolean))
+  const chatIdsByTitle = new Map()
+  for (const chat of chatItems) {
+    const title = normalizeTitle(chat.title)
+    if (!title) continue
+    const ids = chatIdsByTitle.get(title) || []
+    ids.push(String(chat.id))
+    chatIdsByTitle.set(title, ids)
+  }
 
-  // 2. Omit any workflow run that is already represented by a chat session (by linked ID or identical title)
-  const nonRedundant = items.filter((item) => {
-    if (item.type === 'workflow') {
-      if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
-        return false
-      }
-      const norm = normalizeTitle(item.title)
-      if (norm && existingChatTitles.has(norm)) {
-        return false
-      }
-    }
-    return true
-  })
-
-  // 3. Deduplicate multiple identical entries in the same section (keep the most recent one)
+  const fallbackClaimedChatIds = new Set()
   const seenIds = new Set()
-  const seenTitles = new Set()
 
-  return nonRedundant.filter((item) => {
+  return items.filter((item) => {
     const idKey = `${item.type}:${item.id}`
     if (seenIds.has(idKey)) return false
     seenIds.add(idKey)
 
-    const normTitle = normalizeTitle(item.title)
-    if (normTitle) {
-      if (seenTitles.has(normTitle)) return false
-      seenTitles.add(normTitle)
+    if (item.type === 'workflow') {
+      if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
+        return false
+      }
+
+      const matchingChatIds = chatIdsByTitle.get(normalizeTitle(item.title)) || []
+      const unclaimedChatId = matchingChatIds.find((id) => !fallbackClaimedChatIds.has(id))
+      if (unclaimedChatId) {
+        fallbackClaimedChatIds.add(unclaimedChatId)
+        return false
+      }
     }
 
     return true
