@@ -473,7 +473,7 @@
             class="workflow-error-open-btn"
             @click="$emit('open-workflow', workflow.runId || null)"
           >
-            {{ workflow.runId ? 'Open workflow run' : 'Open workflows' }}
+            Open workflow canvas
             <IconArrowRight :size="12" />
           </button>
         </div>
