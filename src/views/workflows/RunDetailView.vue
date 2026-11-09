@@ -17,6 +17,17 @@
             <span class="zyn-crumb-slash">/</span>
             <span class="zyn-crumb-title">{{ workflowName }}</span>
           </div>
+
+          <button
+            class="zyn-detail-toggle-btn"
+            :class="{ active: showSidebar }"
+            type="button"
+            :title="showSidebar ? 'Hide Detail Information' : 'Show Detail Information'"
+            @click="showSidebar = !showSidebar"
+          >
+            <IconLayoutSidebar :size="14" />
+            <span>{{ showSidebar ? 'Hide Details' : 'Details' }}</span>
+          </button>
         </div>
 
         <div class="zyn-top-right">
@@ -89,8 +100,8 @@
 
       <!-- Main Two-Column Layout -->
       <div class="zyn-editor-body">
-        <!-- LEFT CONFIGURATION SIDEBAR -->
-        <aside class="zyn-inspector-sidebar">
+        <!-- LEFT CONFIGURATION SIDEBAR (Collapsible Detail Information) -->
+        <aside v-if="showSidebar" class="zyn-inspector-sidebar">
           <!-- 1. Detail Information Card -->
           <div class="zyn-panel-card">
             <div class="zyn-card-header">
@@ -707,6 +718,7 @@ import {
   IconGitFork,
   IconUpload,
   IconDownload,
+  IconLayoutSidebar,
 } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
@@ -727,6 +739,7 @@ const run = ref(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const errorMessage = ref('')
+const showSidebar = ref(route.query.sidebar !== '0')
 
 // Editable Inspector Fields
 const workflowName = ref('Hello Lads!')
@@ -1204,18 +1217,14 @@ const formatLogMessage = (rawMessage, payload = null, eventName = '') => {
     }
   }
 
-  const directReflectionMessage = formatReflectionLogMessage(eventName, payload, stringifyValue)
-  if (directReflectionMessage) return directReflectionMessage
+  const reflectionMessage = formatReflectionLogMessage(eventName, payload, stringifyValue)
+  if (reflectionMessage) return reflectionMessage
 
   if (typeof rawMessage !== 'string') return stringifyValue(rawMessage || payload || eventName)
   try {
     const parsed = JSON.parse(rawMessage)
     if (parsed && typeof parsed === 'object') {
-      const parsedReflectionMessage = formatReflectionLogMessage(
-        parsed.event || eventName,
-        parsed.payload || payload,
-        stringifyValue,
-      )
+      const parsedReflectionMessage = formatReflectionLogMessage(parsed.event, parsed.payload, stringifyValue)
       if (parsedReflectionMessage) return parsedReflectionMessage
       if (parsed.payload?.message) return stringifyValue(parsed.payload.message)
       if (parsed.payload?.error) return `Error: ${stringifyValue(parsed.payload.error)}`
@@ -1238,6 +1247,7 @@ const refreshEvents = [
   'task_started',
   'task_completed',
   'task_failed',
+  'approval_required',
   'self_healing_started',
   'self_healing_required',
   'self_healing_llm_retry',
@@ -1245,7 +1255,6 @@ const refreshEvents = [
   'self_healing_skipped',
   'node_error_trace',
   'node_retrying',
-  'approval_required',
   'workflow_completed',
   'workflow_failed',
   'run_status_changed',
@@ -1462,6 +1471,35 @@ onBeforeUnmount(() => {
 .icon-circle-btn:hover {
   background: #f3f4f6;
   color: #111827;
+}
+
+.zyn-detail-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 27px;
+  padding: 0 9px;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #52525b;
+  font-size: 11.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 10px;
+}
+
+.zyn-detail-toggle-btn:hover {
+  background: #f4f4f5;
+  color: #18181b;
+  border-color: #d4d4d8;
+}
+
+.zyn-detail-toggle-btn.active {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
 }
 
 .zyn-inline-error {
