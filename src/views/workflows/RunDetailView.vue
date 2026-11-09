@@ -524,44 +524,6 @@
                 </div>
               </div>
             </div>
-
-            <!-- Dynamic Additional Tasks (if run has more tasks) -->
-            <div v-if="tasks.length > 2" class="zyn-additional-tasks">
-              <div class="tasks-chain-title">Sequential Pipeline Tasks ({{ tasks.length - 2 }} more)</div>
-              <div class="extra-tasks-flex">
-                <div
-                  v-for="(task, idx) in tasks.slice(2)"
-                  :key="task.id || idx"
-                  class="zyn-mini-node"
-                  :class="{ 'awaiting': isTaskAwaiting(task) }"
-                  @click="isTaskAwaiting(task) ? openReview(task) : null"
-                >
-                  <div class="mini-node-head">
-                    <span class="mini-index">{{ idx + 3 }}</span>
-                    <strong>{{ task.title }}</strong>
-                    <StatusPill :status="task.status" />
-                  </div>
-                  <div class="mini-node-body">
-                    <small>{{ task.assigned_tool }}</small>
-                    <p>{{ task.instruction }}</p>
-                  </div>
-                  <div
-                    v-if="isTaskAwaiting(task)"
-                    class="node-approval-banner mini"
-                    @click.stop="openReview(task)"
-                  >
-                    <div class="banner-badge">
-                      <IconAlertTriangle :size="12" />
-                      <span>Approval Needed</span>
-                    </div>
-                    <button class="node-inline-approve-btn mini" type="button">
-                      <IconShieldCheck :size="11" />
-                      <span>Review</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- FLOATING BOTTOM CANVAS TOOLBAR -->
