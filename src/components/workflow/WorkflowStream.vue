@@ -137,7 +137,7 @@
                 :aria-label="`Review ${file.path}`"
                 @click="openReview(workflow, file)"
               >
-                <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 {{ file.path }}
               </button>
             </div>
@@ -198,7 +198,7 @@
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
-                <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
                   <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
@@ -311,7 +311,7 @@
               <span class="file-strip-caret">▼</span>
               <span class="file-strip-path">
                 <span class="file-strip-dir">{{ selectedFileDir }}</span>
-                <IconFile :size="15" class="file-language-icon" aria-hidden="true" />
+                <IconFile :size="15" class="file-language-icon" :style="{ color: getFileIconInfo(selectedFileName).color }" aria-hidden="true" />
                 <strong class="file-strip-name">{{ selectedFileName }}</strong>
               </span>
               <div class="file-strip-stats">
@@ -336,7 +336,7 @@
               :class="{ active: String(file.taskId) === String(reviewTaskId) }"
               @click="reviewTaskId = file.taskId"
             >
-              <IconFile :size="13" class="file-language-icon" aria-hidden="true" />
+              <IconFile :size="13" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
               <span>{{ file.path }}</span>
               <span class="pill-stats">+{{ fileStatsById[file.id].additions }} -{{ fileStatsById[file.id].deletions }}</span>
             </button>
@@ -420,7 +420,7 @@
             :aria-label="`Review ${file.path}`"
             @click.stop="openReview(workflow, file, $event)"
           >
-            <IconFile :size="16" class="file-language-icon" aria-hidden="true" />
+            <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
             {{ file.path }}
           </button>
         </li>
@@ -444,7 +444,7 @@
       />
     </Teleport>
 
-    <div v-if="workflow.runId && !workflowErrorExplanation" class="workflow-subtle-footer">
+    <div v-if="workflow.runId" class="workflow-subtle-footer">
       <button type="button" class="workflow-subtle-run-btn" @click="$emit('open-run', workflow.runId)">
         Open full workflow run <IconArrowRight :size="12" />
       </button>
@@ -2195,7 +2195,7 @@ const highlightCode = (value) => {
 .workflow-card-error-actions {
   display: flex;
   justify-content: flex-start;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .workflow-error-open-btn {
@@ -2345,10 +2345,10 @@ const highlightCode = (value) => {
   height: 36px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #e4e4e7;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #ffffff;
+  color: #3f3f46;
 }
 
 .completion-edit-card-copy {
