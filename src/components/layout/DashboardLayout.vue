@@ -316,13 +316,6 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
-          <span
-            v-if="route.name === 'chat' && chatStore.activeSession?.title"
-            class="topbar-chat-title"
-            :title="chatStore.activeSession.title"
-          >
-            {{ chatStore.activeSession.title }}
-          </span>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
