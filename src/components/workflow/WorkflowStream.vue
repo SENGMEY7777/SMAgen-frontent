@@ -2378,17 +2378,17 @@ const highlightCode = (value) => {
   padding: 0;
   border: none;
   background: transparent;
-  color: #2f80d7;
+  color: #27272a;
   font: inherit;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
   text-align: left;
   transition: color 0.15s ease;
 }
 
 .completion-updated-toggle-btn:hover {
-  color: #1d4ed8;
+  color: #09090b;
   text-decoration: underline;
 }
 
