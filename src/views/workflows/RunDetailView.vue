@@ -706,6 +706,16 @@ const showSidebar = ref(route.query.sidebar !== '0')
 // Editable Inspector Fields
 const workflowName = ref('Hello Lads!')
 const workflowDescription = ref('Automated multi-agent execution pipeline')
+
+watch(
+  workflowName,
+  (name) => {
+    if (typeof document !== 'undefined' && name) {
+      document.title = `${name} - ${import.meta.env.VITE_APP_TITLE || 'KAIRO'}`
+    }
+  },
+  { immediate: true },
+)
 const autoRunOnTrigger = ref('On')
 const timeoutMs = ref('1500ms')
 const retryAttempts = ref('3')
