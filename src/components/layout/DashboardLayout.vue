@@ -22,7 +22,14 @@
             <IconHome :size="16" />
             <span>Dashboard</span>
           </RouterLink>
-          <RouterLink class="nav-item" :to="{ name: 'chat' }" exact-active-class="router-link-exact-active" @click="closeMenu">
+          <RouterLink
+            class="nav-item"
+            :class="{ 'router-link-exact-active': isAiChatNavActive }"
+            :to="{ name: 'chat' }"
+            exact-active-class="_"
+            active-class="_"
+            @click="newChat"
+          >
             <IconMessageCircle2 :size="16" />
             <span>AI Chat & Agent</span>
           </RouterLink>
@@ -309,13 +316,13 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
-          <!-- <span
+          <span
             v-if="route.name === 'chat' && chatStore.activeSession?.title"
             class="topbar-chat-title"
             :title="chatStore.activeSession.title"
           >
             {{ chatStore.activeSession.title }}
-          </span> -->
+          </span>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
@@ -455,14 +462,23 @@ const getChatSessionForWorkflow = (runId) => {
   )
 }
 
+const isAiChatNavActive = computed(() => {
+  return route.name === 'chat' && !chatStore.activeSessionId
+})
+
 const isItemActive = (item) => {
   if (!item || !item.id) return false
   if (route.name === 'chat') {
-    return (
-      item.type === 'chat' &&
-      Boolean(chatStore.activeSessionId) &&
-      String(chatStore.activeSessionId) === String(item.id)
-    )
+    if (!chatStore.activeSessionId) return false
+    if (item.type === 'chat') {
+      return String(chatStore.activeSessionId) === String(item.id)
+    }
+    if (item.type === 'workflow') {
+      return (
+        String(chatStore.activeSessionId) === `chat_wf_${item.id}` ||
+        String(item.chatSessionId) === String(chatStore.activeSessionId)
+      )
+    }
   }
   if (route.name === 'run-detail') {
     return (
