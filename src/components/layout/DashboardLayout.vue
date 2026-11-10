@@ -178,12 +178,12 @@
           </div>
         </div>
 
-        <div v-if="unassignedItems.length" class="side-section">
+        <div v-if="allHistoryItems.length" class="side-section">
           <div class="side-label-row">
             <span class="side-label">Chats and tasks</span>
           </div>
           <div class="recent-list">
-            <template v-for="item in unassignedItems" :key="item.id">
+            <template v-for="item in allHistoryItems" :key="`${item.type}-${item.id}`">
               <div
                 class="recent-row"
                 :class="{ 'active-chat': isItemActive(item), 'is-pinned': item.pinned }"
@@ -269,7 +269,7 @@
               </div>
             </template>
 
-            <span v-if="!unassignedItems.length" class="recent-empty">No unassigned activity</span>
+            <span v-if="!allHistoryItems.length" class="recent-empty">No activity yet</span>
           </div>
         </div>
       </div>
@@ -349,7 +349,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   IconSearch,
@@ -563,21 +563,54 @@ const selectChat = (sessionId, fallbackProjectId = null) => {
 }
 
 const selectWorkflowHistory = (item) => {
-  const linkedSession = item.chatSessionId
+  let linkedSession = item.chatSessionId
     ? chatStore.sessions.find((session) => String(session.id) === String(item.chatSessionId))
     : getChatSessionForWorkflow(item.id)
 
-  if (linkedSession) {
-    // A workflow history entry is a shortcut to its conversation. Keep the
-    // run detail available through the explicit workflow controls instead.
-    selectChat(linkedSession.id, getProjectIdForItem(item))
-    return
+  if (!linkedSession) {
+    const existing = chatStore.sessions.find(
+      (s) => s.id === `chat_wf_${item.id}` || s.messages?.some((m) => String(m?.workflow?.runId) === String(item.id))
+    )
+    if (existing) {
+      linkedSession = existing
+    } else {
+      // Automatically create a chat session for this workflow run so it displays in the chatbot first!
+      const title = item.title || item.goal_prompt || 'Workflow run'
+      const newSession = {
+        id: `chat_wf_${item.id}`,
+        title,
+        type: 'chat',
+        projectId: getProjectIdForItem(item) || null,
+        messages: [
+          {
+            id: `msg_user_${item.id}`,
+            role: 'user',
+            content: title,
+            createdAt: new Date(item.updatedAt || Date.now()).toISOString(),
+            requestMode: 'workflow',
+          },
+          {
+            id: `msg_wf_${item.id}`,
+            role: 'assistant',
+            content: '',
+            createdAt: new Date(item.updatedAt || Date.now()).toISOString(),
+            workflow: {
+              runId: item.id,
+              goalPrompt: title,
+              status: item.status || 'COMPLETED',
+              isStreamOpen: true,
+            },
+          },
+        ],
+        createdAt: new Date(item.updatedAt || Date.now()).toISOString(),
+        updatedAt: new Date(item.updatedAt || Date.now()).toISOString(),
+      }
+      chatStore.sessions.unshift(newSession)
+      linkedSession = newSession
+    }
   }
 
-  // Older runs may not have a persisted chat session. Preserve access to the
-  // run rather than making the history item disappear.
-  closeMenu()
-  router.push({ name: 'run-detail', params: { runId: item.id } })
+  selectChat(linkedSession.id, getProjectIdForItem(item))
 }
 
 const formatRecentTime = (timestamp) => {
@@ -697,27 +730,9 @@ const handleMoveToGroup = (item) => {
   closeAllMenus()
 }
 
-const readHiddenWorkflowIds = () => {
-  try {
-    const value = JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]')
-    return Array.isArray(value) ? value.map((id) => String(id)) : []
-  } catch {
-    return []
-  }
-}
+const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
 
-const hiddenWorkflowIds = ref(readHiddenWorkflowIds())
-
-const hideWorkflowRun = (runId) => {
-  const runIdAsString = String(runId)
-  hiddenWorkflowIds.value = [...new Set([...hiddenWorkflowIds.value, runIdAsString])]
-
-  try {
-    localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
-  } catch {}
-}
-
-const handleDelete = async (item) => {
+const handleDelete = (item) => {
   if (item.type === 'chat') {
     const isCurrentActive = chatStore.activeSessionId === item.id
     chatStore.deleteSession(item.id)
@@ -726,17 +741,10 @@ const handleDelete = async (item) => {
       if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
+    hiddenWorkflowIds.value.push(item.id)
     try {
-      await api.deleteRun(item.id)
-      hideWorkflowRun(item.id)
-
-      if (route.name === 'run-detail' && String(route.params.runId) === String(item.id)) {
-        router.replace({ name: 'chat' })
-      }
-    } catch (error) {
-      const message = error?.message || 'Unable to delete this workflow run. Please try again.'
-      window.alert(message)
-    }
+      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
+    } catch {}
   }
   closeAllMenus()
 }
@@ -745,31 +753,58 @@ if (typeof window !== 'undefined') {
   window.addEventListener('click', closeAllMenus)
 }
 
-const combinedRecentItems = computed(() => {
-  // Keep every workflow run in history, including runs that also have a chat
-  // session. Selecting one opens the chat first through selectWorkflowHistory.
-  const workflowItems = props.recentItems
-    .filter((r, index, recentItems) => {
-      if (hiddenWorkflowIds.value.includes(String(r.id))) return false
-      return recentItems.findIndex((item) => String(item.id) === String(r.id)) === index
-    })
-    .map((r) => ({
-      id: r.id,
-      title: r.goal_prompt || r.title || 'Workflow run',
-      type: 'workflow',
-      chatSessionId: getChatSessionForWorkflow(r.id)?.id || null,
-      pinned: false,
-      updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
-    }))
+const loadedRuns = ref([])
 
-  const chatItems = chatStore.sessions
-    .map((s) => ({
-      id: s.id,
-      title: s.title,
-      type: 'chat',
-      pinned: Boolean(s.pinned),
-      updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
-    }))
+const loadAllRuns = async () => {
+  try {
+    const res = await api.listRuns()
+    if (res?.data && Array.isArray(res.data)) {
+      loadedRuns.value = res.data
+    }
+  } catch (err) {
+    console.warn('Failed to load runs in DashboardLayout:', err)
+  }
+}
+
+onMounted(() => {
+  loadAllRuns()
+})
+
+// Refresh runs when route changes to make sure newly launched workflows appear in sidebar immediately
+watch(
+  () => route.fullPath,
+  () => {
+    loadAllRuns()
+  },
+)
+
+const combinedRecentItems = computed(() => {
+  // Combine runs from props and backend API so sidebar ALWAYS shows all history on every page!
+  const allRuns = [...props.recentItems, ...loadedRuns.value]
+  const seenRunIds = new Set()
+  const uniqueRuns = allRuns.filter((r) => {
+    if (!r?.id || seenRunIds.has(String(r.id)) || hiddenWorkflowIds.value.includes(r.id)) return false
+    seenRunIds.add(String(r.id))
+    return true
+  })
+
+  const workflowItems = uniqueRuns.map((r) => ({
+    id: r.id,
+    title: r.goal_prompt || r.title || 'Workflow run',
+    type: 'workflow',
+    status: r.status,
+    chatSessionId: getChatSessionForWorkflow(r.id)?.id || null,
+    pinned: false,
+    updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
+  }))
+
+  const chatItems = chatStore.sessions.map((s) => ({
+    id: s.id,
+    title: s.title,
+    type: 'chat',
+    pinned: Boolean(s.pinned),
+    updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
+  }))
 
   const merged = [...chatItems, ...workflowItems]
   merged.sort((a, b) => {
@@ -780,55 +815,52 @@ const combinedRecentItems = computed(() => {
   return merged
 })
 
-const normalizeTitle = (title) => String(title || '')
-  .trim()
-  .replace(/^(?:goal|workflow|chat)\s*:\s*/i, '')
-  .replace(/(?:…|\.\.\.)$/, '')
-  .toLowerCase()
-  .replace(/\s+/g, ' ')
+const normalizeTitle = (title) => String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
 const deduplicateSidebarItems = (items) => {
   if (!Array.isArray(items)) return []
 
-  // A workflow started from chat is represented by that chat. Prefer the
-  // explicit run/chat link; for old locally persisted chats, fall back to one
-  // title match. A title can only claim one run so intentional re-runs remain
-  // visible in history.
+  // 1. Identify all chat sessions present in this list
   const chatItems = items.filter((item) => item.type === 'chat')
   const existingChatIds = new Set(chatItems.map((c) => String(c.id)))
-  const chatIdsByTitle = new Map()
-  for (const chat of chatItems) {
-    const title = normalizeTitle(chat.title)
-    if (!title) continue
-    const ids = chatIdsByTitle.get(title) || []
-    ids.push(String(chat.id))
-    chatIdsByTitle.set(title, ids)
-  }
+  const existingChatTitles = new Set(chatItems.map((c) => normalizeTitle(c.title)).filter(Boolean))
 
-  const fallbackClaimedChatIds = new Set()
-  const seenIds = new Set()
-
-  return items.filter((item) => {
-    const idKey = `${item.type}:${item.id}`
-    if (seenIds.has(idKey)) return false
-    seenIds.add(idKey)
-
+  // 2. Omit any workflow run that is already represented by a chat session (by linked chatSessionId or identical title)
+  const nonRedundant = items.filter((item) => {
     if (item.type === 'workflow') {
       if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
         return false
       }
-
-      const matchingChatIds = chatIdsByTitle.get(normalizeTitle(item.title)) || []
-      const unclaimedChatId = matchingChatIds.find((id) => !fallbackClaimedChatIds.has(id))
-      if (unclaimedChatId) {
-        fallbackClaimedChatIds.add(unclaimedChatId)
+      const norm = normalizeTitle(item.title)
+      if (norm && existingChatTitles.has(norm)) {
         return false
       }
+    }
+    return true
+  })
+
+  // 3. Deduplicate multiple identical entries (keep the most recent one by ID and by normalized title)
+  const seenIds = new Set()
+  const seenTitles = new Set()
+
+  return nonRedundant.filter((item) => {
+    const idKey = `${item.type}:${item.id}`
+    if (seenIds.has(idKey)) return false
+    seenIds.add(idKey)
+
+    const normTitle = normalizeTitle(item.title)
+    if (normTitle) {
+      if (seenTitles.has(normTitle)) return false
+      seenTitles.add(normTitle)
     }
 
     return true
   })
 }
+
+const allHistoryItems = computed(() => {
+  return deduplicateSidebarItems(combinedRecentItems.value)
+})
 
 const projectItemsById = computed(() => {
   const groups = Object.fromEntries(projectsStore.projects.map((project) => [project.id, []]))
@@ -838,7 +870,7 @@ const projectItemsById = computed(() => {
     groups[projectId].push(item)
   })
 
-  // Apply strict deduplication per project
+  // Apply deduplication per project
   for (const projectId of Object.keys(groups)) {
     groups[projectId] = deduplicateSidebarItems(groups[projectId])
   }
