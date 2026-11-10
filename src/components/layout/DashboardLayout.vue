@@ -16,7 +16,7 @@
       </div>
 
       <!-- Flush Edge Scrollable Body -->
-      <div class="sidebar-scrollable">
+      <div class="sidebar-scrollable" @scroll.passive="closeAllMenus">
         <nav class="side-nav" aria-label="Main navigation">
           <RouterLink class="nav-item" to="/overview" active-class="router-link-exact-active" @click="closeMenu">
             <IconHome :size="16" />
@@ -123,7 +123,7 @@
                 </div>
               </div>
 
-              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" @click.stop>
+              <div v-if="activeProjectMenuId === project.id" class="project-dropdown-menu" :class="{ 'open-upward': projectMenuOpenUpward }" @click.stop>
                 <button class="project-dropdown-item" type="button" @click.stop="copyProjectName(project)">
                   <IconCopy :size="16" />
                   <span>Copy Project Name</span>
@@ -238,7 +238,7 @@
                 </button>
 
                 <!-- Floating Dropdown Menu Card -->
-                <div v-if="activeMenuId === item.id" class="item-dropdown-menu" @click.stop>
+                <div v-if="activeMenuId === item.id" class="item-dropdown-menu" :class="{ 'open-upward': menuOpenUpward }" @click.stop>
                   <button class="dropdown-item" type="button" @click.stop="handlePin(item)">
                     <IconPin :size="15" />
                     <span class="dropdown-label">{{ item.pinned ? 'Unpin' : 'Pin' }}</span>
@@ -627,6 +627,8 @@ const formatRecentTime = (timestamp) => {
 
 const activeMenuId = ref(null)
 const activeProjectMenuId = ref(null)
+const menuOpenUpward = ref(false)
+const projectMenuOpenUpward = ref(false)
 const projectToDelete = ref(null)
 const renamingId = ref(null)
 const renameDraft = ref('')
@@ -639,7 +641,21 @@ const deleteProjectMessage = computed(() => {
 
 const toggleProjectMenu = (projectId, event) => {
   event?.stopPropagation()
-  activeProjectMenuId.value = activeProjectMenuId.value === projectId ? null : projectId
+  if (activeProjectMenuId.value === projectId) {
+    activeProjectMenuId.value = null
+    projectMenuOpenUpward.value = false
+    return
+  }
+
+  if (event?.currentTarget) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    projectMenuOpenUpward.value = spaceBelow < 260
+  } else {
+    projectMenuOpenUpward.value = false
+  }
+
+  activeProjectMenuId.value = projectId
 }
 
 const copyProjectName = async (project) => {
@@ -683,12 +699,28 @@ const deleteProject = (project) => {
 
 const toggleMenu = (id, event) => {
   event?.stopPropagation()
-  activeMenuId.value = activeMenuId.value === id ? null : id
+  if (activeMenuId.value === id) {
+    activeMenuId.value = null
+    menuOpenUpward.value = false
+    return
+  }
+
+  if (event?.currentTarget) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    menuOpenUpward.value = spaceBelow < 260
+  } else {
+    menuOpenUpward.value = false
+  }
+
+  activeMenuId.value = id
 }
 
 const closeAllMenus = () => {
   activeMenuId.value = null
   activeProjectMenuId.value = null
+  menuOpenUpward.value = false
+  projectMenuOpenUpward.value = false
 }
 
 const handlePin = (item) => {
@@ -1102,6 +1134,13 @@ const unassignedItems = computed(() => {
   animation: menuIn 0.12s ease-out;
 }
 
+.project-dropdown-menu.open-upward {
+  top: auto;
+  bottom: calc(100% + 4px);
+  transform-origin: bottom right;
+  animation: menuInUp 0.12s ease-out;
+}
+
 .project-dropdown-item {
   display: flex;
   align-items: center;
@@ -1330,10 +1369,24 @@ const unassignedItems = computed(() => {
   min-width: 180px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
   animation: menuIn 0.12s ease-out;
+  transform-origin: top right;
+}
+
+.item-dropdown-menu.open-upward {
+  top: auto;
+  bottom: calc(100% + 4px);
+  transform-origin: bottom right;
+  animation: menuInUp 0.12s ease-out;
+  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.12), 0 -8px 10px -6px rgba(0, 0, 0, 0.08);
 }
 
 @keyframes menuIn {
   from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes menuInUp {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
