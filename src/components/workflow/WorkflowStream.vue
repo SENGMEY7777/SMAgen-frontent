@@ -129,7 +129,7 @@
       <div v-if="editedFiles.length" class="completion-results completion-file-results">
         <div class="completion-results-heading"><span class="change-style">Updated:</span></div>
         <ul class="completion-result-list">
-          <li v-for="file in visibleEditedFiles" :key="`summary-${file.id}`" class="completion-result-row">
+          <li v-for="file in visibleUpdatedFiles" :key="`summary-${file.id}`" class="completion-result-row">
             <div class="completion-result-copy">
               <button
                 type="button"
@@ -143,6 +143,16 @@
             </div>
           </li>
         </ul>
+        <div v-if="editedFiles.length > MAX_VISIBLE_UPDATED_FILES" class="completion-updated-toggle-wrap">
+          <button
+            type="button"
+            class="completion-updated-toggle-btn"
+            :aria-expanded="showAllUpdatedFiles"
+            @click.stop="toggleUpdatedFiles($event)"
+          >
+            <span>{{ showAllUpdatedFiles ? 'Show fewer files' : `Show ${editedFiles.length - MAX_VISIBLE_UPDATED_FILES} more files` }}</span>
+          </button>
+        </div>
       </div>
 
       <div v-if="editedFiles.length" class="completion-edit-card" aria-label="Updated files">
@@ -655,6 +665,7 @@ const reviewPanelWidth = ref(null)
 const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
 const showAllEditedFiles = ref(false)
+const showAllUpdatedFiles = ref(false)
 const showAllPartialFiles = ref(false)
 const workflowActivityExpanded = ref(false)
 const workflowStreamRef = ref(null)
@@ -662,7 +673,8 @@ const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
-const MAX_VISIBLE_EDITED_FILES = 3
+const MAX_VISIBLE_EDITED_FILES = 5
+const MAX_VISIBLE_UPDATED_FILES = 5
 const MAX_VISIBLE_PARTIAL_FILES = 5
 
 const getWorkflowScrollContainer = () => {
@@ -737,6 +749,12 @@ const toggleStep = (stepId, event = null) => {
 const toggleEditedFiles = (event = null) => {
   preserveWorkflowViewport(() => {
     showAllEditedFiles.value = !showAllEditedFiles.value
+  }, event?.currentTarget)
+}
+
+const toggleUpdatedFiles = (event = null) => {
+  preserveWorkflowViewport(() => {
+    showAllUpdatedFiles.value = !showAllUpdatedFiles.value
   }, event?.currentTarget)
 }
 
@@ -1451,6 +1469,9 @@ const fileStatsById = computed(() => Object.fromEntries(
 ))
 const visibleEditedFiles = computed(() => (
   showAllEditedFiles.value ? editedFiles.value : editedFiles.value.slice(0, MAX_VISIBLE_EDITED_FILES)
+))
+const visibleUpdatedFiles = computed(() => (
+  showAllUpdatedFiles.value ? editedFiles.value : editedFiles.value.slice(0, MAX_VISIBLE_UPDATED_FILES)
 ))
 const visiblePartialFiles = computed(() => (
   showAllPartialFiles.value ? editedFiles.value : editedFiles.value.slice(0, MAX_VISIBLE_PARTIAL_FILES)
@@ -2346,6 +2367,34 @@ const highlightCode = (value) => {
   flex: 0 0 auto;
   color: #2563eb;
   vertical-align: middle;
+}
+
+.completion-updated-toggle-wrap {
+  margin: -6px 0 16px 20px;
+}
+
+.completion-updated-toggle-btn {
+  display: inline-block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #2f80d7;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.completion-updated-toggle-btn:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.completion-updated-toggle-btn:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
 .completion-edit-card {
