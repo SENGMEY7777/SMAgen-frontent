@@ -123,8 +123,10 @@ import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate, formatTokens } from '@/utils/formatters'
 import { getWorkflowRunId } from '@/utils/workflow'
+import { useChatStore } from '@/stores/chat'
 
 const router = useRouter()
+const chatStore = useChatStore()
 const runs = ref([])
 const workflows = ref([])
 const loading = ref(true)
@@ -171,7 +173,40 @@ const startDagWorkflow = async () => {
     }
 
     goalPrompt.value = ''
-    await router.push(`/runs/${runId}`)
+    
+    // Show chatbot first with the workflow execution, not canvas!
+    const newSession = {
+      id: `chat_wf_${runId}`,
+      title: goal,
+      type: 'chat',
+      projectId: null,
+      messages: [
+        {
+          id: `msg_user_${runId}`,
+          role: 'user',
+          content: goal,
+          createdAt: new Date().toISOString(),
+          requestMode: 'workflow',
+        },
+        {
+          id: `msg_wf_${runId}`,
+          role: 'assistant',
+          content: '',
+          createdAt: new Date().toISOString(),
+          workflow: {
+            runId: String(runId),
+            goalPrompt: goal,
+            status: 'RUNNING',
+            isStreamOpen: true,
+          },
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    chatStore.sessions.unshift(newSession)
+    chatStore.selectSession(newSession.id)
+    await router.push({ name: 'chat' })
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to launch DAG workflow.'
   } finally {
