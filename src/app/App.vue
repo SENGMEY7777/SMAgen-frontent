@@ -15,20 +15,24 @@ const dynamicTitle = computed(() => {
   if (route.name === 'chat') {
     const session = chatStore.activeSession
     if (session && session.title) {
-      return `${session.title} - ${appTitle}`
+      return `${appTitle}: ${session.title}`
     }
-    return `New chat - ${appTitle}`
+    return `${appTitle}: Chat, Work, Create & Innovate`
   }
 
   if (route.name === 'run-detail') {
-    return `Workflow run - ${appTitle}`
+    return `${appTitle}: Workflow run`
+  }
+
+  if (route.name === 'home' || !route.name) {
+    return `${appTitle}: Chat, Work, Create & Innovate`
   }
 
   if (route.meta?.title) {
-    return `${route.meta.title} - ${appTitle}`
+    return `${appTitle}: ${route.meta.title}`
   }
 
-  return appTitle
+  return `${appTitle}: Chat, Work, Create & Innovate`
 })
 
 watch(
