@@ -711,7 +711,7 @@ watch(
   workflowName,
   (name) => {
     if (typeof document !== 'undefined' && name) {
-      document.title = `${name} - ${import.meta.env.VITE_APP_TITLE || 'KAIRO'}`
+      document.title = `${import.meta.env.VITE_APP_TITLE || 'KAIRO'}: ${name}`
     }
   },
   { immediate: true },
