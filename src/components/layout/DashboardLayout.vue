@@ -185,12 +185,12 @@
           </div>
         </div>
 
-        <div v-if="allHistoryItems.length" class="side-section">
+        <div v-if="unassignedItems.length || !projectsStore.projects.length" class="side-section">
           <div class="side-label-row">
             <span class="side-label">Chats and tasks</span>
           </div>
           <div class="recent-list">
-            <template v-for="item in allHistoryItems" :key="`${item.type}-${item.id}`">
+            <template v-for="item in unassignedItems" :key="`${item.type}-${item.id}`">
               <div
                 class="recent-row"
                 :class="{ 'active-chat': isItemActive(item), 'is-pinned': item.pinned }"
@@ -276,7 +276,7 @@
               </div>
             </template>
 
-            <span v-if="!allHistoryItems.length" class="recent-empty">No activity yet</span>
+            <span v-if="!unassignedItems.length" class="recent-empty">No activity yet</span>
           </div>
         </div>
       </div>
@@ -316,6 +316,13 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
+          <span
+            v-if="route.name === 'chat' && chatStore.activeSession?.title"
+            class="topbar-chat-title"
+            :title="chatStore.activeSession.title"
+          >
+            {{ chatStore.activeSession.title }}
+          </span>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
