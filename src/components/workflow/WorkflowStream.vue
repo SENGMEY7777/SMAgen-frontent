@@ -208,7 +208,6 @@
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
-                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
                   <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
@@ -673,7 +672,7 @@ const REVIEW_ZOOM_MIN = 75
 const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
-const MAX_VISIBLE_EDITED_FILES = 5
+const MAX_VISIBLE_EDITED_FILES = 3
 const MAX_VISIBLE_UPDATED_FILES = 5
 const MAX_VISIBLE_PARTIAL_FILES = 5
 
