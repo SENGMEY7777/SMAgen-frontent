@@ -1014,9 +1014,15 @@
   padding: 14px 18px;
   overflow-x: auto;
   font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.6;
   color: #e2e8f0;
+}
+
+.assistant-markdown pre code,
+.code-block pre,
+.code-block code {
+  font-size: 13px;
 }
 
 /* Syntax Highlighting Tokens */
