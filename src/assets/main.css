@@ -301,7 +301,7 @@
   gap: 10px;
 }
 
-/* .model-picker {
+.model-picker {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -319,7 +319,7 @@
 .model-picker:hover {
   border-color: #d1d5db;
   background: #f9fafb;
-} */
+}
 
 .model-dot {
   display: grid;
@@ -543,7 +543,7 @@
 }
 
 .composer {
-  width: min(760px, 100%);
+  width: min(920px, 100%);
   border-radius: 26px;
   border: 1px solid #e2e4e8;
   background: #ffffff;
@@ -737,13 +737,13 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding-bottom: 160px;
+  padding-bottom: 200px;
 }
 
 .chat-thread-inner {
-  width: min(760px, 100%);
+  width: min(920px, 100%);
   margin: 0 auto;
-  padding: 24px 16px 0;
+  padding: 24px 20px 40px;
   display: flex;
   flex-direction: column;
 }
