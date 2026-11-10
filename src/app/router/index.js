@@ -190,7 +190,7 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  const title = to.meta.title ? `${to.meta.title} - ${appTitle}` : appTitle
+  const title = to.meta.title ? `${appTitle}: ${to.meta.title}` : `${appTitle}: Chat, Work, Create & Innovate`
   document.title = title
 })
 
