@@ -729,19 +729,117 @@ watch(activeMode, async (mode) => {
 
 const userScrolledUp = ref(false)
 let isProgrammaticScrolling = false
+let isRestoringScroll = false
+let restoreTimeout = null
 let resizeObserver = null
+let scrollSaveTimer = null
+
+const SCROLL_STORAGE_PREFIX = 'kairo_chat_scroll_'
+const getScrollStorageKey = () => `${SCROLL_STORAGE_PREFIX}${chatStore.activeSessionId || 'default'}`
+
+const saveScrollState = (scrollTop, isAtBottom) => {
+  try {
+    sessionStorage.setItem(
+      getScrollStorageKey(),
+      JSON.stringify({
+        scrollTop: Math.max(0, Math.round(scrollTop)),
+        isAtBottom: Boolean(isAtBottom),
+        savedAt: Date.now(),
+      })
+    )
+  } catch {}
+}
+
+const getSavedScrollState = () => {
+  try {
+    const raw = sessionStorage.getItem(getScrollStorageKey())
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.scrollTop === 'number') {
+      return parsed
+    }
+  } catch {}
+  return null
+}
 
 const handleScroll = () => {
-  if (!chatThreadRef.value || isProgrammaticScrolling) return
+  if (!chatThreadRef.value) return
   const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
-  const isUp = scrollHeight - scrollTop - clientHeight > 60
+  const distanceToBottom = scrollHeight - scrollTop - clientHeight
+  const isUp = distanceToBottom > 60
   showScrollButton.value = isUp
   userScrolledUp.value = isUp
+
+  if (isProgrammaticScrolling || isRestoringScroll) return
+
+  if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
+  scrollSaveTimer = setTimeout(() => {
+    saveScrollState(scrollTop, !isUp)
+  }, 100)
+}
+
+const onUserScrollStart = () => {
+  if (isRestoringScroll) {
+    isRestoringScroll = false
+    if (restoreTimeout) clearTimeout(restoreTimeout)
+  }
+}
+
+const restoreScrollPosition = () => {
+  if (!chatThreadRef.value) return
+  const saved = getSavedScrollState()
+
+  isRestoringScroll = true
+  if (restoreTimeout) clearTimeout(restoreTimeout)
+  restoreTimeout = setTimeout(() => {
+    isRestoringScroll = false
+  }, 1200)
+
+  const applyRestore = () => {
+    if (!chatThreadRef.value || !isRestoringScroll) return
+    if (!saved) {
+      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      showScrollButton.value = false
+      userScrolledUp.value = false
+      return
+    }
+
+    if (saved.isAtBottom) {
+      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      showScrollButton.value = false
+      userScrolledUp.value = false
+    } else {
+      chatThreadRef.value.scrollTop = saved.scrollTop
+      const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
+      const isUp = scrollHeight - scrollTop - clientHeight > 60
+      showScrollButton.value = isUp
+      userScrolledUp.value = isUp
+    }
+  }
+
+  applyRestore()
+  const restorePhases = [30, 80, 160, 300, 600, 1000]
+  restorePhases.forEach((delay) => {
+    setTimeout(() => {
+      if (isRestoringScroll) {
+        applyRestore()
+      }
+    }, delay)
+  })
+}
+
+const handleBeforeUnload = () => {
+  if (chatThreadRef.value) {
+    const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
+    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 60
+    saveScrollState(scrollTop, isAtBottom)
+  }
 }
 
 const scrollToBottom = async (behavior = 'auto') => {
   await nextTick()
   if (chatThreadRef.value) {
+    isRestoringScroll = false
     userScrolledUp.value = false
     showScrollButton.value = false
     isProgrammaticScrolling = true
@@ -753,6 +851,7 @@ const scrollToBottom = async (behavior = 'auto') => {
     } else {
       chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
     }
+    saveScrollState(chatThreadRef.value.scrollHeight, true)
     setTimeout(() => {
       isProgrammaticScrolling = false
       if (chatThreadRef.value) {
@@ -774,7 +873,19 @@ const setupScrollObserver = () => {
   const target = chatThreadRef.value?.querySelector('.chat-thread-inner') || chatThreadRef.value
   if (!target) return
   resizeObserver = new ResizeObserver(() => {
-    if (!userScrolledUp.value && chatThreadRef.value) {
+    if (!chatThreadRef.value) return
+    if (isRestoringScroll) {
+      const saved = getSavedScrollState()
+      if (saved) {
+        if (saved.isAtBottom) {
+          chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+        } else {
+          chatThreadRef.value.scrollTop = saved.scrollTop
+        }
+      } else {
+        chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      }
+    } else if (!userScrolledUp.value) {
       chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
       showScrollButton.value = false
     }
@@ -785,8 +896,10 @@ const setupScrollObserver = () => {
 watch(chatThreadRef, (el) => {
   if (el) {
     el.addEventListener('scroll', handleScroll, { passive: true })
+    el.addEventListener('wheel', onUserScrollStart, { passive: true })
+    el.addEventListener('touchmove', onUserScrollStart, { passive: true })
     setupScrollObserver()
-    scrollToBottom('auto')
+    restoreScrollPosition()
   } else if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -794,17 +907,8 @@ watch(chatThreadRef, (el) => {
 })
 
 watch(() => chatStore.activeSessionId, async () => {
-  userScrolledUp.value = false
   await nextTick()
-  scrollToBottom('auto')
-  const sessionDelays = [40, 100, 250, 500]
-  sessionDelays.forEach((delay) => {
-    setTimeout(() => {
-      if (!userScrolledUp.value) {
-        scrollToBottom('auto')
-      }
-    }, delay)
-  })
+  restoreScrollPosition()
 })
 
 const {
@@ -1468,18 +1572,12 @@ onMounted(() => {
   }, 60 * 1000)
   if (chatThreadRef.value) {
     chatThreadRef.value.addEventListener('scroll', handleScroll, { passive: true })
+    chatThreadRef.value.addEventListener('wheel', onUserScrollStart, { passive: true })
+    chatThreadRef.value.addEventListener('touchmove', onUserScrollStart, { passive: true })
     setupScrollObserver()
   }
-  // Guarantee scroll to bottom on refresh / initial page load across multiple rendering phases
-  scrollToBottom('auto')
-  const initialScrollDelays = [50, 150, 300, 600, 1000]
-  initialScrollDelays.forEach((delay) => {
-    setTimeout(() => {
-      if (!userScrolledUp.value) {
-        scrollToBottom('auto')
-      }
-    }, delay)
-  })
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  restoreScrollPosition()
 })
 
 onUnmounted(() => {
@@ -1489,11 +1587,16 @@ onUnmounted(() => {
   }
   if (chatThreadRef.value) {
     chatThreadRef.value.removeEventListener('scroll', handleScroll)
+    chatThreadRef.value.removeEventListener('wheel', onUserScrollStart)
+    chatThreadRef.value.removeEventListener('touchmove', onUserScrollStart)
   }
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
   }
+  if (restoreTimeout) clearTimeout(restoreTimeout)
+  if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
 })
 </script>
 
