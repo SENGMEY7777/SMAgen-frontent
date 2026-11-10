@@ -309,6 +309,13 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
+          <span
+            v-if="route.name === 'chat' && chatStore.activeSession?.title"
+            class="topbar-chat-title"
+            :title="chatStore.activeSession.title"
+          >
+            {{ chatStore.activeSession.title }}
+          </span>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
@@ -1457,5 +1464,17 @@ const unassignedItems = computed(() => {
   padding: 10px 12px 0 12px;
   border-top: 1px solid #e5e7eb;
   background: #fbfcfd;
+}
+
+.topbar-chat-title {
+  font-size: 14.5px;
+  font-weight: 550;
+  color: #18181b;
+  max-width: clamp(160px, 40vw, 480px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  margin-left: 6px;
 }
 </style>
