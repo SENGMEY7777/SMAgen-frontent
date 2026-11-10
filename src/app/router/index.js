@@ -56,7 +56,7 @@ const router = createRouter({
       path: '/overview',
       name: 'overview',
       component: views.overview,
-      meta: { ...dashboardMeta },
+      meta: { ...dashboardMeta, title: 'Dashboard' },
     },
     {
       path: '/dashboard',
@@ -189,8 +189,9 @@ router.beforeEach((to) => {
   return true
 })
 
-router.afterEach(() => {
-  document.title = appTitle
+router.afterEach((to) => {
+  const title = to.meta.title ? `${to.meta.title} - ${appTitle}` : appTitle
+  document.title = title
 })
 
 export const isInternalRedirect = (value) => {
