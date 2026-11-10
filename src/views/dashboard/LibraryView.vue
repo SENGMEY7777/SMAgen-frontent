@@ -94,8 +94,10 @@ import { IconPlus, IconX, IconPlayerPlay } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDateShort } from '@/utils/formatters'
 import { formatWorkflowError, getWorkflowRunId } from '@/utils/workflow'
+import { useChatStore } from '@/stores/chat'
 
 const router = useRouter()
+const chatStore = useChatStore()
 const workflows = ref([])
 const showCreate = ref(false)
 const loading = ref(false)
@@ -133,9 +135,10 @@ const runWorkflow = async () => {
   errorMessage.value = ''
   loading.value = true
   try {
+    const goal = runGoal.value.trim()
     const response = await api.runWorkflow({
       workflowId: runTarget.value.id,
-      goalPrompt: runGoal.value.trim(),
+      goalPrompt: goal,
     })
     const runId = getWorkflowRunId(response)
 
@@ -143,7 +146,39 @@ const runWorkflow = async () => {
       throw new ApiError('The workflow started but no run ID was returned. Please try again.')
     }
 
-    await router.push(`/runs/${runId}`)
+    // Show chatbot first with the workflow execution, not canvas!
+    const newSession = {
+      id: `chat_wf_${runId}`,
+      title: goal || runTarget.value?.title || 'Workflow Run',
+      type: 'chat',
+      projectId: null,
+      messages: [
+        {
+          id: `msg_user_${runId}`,
+          role: 'user',
+          content: goal,
+          createdAt: new Date().toISOString(),
+          requestMode: 'workflow',
+        },
+        {
+          id: `msg_wf_${runId}`,
+          role: 'assistant',
+          content: '',
+          createdAt: new Date().toISOString(),
+          workflow: {
+            runId: String(runId),
+            goalPrompt: goal,
+            status: 'RUNNING',
+            isStreamOpen: true,
+          },
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    chatStore.sessions.unshift(newSession)
+    chatStore.selectSession(newSession.id)
+    await router.push({ name: 'chat' })
   } catch (error) {
     errorMessage.value = formatWorkflowError(error)
   } finally {
