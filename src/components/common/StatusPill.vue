@@ -47,21 +47,78 @@ const statusIcon = computed(() => {
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #4b5563;
-  font-size: 10.5px;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
+  line-height: 1.3;
+  color: #4b5563;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  transition: all 0.15s ease;
 }
 
 .status-pill :deep(svg) {
   flex: 0 0 auto;
 }
 
-.status-pill.running :deep(svg) {
+/* FAILED / REJECTED / ERROR */
+.status-pill.failed,
+.status-pill.rejected,
+.status-pill.error {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* COMPLETED / SUCCESS / APPROVED */
+.status-pill.completed,
+.status-pill.success,
+.status-pill.approved {
+  color: #16a34a;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+/* RUNNING / IN PROGRESS */
+.status-pill.running,
+.status-pill.in_progress {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.status-pill.running :deep(svg),
+.status-pill.in_progress :deep(svg) {
   animation: status-spin 1.2s linear infinite;
+}
+
+/* QUEUED / PENDING */
+.status-pill.queued,
+.status-pill.pending {
+  color: #d97706;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+/* AWAITING APPROVAL */
+.status-pill.awaiting_approval {
+  color: #7c3aed;
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+/* CANCELLED / CREATED */
+.status-pill.cancelled,
+.status-pill.created {
+  color: #4b5563;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
 }
 
 @keyframes status-spin {
