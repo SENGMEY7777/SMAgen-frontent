@@ -208,7 +208,7 @@
           class="scroll-down-btn"
           type="button"
           aria-label="Scroll to bottom"
-          @click="scrollToBottom"
+          @click="scrollToBottom('smooth')"
         >
           <IconChevronDown :size="16" />
         </button>
@@ -727,19 +727,85 @@ watch(activeMode, async (mode) => {
   }
 })
 
+const userScrolledUp = ref(false)
+let isProgrammaticScrolling = false
+let resizeObserver = null
+
 const handleScroll = () => {
-  if (!chatThreadRef.value) return
+  if (!chatThreadRef.value || isProgrammaticScrolling) return
   const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
-  showScrollButton.value = scrollHeight - scrollTop - clientHeight > 60
+  const isUp = scrollHeight - scrollTop - clientHeight > 60
+  showScrollButton.value = isUp
+  userScrolledUp.value = isUp
 }
 
-const scrollToBottom = async () => {
+const scrollToBottom = async (behavior = 'auto') => {
   await nextTick()
   if (chatThreadRef.value) {
-    chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+    userScrolledUp.value = false
     showScrollButton.value = false
+    isProgrammaticScrolling = true
+    if (typeof chatThreadRef.value.scrollTo === 'function') {
+      chatThreadRef.value.scrollTo({
+        top: chatThreadRef.value.scrollHeight,
+        behavior,
+      })
+    } else {
+      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+    }
+    setTimeout(() => {
+      isProgrammaticScrolling = false
+      if (chatThreadRef.value) {
+        const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
+        const isUp = scrollHeight - scrollTop - clientHeight > 60
+        showScrollButton.value = isUp
+        userScrolledUp.value = isUp
+      }
+    }, behavior === 'smooth' ? 350 : 60)
   }
 }
+
+const setupScrollObserver = () => {
+  if (typeof ResizeObserver === 'undefined') return
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  const target = chatThreadRef.value?.querySelector('.chat-thread-inner') || chatThreadRef.value
+  if (!target) return
+  resizeObserver = new ResizeObserver(() => {
+    if (!userScrolledUp.value && chatThreadRef.value) {
+      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      showScrollButton.value = false
+    }
+  })
+  resizeObserver.observe(target)
+}
+
+watch(chatThreadRef, (el) => {
+  if (el) {
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    setupScrollObserver()
+    scrollToBottom('auto')
+  } else if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+})
+
+watch(() => chatStore.activeSessionId, async () => {
+  userScrolledUp.value = false
+  await nextTick()
+  scrollToBottom('auto')
+  const sessionDelays = [40, 100, 250, 500]
+  sessionDelays.forEach((delay) => {
+    setTimeout(() => {
+      if (!userScrolledUp.value) {
+        scrollToBottom('auto')
+      }
+    }, delay)
+  })
+})
 
 const {
   timerTick,
@@ -755,7 +821,9 @@ const {
 })
 
 watch([currentMessages, loading], () => {
-  scrollToBottom()
+  if (!userScrolledUp.value) {
+    scrollToBottom('auto')
+  }
 }, { deep: true })
 
 // Upload and Paste Handling for Images and Code/Document Files
@@ -1399,8 +1467,19 @@ onMounted(() => {
     currentTime.value = new Date()
   }, 60 * 1000)
   if (chatThreadRef.value) {
-    chatThreadRef.value.addEventListener('scroll', handleScroll)
+    chatThreadRef.value.addEventListener('scroll', handleScroll, { passive: true })
+    setupScrollObserver()
   }
+  // Guarantee scroll to bottom on refresh / initial page load across multiple rendering phases
+  scrollToBottom('auto')
+  const initialScrollDelays = [50, 150, 300, 600, 1000]
+  initialScrollDelays.forEach((delay) => {
+    setTimeout(() => {
+      if (!userScrolledUp.value) {
+        scrollToBottom('auto')
+      }
+    }, delay)
+  })
 })
 
 onUnmounted(() => {
@@ -1410,6 +1489,10 @@ onUnmounted(() => {
   }
   if (chatThreadRef.value) {
     chatThreadRef.value.removeEventListener('scroll', handleScroll)
+  }
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
   }
 })
 </script>
