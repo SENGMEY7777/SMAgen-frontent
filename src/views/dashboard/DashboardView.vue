@@ -319,14 +319,6 @@
             </div>
           </div>
         </div>
-
-        <div class="chat-footer-bar">
-          <span class="footer-disclaimer">KAIRO is AI and can make mistakes. Please double-check responses.</span>
-          <div class="footer-model-badge">
-            <span class="status-dot"></span>
-            <span>KAIRO Pro</span>
-          </div>
-        </div>
       </div>
 
       <!-- Lightbox Image Modal -->
@@ -1015,7 +1007,7 @@ const commitStreamingResponse = () => {
   streamingContent.value = ''
 }
 
-const requestChatReply = async (prompt, history, signal) => {
+const requestChatReply = async (prompt, history, signal, images = []) => {
   streamingContent.value = ''
   let receivedChunk = false
 
@@ -1032,6 +1024,7 @@ const requestChatReply = async (prompt, history, signal) => {
       signal,
       projectContext,
       localDestination: localDest,
+      images,
       onChunk: (chunk) => {
         if (!chunk) return
         receivedChunk = true
@@ -1044,7 +1037,7 @@ const requestChatReply = async (prompt, history, signal) => {
 
     // Preserve the existing history-validation fallback for older API deployments.
     if (history.length > 0 && !receivedChunk) {
-      const response = await api.chat(prompt, [], { signal, projectContext, localDestination: localDest })
+      const response = await api.chat(prompt, [], { signal, projectContext, localDestination: localDest, images })
       streamingContent.value = response?.data?.message || 'I could not generate a response.'
       return
     }
@@ -1088,12 +1081,13 @@ const addWorkflowPlaceholder = (goalPrompt) => {
   return workflowMessageIndex
 }
 
-const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = []) => {
+const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = [], images = []) => {
   workflowStopRequested = false
   const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
   const response = await api.runWorkflow({
     goalPrompt,
     ...(localDestination ? { localDestination } : {}),
+    ...(images && images.length > 0 ? { images } : {}),
   })
   const runId = getWorkflowRunId(response)
   if (!runId) throw new ApiError('The workflow started without a run ID.')
@@ -1153,7 +1147,7 @@ const submitEditUserMessage = async (index) => {
     const workflowMessageIndex = addWorkflowPlaceholder(newText)
 
     try {
-      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index))
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index), originalMessage?.images || [])
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1169,7 +1163,7 @@ const submitEditUserMessage = async (index) => {
 
   try {
     const fullPrompt = formatPromptWithFiles(newText, messageFiles)
-    await requestChatReply(fullPrompt, history, signal)
+    await requestChatReply(fullPrompt, history, signal, originalMessage?.images || [])
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
@@ -1200,7 +1194,7 @@ const retryUserMessage = async (index) => {
     const workflowMessageIndex = addWorkflowPlaceholder(message.content)
     try {
       const workflowPrompt = formatPromptWithFiles(message.content, messageFiles)
-      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index))
+      await startWorkflowRun(workflowMessageIndex, workflowPrompt, currentMessages.value.slice(0, index), message?.images || [])
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1234,7 +1228,7 @@ const retryUserMessage = async (index) => {
 
   try {
     const fullPrompt = formatPromptWithFiles(message.content, message.files || [])
-    await requestChatReply(fullPrompt, history, signal)
+    await requestChatReply(fullPrompt, history, signal, message?.images || [])
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
@@ -1333,7 +1327,7 @@ const send = async () => {
     try {
       // The current user message and the workflow placeholder are both already
       // in the store; only earlier messages should provide follow-up context.
-      await startWorkflowRun(workflowMessageIndex, fullPrompt, currentMessages.value.slice(0, -2))
+      await startWorkflowRun(workflowMessageIndex, fullPrompt, currentMessages.value.slice(0, -2), images)
     } catch (error) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'FAILED',
@@ -1379,7 +1373,7 @@ const send = async () => {
 
   try {
     const promptToSend = fullPrompt || (images.length ? 'I have attached an image. Please review it.' : '')
-    await requestChatReply(promptToSend, history, signal)
+    await requestChatReply(promptToSend, history, signal, images)
   } catch (error) {
     if (error.name === 'AbortError' || signal.aborted) {
       return
