@@ -129,7 +129,7 @@
       <div v-if="editedFiles.length" class="completion-results completion-file-results">
         <div class="completion-results-heading"><span class="change-style">Updated:</span></div>
         <ul class="completion-result-list">
-          <li v-for="file in editedFiles" :key="`summary-${file.id}`" class="completion-result-row">
+          <li v-for="file in visibleEditedFiles" :key="`summary-${file.id}`" class="completion-result-row">
             <div class="completion-result-copy">
               <button
                 type="button"
@@ -198,6 +198,7 @@
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
+                <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 <span class="completion-edit-file-path">
                   <span class="completion-edit-file-directory">{{ getFilePathParts(file).directory }}</span>
                   <span class="completion-edit-file-name">{{ getFilePathParts(file).name }}</span>
@@ -410,9 +411,23 @@
       class="workflow-partial-changes"
       aria-label="Changes made before the workflow stopped"
     >
-      <div class="workflow-partial-changes-heading">Files changed</div>
+      <div class="workflow-partial-changes-heading-row">
+        <div class="workflow-partial-changes-heading">
+          <span>Files changed</span>
+          <span v-if="editedFiles.length > 1" class="workflow-partial-changes-count">({{ editedFiles.length }})</span>
+        </div>
+        <button
+          v-if="editedFiles.length > MAX_VISIBLE_PARTIAL_FILES"
+          type="button"
+          class="stream-steps-toggle partial-files-toggle"
+          @click.stop="togglePartialFiles($event)"
+        >
+          <span>{{ showAllPartialFiles ? 'Hide files' : `View ${editedFiles.length} files` }}</span>
+          <IconChevronDown :size="12" :class="{ 'rotate-180': showAllPartialFiles }" />
+        </button>
+      </div>
       <ul class="workflow-partial-changes-list">
-        <li v-for="file in editedFiles" :key="`partial-${file.id}`" class="workflow-partial-change-row">
+        <li v-for="file in visiblePartialFiles" :key="`partial-${file.id}`" class="workflow-partial-change-row">
           <button
             type="button"
             class="workflow-partial-change-path"
@@ -424,6 +439,16 @@
           </button>
         </li>
       </ul>
+      <div v-if="editedFiles.length > MAX_VISIBLE_PARTIAL_FILES" class="workflow-partial-changes-footer">
+        <button
+          type="button"
+          class="stream-steps-toggle partial-files-toggle"
+          @click.stop="togglePartialFiles($event)"
+        >
+          <span>{{ showAllPartialFiles ? 'Show fewer files' : `View ${editedFiles.length} files` }}</span>
+          <IconChevronDown :size="12" :class="{ 'rotate-180': showAllPartialFiles }" />
+        </button>
+      </div>
     </section>
 
     <Teleport to=".composer-container">
@@ -630,6 +655,7 @@ const reviewPanelWidth = ref(null)
 const reviewPanelResizing = ref(false)
 const reviewZoom = ref(100)
 const showAllEditedFiles = ref(false)
+const showAllPartialFiles = ref(false)
 const workflowActivityExpanded = ref(false)
 const workflowStreamRef = ref(null)
 const REVIEW_ZOOM_MIN = 75
@@ -637,6 +663,7 @@ const REVIEW_ZOOM_MAX = 175
 const REVIEW_PANEL_MIN_WIDTH = 320
 const REVIEW_PANEL_MAX_WIDTH = 1200
 const MAX_VISIBLE_EDITED_FILES = 3
+const MAX_VISIBLE_PARTIAL_FILES = 5
 
 const getWorkflowScrollContainer = () => {
   let element = workflowStreamRef.value?.parentElement || null
@@ -710,6 +737,12 @@ const toggleStep = (stepId, event = null) => {
 const toggleEditedFiles = (event = null) => {
   preserveWorkflowViewport(() => {
     showAllEditedFiles.value = !showAllEditedFiles.value
+  }, event?.currentTarget)
+}
+
+const togglePartialFiles = (event = null) => {
+  preserveWorkflowViewport(() => {
+    showAllPartialFiles.value = !showAllPartialFiles.value
   }, event?.currentTarget)
 }
 
@@ -1418,6 +1451,9 @@ const fileStatsById = computed(() => Object.fromEntries(
 ))
 const visibleEditedFiles = computed(() => (
   showAllEditedFiles.value ? editedFiles.value : editedFiles.value.slice(0, MAX_VISIBLE_EDITED_FILES)
+))
+const visiblePartialFiles = computed(() => (
+  showAllPartialFiles.value ? editedFiles.value : editedFiles.value.slice(0, MAX_VISIBLE_PARTIAL_FILES)
 ))
 const reviewTask = computed(() => getReviewTask(props.workflow, editedFiles.value))
 const reviewLines = computed(() => getReviewLines(reviewTask.value, props.workflow, selectedFile.value?.path || ''))
@@ -2390,10 +2426,43 @@ const highlightCode = (value) => {
   color: #27272a;
 }
 
+.workflow-partial-changes-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .workflow-partial-changes-heading {
   color: #18181b;
   font-size: 15px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workflow-partial-changes-count {
+  font-size: 13px;
+  color: #71717a;
+  font-weight: 500;
+}
+
+.workflow-partial-changes-footer {
+  margin-top: 10px;
+  padding-left: 2px;
+}
+
+.partial-files-toggle {
+  font-size: 14px;
+  color: #71717a;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.partial-files-toggle:hover {
+  color: #18181b;
 }
 
 .workflow-partial-changes-list {
