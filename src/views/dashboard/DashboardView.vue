@@ -1628,19 +1628,6 @@ onUnmounted(() => {
   object-fit: contain;
   display: block;
 }
-
-.composer-input {
-  width: 50% !important;
-  min-height: 70px;
-  max-height: 180px;
-  border: none;
-  outline: none;
-  resize: none;
-  font-family: inherit;
-  font-size: 14.5px;
-  line-height: 1.45;
-  color: #18181b;
-}
 .user-message-container {
   display: flex;
   flex-direction: column;
