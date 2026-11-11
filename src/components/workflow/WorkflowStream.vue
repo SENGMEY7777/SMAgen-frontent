@@ -25,7 +25,7 @@
 
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
       <button type="button" class="stream-steps-toggle" @click.stop="toggleStream()">
-        <span>{{ workflow.isStreamOpen ? 'Hide steps' : `View ${workflow.tasks.length} steps` }}</span>
+        <span>{{ workflow.isStreamOpen ? 'Hide steps' : getStepsToggleText(workflow) }}</span>
         <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen }" />
       </button>
 
@@ -835,6 +835,16 @@ const isCompletedTask = (task) => ['COMPLETED', 'SUCCESS'].includes(
 const getCompletedTasks = (workflow) => (workflow?.tasks || []).filter(isCompletedTask)
 
 const completedStepCount = (workflow) => getCompletedTasks(workflow).length
+
+const getStepsToggleText = (workflow) => {
+  const total = (workflow?.tasks || []).length
+  if (!total) return 'View steps'
+  const completed = completedStepCount(workflow)
+  if (isWorkflowLive(workflow) && completed > 0) {
+    return `View ${total} steps (${completed}/${total})`
+  }
+  return `View ${total} steps`
+}
 
 const getWorkflowResultItems = (workflow) => {
   const completedTasks = getCompletedTasks(workflow)
