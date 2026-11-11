@@ -1696,9 +1696,10 @@ const highlightCode = (value) => {
 }
 .workflow-antigravity-stream {
   width: 100%;
-  max-width: 760px;
+  max-width: 100%;
   background: transparent;
-  padding: 2px 0 8px;
+  margin: 0;
+  padding: 0;
 }
 
 .stream-elapsed-header {
@@ -2247,6 +2248,7 @@ const highlightCode = (value) => {
 }
 
 .workflow-completion-response {
+  width: 100%;
   margin: 16px 0 4px;
   padding: 0;
   color: #18181b;
