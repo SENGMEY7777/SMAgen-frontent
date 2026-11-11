@@ -624,7 +624,7 @@
 }
 
 .composer {
-  width: min(920px, 100%);
+  width: min(768px, 100%);
   border-radius: 26px;
   border: 1px solid #e2e4e8;
   background: #ffffff;
@@ -639,7 +639,7 @@
 }
 
 .composer.workflow-composer {
-  width: min(770px, 100%);
+  width: min(768px, 100%);
   border-color: #e2e4e8;
   border-radius: 15px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
@@ -822,7 +822,7 @@
 }
 
 .chat-thread-inner {
-  width: min(920px, 100%);
+  width: min(768px, 100%);
   margin: 0 auto;
   padding: 24px 20px 20px;
   display: flex;
@@ -961,9 +961,9 @@
 
 /* Modern Clean Markdown Elements */
 .assistant-markdown .md-p {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   color: #0f172a;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .assistant-markdown .md-p:last-child {
@@ -1000,14 +1000,14 @@
 .assistant-markdown .md-h4 { font-size: 16px; }
 
 .assistant-markdown .md-list {
-  margin: 8px 0 16px 20px;
+  margin: 10px 0 16px 22px;
   padding: 0;
-  line-height: 1.6;
+  line-height: 1.65;
   color: #0f172a;
 }
 
 .assistant-markdown .md-list li {
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   line-height: inherit;
 }
 
