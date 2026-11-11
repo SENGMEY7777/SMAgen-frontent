@@ -143,12 +143,12 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 <style scoped>
 .workflow-approval-panel {
   order: -1;
-  width: min(760px, 100%);
-  max-width: min(760px, 100%);
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   max-height: min(520px, calc(100dvh - 190px));
   overflow-y: auto;
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   padding: clamp(18px, 1.5vw, 26px);
   border: 1px solid #e2e4e8;
   border-radius: 15px;
