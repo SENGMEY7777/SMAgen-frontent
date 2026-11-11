@@ -1170,24 +1170,7 @@ const stopGeneration = async () => {
   })
 
   if (runningWorkflowMsg?.workflow) {
-    const idx = currentMessages.value.indexOf(runningWorkflowMsg)
-    const runId = String(runningWorkflowMsg.workflow.runId || '')
-
-    updateWorkflowMessage(idx, {
-      status: 'CANCELLED',
-      cancellationPending: false,
-      approval: null,
-      error: 'Workflow stopped by user.',
-    })
-
-    if (runId) {
-      stopWorkflowPolling(runId)
-      try {
-        await api.cancelWorkflow(runId)
-      } catch (err) {
-        console.warn('Backend workflow cancellation error:', err)
-      }
-    }
+    await cancelWorkflowRun(runningWorkflowMsg)
   }
 }
 
