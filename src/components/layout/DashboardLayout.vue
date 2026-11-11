@@ -283,28 +283,60 @@
 
       <!-- Fixed Sidebar Footer -->
       <div class="sidebar-footer">
-        <button
-          class="account-card"
-          type="button"
-          @click="router.push('/settings'); closeMenu()"
-          title="Account Settings"
-        >
-          <span class="avatar" :class="{ 'has-img': avatarSrc && !avatarError }">
-            <img
-              v-if="avatarSrc && !avatarError"
-              :src="avatarSrc"
-              :alt="auth.displayName"
-              class="avatar-img"
-              @error="handleAvatarError"
-            />
-            <span v-else>{{ auth.initials }}</span>
-          </span>
-          <span class="account-copy">
-            <span class="account-name">{{ auth.displayName }}</span>
-            <span class="account-email">{{ auth.user?.email }}</span>
-          </span>
-          <IconSettings :size="15" class="account-settings-icon" />
-        </button>
+        <div class="sidebar-footer-inner">
+          <button
+            class="account-card"
+            type="button"
+            @click="toggleAccountMenu"
+            :title="`${auth.displayName} (${auth.user?.email || 'Account'})`"
+            aria-label="Account menu"
+          >
+            <span class="avatar" :class="{ 'has-img': avatarSrc && !avatarError }">
+              <img
+                v-if="avatarSrc && !avatarError"
+                :src="avatarSrc"
+                :alt="auth.displayName"
+                class="avatar-img"
+                @error="handleAvatarError"
+              />
+              <span v-else>{{ auth.initials }}</span>
+            </span>
+            <span class="account-row-content">
+              <span class="account-name">{{ auth.displayName }}</span>
+              <span class="account-plan-sep">&middot;</span>
+              <span class="account-plan-badge">Free</span>
+              <IconChevronDown :size="13" class="account-chevron" :class="{ 'rotate-180': accountMenuOpen }" />
+            </span>
+          </button>
+
+          <button
+            class="sidebar-devices-btn"
+            type="button"
+            title="Desktop App"
+            aria-label="Desktop App"
+            @click.stop="openAccountSettings"
+          >
+            <IconDevices :size="18" />
+          </button>
+        </div>
+
+        <!-- Account Dropdown Menu (Opens Upward) -->
+        <div v-if="accountMenuOpen" class="account-dropdown-menu" @click.stop>
+          <div class="account-dropdown-header">
+            <span class="account-dropdown-name">{{ auth.displayName }}</span>
+            <span class="account-dropdown-email">{{ auth.user?.email }}</span>
+          </div>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item" type="button" @click.stop="openAccountSettings">
+            <IconSettings :size="15" />
+            <span class="dropdown-label">Settings</span>
+          </button>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger" type="button" @click.stop="handleAccountLogout">
+            <IconLogout :size="15" />
+            <span class="dropdown-label">Log out</span>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -388,6 +420,9 @@ import {
   IconSettings,
   IconMenu2,
   IconPlus,
+  IconChevronDown,
+  IconDevices,
+  IconLogout,
 } from '@tabler/icons-vue'
 import BrandMark from '@/components/branding/BrandMark.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -739,11 +774,34 @@ const toggleMenu = (id, event) => {
   activeMenuId.value = id
 }
 
+const accountMenuOpen = ref(false)
+
 const closeAllMenus = () => {
   activeMenuId.value = null
   activeProjectMenuId.value = null
+  accountMenuOpen.value = false
   menuOpenUpward.value = false
   projectMenuOpenUpward.value = false
+}
+
+const toggleAccountMenu = (event) => {
+  if (event) event.stopPropagation()
+  const next = !accountMenuOpen.value
+  closeAllMenus()
+  accountMenuOpen.value = next
+}
+
+const openAccountSettings = () => {
+  closeAllMenus()
+  closeMenu()
+  router.push('/settings')
+}
+
+const handleAccountLogout = async () => {
+  closeAllMenus()
+  closeMenu()
+  await auth.logout()
+  router.push('/auth')
 }
 
 const handlePin = (item) => {
@@ -1475,11 +1533,12 @@ const unassignedItems = computed(() => {
 }
 
 .sidebar-footer {
+  position: relative;
   flex-shrink: 0;
   margin-top: auto;
-  padding: 10px 12px 0 12px;
+  padding: 8px 10px 10px 10px;
   border-top: 1px solid #e5e7eb;
-  background: #fbfcfd;
+  background: #ffffff;
 }
 
 .topbar-chat-title {
