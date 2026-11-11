@@ -10,16 +10,8 @@
       class="stream-subactivity-text"
       :class="{
         'is-live': isWorkflowLive(workflow),
-        'is-clickable': canToggleWorkflowActivity(workflow),
-        'is-expanded': isWorkflowActivityExpanded(workflow),
       }"
-      :role="canToggleWorkflowActivity(workflow) ? 'button' : undefined"
-      :tabindex="canToggleWorkflowActivity(workflow) ? 0 : undefined"
-      :aria-expanded="canToggleWorkflowActivity(workflow) ? isWorkflowActivityExpanded(workflow) : undefined"
-      :aria-label="canToggleWorkflowActivity(workflow) ? `${isWorkflowActivityExpanded(workflow) ? 'Hide' : 'Show'} workflow activity` : undefined"
       aria-live="polite"
-      @click.stop="toggleWorkflowActivity(workflow, $event)"
-      @keydown="handleWorkflowActivityKeydown($event, workflow)"
     >
       <span class="stream-current-task-icon" aria-hidden="true">
         <IconWifiOff v-if="isConnectionRecovering(workflow)" :size="13" />
@@ -29,34 +21,6 @@
       <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
         <span>.</span><span>.</span><span>.</span>
       </span>
-      <IconChevronDown
-        v-if="canToggleWorkflowActivity(workflow)"
-        :size="13"
-        class="stream-current-task-chevron"
-        :class="{ 'rotate-180': isWorkflowActivityExpanded(workflow) }"
-        aria-hidden="true"
-      />
-    </div>
-
-    <div
-      v-if="isWorkflowActivityExpanded(workflow)"
-      class="stream-current-task-details"
-      aria-live="polite"
-    >
-      <div class="stream-current-task-details-head">
-        <strong>{{ getCurrentWorkflowTask(workflow) ? 'About this task' : 'About this workflow' }}</strong>
-        <span class="stream-current-task-status">
-          {{ getCurrentWorkflowTask(workflow) ? formatTaskStatus(getCurrentWorkflowTask(workflow)) : formatWorkflowStatus(workflow) }}
-        </span>
-      </div>
-      <div class="stream-current-task-title">
-        {{ getCurrentWorkflowTask(workflow)
-          ? getCurrentWorkflowTask(workflow).title || getCurrentWorkflowTask(workflow).instruction || 'Workflow task'
-          : workflow.goalPrompt || workflow.goal_prompt || workflow.goal || 'Preparing workflow' }}
-      </div>
-      <p v-if="getCurrentWorkflowTask(workflow)?.instruction" class="stream-current-task-instruction">
-        {{ getCurrentWorkflowTask(workflow).instruction }}
-      </p>
     </div>
 
     <div v-if="workflow.tasks?.length" class="stream-steps-preview">
