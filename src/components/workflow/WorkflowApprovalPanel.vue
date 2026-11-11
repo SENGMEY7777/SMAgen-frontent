@@ -54,8 +54,9 @@
             Skip
           </button>
           <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
+            <IconLoader2 v-if="decisionPending" :size="14" class="spin-icon" />
             <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
-            <IconCornerDownLeft :size="13" />
+            <IconCornerDownLeft v-if="!decisionPending" :size="13" />
           </button>
         </div>
       </div>
@@ -76,7 +77,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { IconTerminal2, IconCornerDownLeft } from '@tabler/icons-vue'
+import { IconLoader2, IconTerminal2, IconCornerDownLeft } from '@tabler/icons-vue'
 import { highlightCode } from '@/utils/markdown'
 
 const props = defineProps({
@@ -437,6 +438,19 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 .workflow-skip-btn:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workflow-card-error {
