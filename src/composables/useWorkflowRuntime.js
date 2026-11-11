@@ -607,6 +607,9 @@ export function useWorkflowRuntime({
 
     if (runId) stopWorkflowPolling(runId)
 
+    const startTime = Date.now()
+    const STANDARD_DELAY_MS = 600
+
     try {
       if (isRealApproval) {
         try {
@@ -637,6 +640,12 @@ export function useWorkflowRuntime({
         } catch (resumeError) {
           if (resumeError?.status !== 409) throw resumeError
         }
+      }
+
+      // Enforce standard smooth delay (minimum 600ms) for clear visual confirmation
+      const elapsed = Date.now() - startTime
+      if (elapsed < STANDARD_DELAY_MS) {
+        await new Promise((resolve) => window.setTimeout(resolve, STANDARD_DELAY_MS - elapsed))
       }
 
       updateWorkflowMessage(index, {
