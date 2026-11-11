@@ -197,7 +197,7 @@
           </div>
 
           <!-- Bottom spacer ensuring the last lines of messages can be scrolled well above composer -->
-          <div class="chat-bottom-spacer" style="height: 120px; min-height: 120px; flex-shrink: 0;"></div>
+          <div class="chat-bottom-spacer" style="height: 160px; min-height: 160px; flex-shrink: 0;"></div>
         </div>
       </div>
 
@@ -257,6 +257,30 @@
                 <IconX :size="11" />
               </button>
             </div>
+          </div>
+
+          <!-- Workflow Progress Bar on Top Margin-Left of Input Goal -->
+          <div v-if="hasActiveWorkflowRun && activeWorkflowProgress" class="composer-progress-header">
+            <div class="composer-progress-meta">
+              <span class="composer-progress-label">
+                <span class="composer-progress-spinner"></span>
+                {{ activeWorkflowProgress.label }}
+              </span>
+              <span class="composer-progress-pct">{{ activeWorkflowProgress.percent }}%</span>
+            </div>
+            <div class="composer-progress-track">
+              <div
+                class="composer-progress-bar"
+                :style="{ width: `${activeWorkflowProgress.percent}%` }"
+              ></div>
+            </div>
+          </div>
+
+          <div v-else-if="activeMode === 'workflow' && !hasActiveWorkflowRun" class="composer-mode-badge-row">
+            <span class="composer-workflow-pill">
+              <IconBulb :size="12" />
+              <span>Workflow Goal</span>
+            </span>
           </div>
 
           <div class="composer-main-row">
@@ -421,6 +445,40 @@ const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse(
   message?.workflow?.runId && isWorkflowRunning(message.workflow)
 )) || null)
 const hasActiveWorkflowRun = computed(() => Boolean(activeWorkflowMessage.value))
+
+const activeWorkflowProgress = computed(() => {
+  const workflow = activeWorkflowMessage.value?.workflow
+  if (!workflow) return null
+
+  const tasks = Array.isArray(workflow.tasks) ? workflow.tasks : []
+  const total = tasks.length
+  const completed = tasks.filter((t) => {
+    const s = String(t?.status || '').toUpperCase()
+    return ['COMPLETED', 'SUCCESS', 'DONE'].includes(s)
+  }).length
+
+  let percent = 0
+  if (total > 0) {
+    percent = Math.min(100, Math.round((completed / total) * 100))
+  } else if (workflow.status === 'RUNNING' || workflow.status === 'IN_PROGRESS') {
+    percent = 20
+  }
+
+  let label = 'Running workflow…'
+  if (workflow.approval) {
+    label = 'Paused for approval'
+  } else if (total > 0) {
+    label = `${completed} of ${total} steps completed`
+  }
+
+  return {
+    percent,
+    completed,
+    total,
+    label,
+    status: String(workflow.status || '').toUpperCase(),
+  }
+})
 
 const workflowApprovalOptions = (tool = 'this action') => [
   { number: '1', value: 'allow_once', label: 'Yes, allow this time' },
@@ -763,14 +821,12 @@ const getSavedScrollState = () => {
 }
 
 const handleScroll = () => {
-  if (!chatThreadRef.value) return
+  if (!chatThreadRef.value || isProgrammaticScrolling || isRestoringScroll) return
   const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
   const distanceToBottom = scrollHeight - scrollTop - clientHeight
-  const isUp = distanceToBottom > 60
+  const isUp = distanceToBottom > 40
   showScrollButton.value = isUp
   userScrolledUp.value = isUp
-
-  if (isProgrammaticScrolling || isRestoringScroll) return
 
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
   scrollSaveTimer = setTimeout(() => {
@@ -856,11 +912,11 @@ const scrollToBottom = async (behavior = 'auto') => {
       isProgrammaticScrolling = false
       if (chatThreadRef.value) {
         const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
-        const isUp = scrollHeight - scrollTop - clientHeight > 60
+        const isUp = scrollHeight - scrollTop - clientHeight > 40
         showScrollButton.value = isUp
         userScrolledUp.value = isUp
       }
-    }, behavior === 'smooth' ? 350 : 60)
+    }, behavior === 'smooth' ? 600 : 80)
   }
 }
 
