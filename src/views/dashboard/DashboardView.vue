@@ -201,18 +201,18 @@
         </div>
       </div>
 
-      <div class="composer-container">
-        <!-- Floating scroll down button -->
-        <button
-          v-if="showScrollButton"
-          class="scroll-down-btn"
-          type="button"
-          aria-label="Scroll to bottom"
-          @click="scrollToBottom('smooth')"
-        >
-          <IconChevronDown :size="16" />
-        </button>
+      <!-- Floating scroll down button -->
+      <button
+        v-if="showScrollButton"
+        class="scroll-down-btn"
+        type="button"
+        aria-label="Scroll to bottom"
+        @click="scrollToBottom('smooth')"
+      >
+        <IconChevronDown :size="16" />
+      </button>
 
+      <div class="composer-container">
         <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
 
         <div class="composer" :class="{ 'workflow-composer': activeMode === 'workflow' }">
@@ -257,30 +257,6 @@
                 <IconX :size="11" />
               </button>
             </div>
-          </div>
-
-          <!-- Workflow Progress Bar on Top Margin-Left of Input Goal -->
-          <div v-if="hasActiveWorkflowRun && activeWorkflowProgress" class="composer-progress-header">
-            <div class="composer-progress-meta">
-              <span class="composer-progress-label">
-                <span class="composer-progress-spinner"></span>
-                {{ activeWorkflowProgress.label }}
-              </span>
-              <span class="composer-progress-pct">{{ activeWorkflowProgress.percent }}%</span>
-            </div>
-            <div class="composer-progress-track">
-              <div
-                class="composer-progress-bar"
-                :style="{ width: `${activeWorkflowProgress.percent}%` }"
-              ></div>
-            </div>
-          </div>
-
-          <div v-else-if="activeMode === 'workflow' && !hasActiveWorkflowRun" class="composer-mode-badge-row">
-            <span class="composer-workflow-pill">
-              <IconBulb :size="12" />
-              <span>Workflow Goal</span>
-            </span>
           </div>
 
           <div class="composer-main-row">
@@ -445,40 +421,6 @@ const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse(
   message?.workflow?.runId && isWorkflowRunning(message.workflow)
 )) || null)
 const hasActiveWorkflowRun = computed(() => Boolean(activeWorkflowMessage.value))
-
-const activeWorkflowProgress = computed(() => {
-  const workflow = activeWorkflowMessage.value?.workflow
-  if (!workflow) return null
-
-  const tasks = Array.isArray(workflow.tasks) ? workflow.tasks : []
-  const total = tasks.length
-  const completed = tasks.filter((t) => {
-    const s = String(t?.status || '').toUpperCase()
-    return ['COMPLETED', 'SUCCESS', 'DONE'].includes(s)
-  }).length
-
-  let percent = 0
-  if (total > 0) {
-    percent = Math.min(100, Math.round((completed / total) * 100))
-  } else if (workflow.status === 'RUNNING' || workflow.status === 'IN_PROGRESS') {
-    percent = 20
-  }
-
-  let label = 'Running workflow…'
-  if (workflow.approval) {
-    label = 'Paused for approval'
-  } else if (total > 0) {
-    label = `${completed} of ${total} steps completed`
-  }
-
-  return {
-    percent,
-    completed,
-    total,
-    label,
-    status: String(workflow.status || '').toUpperCase(),
-  }
-})
 
 const workflowApprovalOptions = (tool = 'this action') => [
   { number: '1', value: 'allow_once', label: 'Yes, allow this time' },
@@ -1209,21 +1151,43 @@ const cancelEditUserMessage = () => {
 let activeAbortController = null
 let workflowStopRequested = false
 
-const stopGeneration = () => {
-  if (activeWorkflowMessage.value?.workflow?.runId) {
-    cancelWorkflowRun(activeWorkflowMessage.value)
-    return
-  }
-
-  if (activeMode.value === 'workflow' && loading.value) {
-    // The run ID is created by the backend after planning. Keep the request
-    // alive long enough to receive that ID, then cancel the actual run.
-    workflowStopRequested = true
-    return
-  }
+const stopGeneration = async () => {
+  loading.value = false
+  workflowStopRequested = true
 
   if (activeAbortController) {
-    activeAbortController.abort()
+    try {
+      activeAbortController.abort()
+    } catch {}
+    activeAbortController = null
+  }
+
+  // Find any active/running workflow message
+  const runningWorkflowMsg = [...currentMessages.value].reverse().find((m) => {
+    if (!m?.workflow) return false
+    const s = String(m.workflow.status || '').toUpperCase()
+    return !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED'].includes(s)
+  })
+
+  if (runningWorkflowMsg?.workflow) {
+    const idx = currentMessages.value.indexOf(runningWorkflowMsg)
+    const runId = String(runningWorkflowMsg.workflow.runId || '')
+
+    updateWorkflowMessage(idx, {
+      status: 'CANCELLED',
+      cancellationPending: false,
+      approval: null,
+      error: 'Workflow stopped by user.',
+    })
+
+    if (runId) {
+      stopWorkflowPolling(runId)
+      try {
+        await api.cancelWorkflow(runId)
+      } catch (err) {
+        console.warn('Backend workflow cancellation error:', err)
+      }
+    }
   }
 }
 
@@ -1311,26 +1275,54 @@ const addWorkflowPlaceholder = (goalPrompt) => {
 
 const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessages = [], images = []) => {
   workflowStopRequested = false
+  if (activeAbortController) {
+    activeAbortController.abort()
+  }
+  activeAbortController = new AbortController()
+  const signal = activeAbortController.signal
+
   const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
-  const response = await api.runWorkflow({
-    goalPrompt,
-    ...(localDestination ? { localDestination } : {}),
-    ...(images && images.length > 0 ? { images } : {}),
-  })
+  let response = null
+  try {
+    response = await api.runWorkflow({
+      goalPrompt,
+      ...(localDestination ? { localDestination } : {}),
+      ...(images && images.length > 0 ? { images } : {}),
+    }, { signal })
+  } catch (err) {
+    if (err.name === 'AbortError' || signal.aborted || workflowStopRequested) {
+      updateWorkflowMessage(workflowMessageIndex, {
+        status: 'CANCELLED',
+        cancellationPending: false,
+        error: 'Workflow stopped by user.',
+      })
+      return
+    }
+    throw err
+  }
+
   const runId = getWorkflowRunId(response)
   if (!runId) throw new ApiError('The workflow started without a run ID.')
+
+  if (workflowStopRequested || signal.aborted) {
+    workflowStopRequested = false
+    updateWorkflowMessage(workflowMessageIndex, {
+      runId: String(runId),
+      status: 'CANCELLED',
+      cancellationPending: false,
+      error: 'Workflow stopped by user.',
+    })
+    try {
+      await api.cancelWorkflow(String(runId))
+    } catch {}
+    return
+  }
 
   updateWorkflowMessage(workflowMessageIndex, {
     runId: String(runId),
     status: 'RUNNING',
     error: '',
   })
-
-  if (workflowStopRequested) {
-    workflowStopRequested = false
-    await cancelWorkflowRun(currentMessages.value[workflowMessageIndex])
-    return
-  }
 
   startWorkflowPolling(workflowMessageIndex, String(runId))
 }
