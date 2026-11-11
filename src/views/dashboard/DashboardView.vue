@@ -197,7 +197,7 @@
           </div>
 
           <!-- Bottom spacer ensuring the last lines of messages can be scrolled well above composer -->
-          <div class="chat-bottom-spacer" style="height: 260px; min-height: 260px; flex-shrink: 0;"></div>
+          <div class="chat-bottom-spacer" style="height: 120px; min-height: 120px; flex-shrink: 0;"></div>
         </div>
       </div>
 
