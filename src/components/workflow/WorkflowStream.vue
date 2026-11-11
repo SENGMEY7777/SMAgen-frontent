@@ -1698,7 +1698,7 @@ const highlightCode = (value) => {
   width: 100%;
   max-width: 100%;
   background: transparent;
-  margin: 0;
+  margin: 0 0 24px;
   padding: 0;
 }
 
@@ -2249,7 +2249,7 @@ const highlightCode = (value) => {
 
 .workflow-completion-response {
   width: 100%;
-  margin: 16px 0 4px;
+  margin: 16px 0 28px;
   padding: 0;
   color: #18181b;
   font-size: 16px;
