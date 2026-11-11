@@ -818,15 +818,23 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding-bottom: 200px;
+  padding-bottom: 260px;
 }
 
 .chat-thread-inner {
   width: min(920px, 100%);
   margin: 0 auto;
-  padding: 24px 20px 40px;
+  padding: 24px 20px 60px;
   display: flex;
   flex-direction: column;
+}
+
+.chat-bottom-spacer {
+  height: 260px;
+  min-height: 260px;
+  flex-shrink: 0;
+  width: 100%;
+  pointer-events: none;
 }
 
 .chat-thread::-webkit-scrollbar {
