@@ -386,31 +386,28 @@ export function useWorkflowRuntime({
     const index = currentMessages.value.indexOf(message)
     const workflow = index === -1 ? null : currentMessages.value[index]?.workflow
     const runId = String(workflow?.runId || '')
-    if (!workflow || !runId || workflow.cancellationPending) return
+    if (!workflow) return
+
+    if (runId) {
+      stopWorkflowPolling(runId)
+    }
+
+    const stoppedTasks = reconcileTerminalTasks(workflow.tasks || [], 'CANCELLED', 'Workflow stopped by user.')
 
     updateWorkflowMessage(index, {
-      status: 'CANCELLING',
-      cancellationPending: true,
-      error: '',
+      status: 'CANCELLED',
+      cancellationPending: false,
+      approval: null,
+      tasks: stoppedTasks,
+      error: 'Workflow stopped by user.',
     })
 
-    try {
-      await api.cancelWorkflow(runId)
-      stopWorkflowPolling(runId)
-      updateWorkflowMessage(index, {
-        status: 'CANCELLED',
-        cancellationPending: false,
-        approval: null,
-        error: '',
-      })
-      await refreshWorkflowMessage(index, runId)
-    } catch (error) {
-      updateWorkflowMessage(index, {
-        status: workflow.status,
-        cancellationPending: false,
-        error: error instanceof ApiError ? error.message : 'Unable to stop this workflow.',
-      })
-      startWorkflowPolling(index, runId)
+    if (runId) {
+      try {
+        await api.cancelWorkflow(runId)
+      } catch (error) {
+        console.warn('Backend workflow cancellation warning:', error)
+      }
     }
   }
 
@@ -474,8 +471,9 @@ export function useWorkflowRuntime({
       const workflowError = workflowErrorValue
         ? stringifyWorkflowValue(workflowErrorValue)
         : (String(workflowStatus || '').toUpperCase() === 'CANCELLED' ? 'Workflow cancelled by user' : '')
-      const awaitingTask = tasks.find((task) => getWorkflowTaskStatus(task) === 'AWAITING_APPROVAL')
-      const awaitingApproval = String(workflowStatus || '').toUpperCase() === 'AWAITING_APPROVAL' || Boolean(awaitingTask)
+      const isTerminal = isTerminalWorkflowStatus(workflowStatus) || isTerminalWorkflowStatus(currentWorkflow.status) || currentWorkflow.status === 'CANCELLED'
+      const awaitingTask = isTerminal ? null : tasks.find((task) => getWorkflowTaskStatus(task) === 'AWAITING_APPROVAL')
+      const awaitingApproval = !isTerminal && (String(workflowStatus || '').toUpperCase() === 'AWAITING_APPROVAL' || Boolean(awaitingTask))
       const existingApproval = currentWorkflow.approval || null
       const connectionLost = (typeof navigator !== 'undefined' && navigator.onLine === false)
         || Boolean(workflowSocket && !workflowSocket.connected)
