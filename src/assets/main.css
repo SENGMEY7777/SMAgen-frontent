@@ -818,20 +818,20 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding-bottom: 260px;
+  padding-bottom: 0;
 }
 
 .chat-thread-inner {
   width: min(920px, 100%);
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: 24px 20px 20px;
   display: flex;
   flex-direction: column;
 }
 
 .chat-bottom-spacer {
-  height: 260px;
-  min-height: 260px;
+  height: 120px;
+  min-height: 120px;
   flex-shrink: 0;
   width: 100%;
   pointer-events: none;
