@@ -171,10 +171,12 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const deleteSession = (sessionId) => {
-    const idx = sessions.value.findIndex((s) => s.id === sessionId)
+    const strId = String(sessionId || '')
+    if (!strId) return
+    const idx = sessions.value.findIndex((s) => String(s.id) === strId)
     if (idx !== -1) {
       sessions.value.splice(idx, 1)
-      if (activeSessionId.value === sessionId) {
+      if (String(activeSessionId.value) === strId) {
         activeSessionId.value = null
       }
     }
