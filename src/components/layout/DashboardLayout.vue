@@ -404,13 +404,13 @@
           <button class="mobile-menu" type="button" aria-label="Open menu" @click="mobileOpen = !mobileOpen">
             <IconMenu2 :size="18" />
           </button>
-          <!-- <span
+          <span
             v-if="route.name === 'chat' && chatStore.activeSession?.title"
             class="topbar-chat-title"
             :title="chatStore.activeSession.title"
           >
             {{ chatStore.activeSession.title }}
-          </span> -->
+          </span>
         </div>
         <div class="top-actions">
           <button class="new-chat-btn" type="button" @click="newChat">
@@ -451,7 +451,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   IconSearch,
@@ -931,6 +931,14 @@ const hideAndRemoveWorkflowRun = async (rawRunId) => {
     } catch {}
   }
 
+  // Check if the run is still active in either loadedRuns or props.recentItems and cancel best-effort first
+  const allKnownRuns = [...(props.recentItems || []), ...(loadedRuns.value || [])]
+  const activeStatuses = new Set(['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'])
+  const isActiveRun = allKnownRuns.some((r) => {
+    const id = getWorkflowRunId(r) || r?.id
+    return String(id) === runId && activeStatuses.has(String(r?.status || '').toUpperCase())
+  })
+
   // Remove from loadedRuns immediately so UI reacts instantly
   loadedRuns.value = loadedRuns.value.filter((r) => {
     const id = getWorkflowRunId(r) || r?.id
@@ -940,6 +948,12 @@ const hideAndRemoveWorkflowRun = async (rawRunId) => {
   // Broadcast event so DashboardView, HistoryView, and other components update immediately
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('workflow-runs-updated', { detail: { deletedRunId: runId } }))
+  }
+
+  if (isActiveRun) {
+    try {
+      await api.cancelWorkflow(runId).catch(() => {})
+    } catch {}
   }
 
   try {
@@ -961,10 +975,12 @@ const handleRemoveFromProject = (item, projectId) => {
 }
 
 const handleDelete = async (item) => {
-  const itemId = String(item.id)
-  const itemTitleNorm = normalizeTitle(item.title)
+  closeAllMenus()
+  if (!item) return
 
-  // 1. Remove from all projects
+  const itemId = String(item.id)
+
+  // 1. Remove item from all projects
   projectsStore.unassignItemFromAllProjects?.(item.id)
   projectsStore.unassignItemFromAllProjects?.(itemId)
 
@@ -985,13 +1001,12 @@ const handleDelete = async (item) => {
       })
     }
 
-    // Also match any workflow run with identical title or pointing to this session
+    // Also match any workflow run with identical/truncated title or pointing to this session
     const allRuns = [...(props.recentItems || []), ...(loadedRuns.value || [])]
     allRuns.forEach((r) => {
       const rId = String(getWorkflowRunId(r) || r?.id || '')
       if (!rId) return
-      const rTitleNorm = normalizeTitle(r.goal_prompt || r.title || r.name)
-      if (rTitleNorm && itemTitleNorm && rTitleNorm === itemTitleNorm) {
+      if (matchesNormalizedTitle(r.goal_prompt || r.title || r.name, item.title)) {
         linkedRunIds.add(rId)
       }
       if (r.chatSessionId && String(r.chatSessionId) === itemId) {
@@ -1003,8 +1018,10 @@ const handleDelete = async (item) => {
     chatStore.deleteSession(item.id)
     chatStore.deleteSession(itemId)
 
-    // Hide/delete linked workflow runs
+    // Unassign and hide/delete linked workflow runs
     for (const runId of linkedRunIds) {
+      projectsStore.unassignItemFromAllProjects?.(runId)
+      projectsStore.unassignItemFromAllProjects?.(`chat_wf_${runId}`)
       await hideAndRemoveWorkflowRun(runId)
     }
 
@@ -1013,6 +1030,7 @@ const handleDelete = async (item) => {
       if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
+    projectsStore.unassignItemFromAllProjects?.(`chat_wf_${itemId}`)
     await hideAndRemoveWorkflowRun(itemId)
 
     // Also remove any linked chat session
@@ -1022,12 +1040,12 @@ const handleDelete = async (item) => {
         const wfRunId = m.workflow?.runId || m.workflow?.run_id || m.workflowRunId || m.runId
         return String(wfRunId) === itemId
       })) return true
-      const sTitleNorm = normalizeTitle(s.title)
-      if (sTitleNorm && itemTitleNorm && sTitleNorm === itemTitleNorm) return true
+      if (matchesNormalizedTitle(s.title, item.title)) return true
       return false
     })
 
     linkedSessions.forEach((s) => {
+      projectsStore.unassignItemFromAllProjects?.(s.id)
       const isCurrentActive = String(chatStore.activeSessionId) === String(s.id)
       chatStore.deleteSession(s.id)
       if (isCurrentActive) {
@@ -1036,17 +1054,27 @@ const handleDelete = async (item) => {
       }
     })
   }
-
-  closeAllMenus()
 }
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('click', closeAllMenus)
+const onWorkflowRunsUpdated = (event) => {
+  const deletedId = event?.detail?.deletedRunId
+  hiddenWorkflowIds.value = readHiddenWorkflowIds()
+  if (deletedId) {
+    const delStr = String(deletedId)
+    if (!hiddenWorkflowIds.value.some((h) => String(h) === delStr)) {
+      hiddenWorkflowIds.value = [...hiddenWorkflowIds.value, delStr]
+    }
+    loadedRuns.value = loadedRuns.value.filter((r) => {
+      const id = getWorkflowRunId(r) || r?.id
+      return String(id) !== delStr
+    })
+  }
 }
 
 const loadedRuns = ref([])
 
 const loadAllRuns = async () => {
+  hiddenWorkflowIds.value = readHiddenWorkflowIds()
   try {
     const res = await api.listRuns()
     if (res?.data && Array.isArray(res.data)) {
@@ -1062,6 +1090,17 @@ const loadAllRuns = async () => {
 
 onMounted(() => {
   loadAllRuns()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('click', closeAllMenus)
+    window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+  }
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('click', closeAllMenus)
+    window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+  }
 })
 
 // Refresh runs when route changes to make sure newly launched workflows appear in sidebar immediately
@@ -1115,19 +1154,21 @@ const combinedRecentItems = computed(() => {
   })
   return merged
 })
-    updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
-  }))
-
-  const merged = [...chatItems, ...workflowItems]
-  merged.sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1
-    if (!a.pinned && b.pinned) return 1
-    return b.updatedAt - a.updatedAt
-  })
-  return merged
-})
 
 const normalizeTitle = (title) => String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+const matchesNormalizedTitle = (a, b) => {
+  const normA = normalizeTitle(a)
+  const normB = normalizeTitle(b)
+  if (!normA || !normB) return false
+  if (normA === normB) return true
+  const stripEllipsis = (s) => s.replace(/(?:\.\.\.|…)+$/, '').trim()
+  const baseA = stripEllipsis(normA)
+  const baseB = stripEllipsis(normB)
+  if (normA !== baseA && baseA.length >= 16 && normB.startsWith(baseA)) return true
+  if (normB !== baseB && baseB.length >= 16 && normA.startsWith(baseB)) return true
+  return false
+}
 
 const deduplicateSidebarItems = (items) => {
   if (!Array.isArray(items)) return []
@@ -1137,14 +1178,13 @@ const deduplicateSidebarItems = (items) => {
   const existingChatIds = new Set(chatItems.map((c) => String(c.id)))
   const existingChatTitles = new Set(chatItems.map((c) => normalizeTitle(c.title)).filter(Boolean))
 
-  // 2. Omit any workflow run that is already represented by a chat session (by linked chatSessionId or identical title)
+  // 2. Omit any workflow run that is already represented by a chat session (by linked chatSessionId or matching title)
   const nonRedundant = items.filter((item) => {
     if (item.type === 'workflow') {
       if (item.chatSessionId && existingChatIds.has(String(item.chatSessionId))) {
         return false
       }
-      const norm = normalizeTitle(item.title)
-      if (norm && existingChatTitles.has(norm)) {
+      if (item.title && chatItems.some((c) => matchesNormalizedTitle(c.title, item.title))) {
         return false
       }
     }
