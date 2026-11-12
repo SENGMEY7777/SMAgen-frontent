@@ -1486,7 +1486,9 @@ const loadRuns = async () => {
       })()
     )
     const rawRuns = response?.data || []
-    runs.value = Array.isArray(rawRuns) ? rawRuns.filter((r) => !hiddenSet.has(String(r?.id))) : []
+    runs.value = Array.isArray(rawRuns)
+      ? rawRuns.filter((r) => !hiddenSet.has(String(getWorkflowRunId(r) || r?.id)))
+      : []
   } catch {
     runs.value = []
   }
