@@ -1474,7 +1474,19 @@ const messageTimeLabel = (value) => {
 const loadRuns = async () => {
   try {
     const response = await api.listRuns()
-    runs.value = response?.data || []
+    const hiddenSet = new Set(
+      (() => {
+        try {
+          const raw = localStorage.getItem('hidden_workflow_runs')
+          const parsed = raw ? JSON.parse(raw) : []
+          return Array.isArray(parsed) ? parsed.map(String) : []
+        } catch {
+          return []
+        }
+      })()
+    )
+    const rawRuns = response?.data || []
+    runs.value = Array.isArray(rawRuns) ? rawRuns.filter((r) => !hiddenSet.has(String(r?.id))) : []
   } catch {
     runs.value = []
   }
@@ -1595,8 +1607,16 @@ const startPrompt = (prompt) => {
   autoResizeTextarea()
 }
 
+const onWorkflowRunsUpdated = (event) => {
+  const deletedId = event?.detail?.deletedRunId
+  if (deletedId) {
+    runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== String(deletedId))
+  }
+}
+
 onMounted(() => {
   loadRuns()
+  window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
   currentTime.value = new Date()
   timeInterval = window.setInterval(() => {
     currentTime.value = new Date()
@@ -1612,6 +1632,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
   if (timeInterval) {
     window.clearInterval(timeInterval)
     timeInterval = null
