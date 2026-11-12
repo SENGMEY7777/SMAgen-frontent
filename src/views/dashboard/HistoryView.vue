@@ -48,6 +48,15 @@
             <RouterLink class="secondary-btn sm" :to="`/runs/${run.id}`">
               View run <IconArrowRight :size="12" />
             </RouterLink>
+            <button
+              class="history-delete-btn"
+              type="button"
+              title="Delete run"
+              aria-label="Delete run"
+              @click="handleDeleteRun(run.id)"
+            >
+              <IconTrash :size="14" />
+            </button>
           </div>
         </article>
       </div>
@@ -101,7 +110,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import {
@@ -109,11 +118,14 @@ import {
   IconArrowRight,
   IconChevronLeft,
   IconChevronRight,
+  IconTrash,
 } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate, formatTokens } from '@/utils/formatters'
+import { useChatStore } from '@/stores/chat'
 
+const chatStore = useChatStore()
 const runs = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
@@ -178,7 +190,19 @@ const load = async () => {
   loading.value = true
   try {
     const response = await api.listRuns()
-    runs.value = response?.data || []
+    const hiddenSet = new Set(
+      (() => {
+        try {
+          const raw = localStorage.getItem('hidden_workflow_runs')
+          const parsed = raw ? JSON.parse(raw) : []
+          return Array.isArray(parsed) ? parsed.map(String) : []
+        } catch {
+          return []
+        }
+      })()
+    )
+    const rawRuns = response?.data || []
+    runs.value = Array.isArray(rawRuns) ? rawRuns.filter((r) => !hiddenSet.has(String(r?.id))) : []
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load run history.'
   } finally {
@@ -186,7 +210,51 @@ const load = async () => {
   }
 }
 
-onMounted(load)
+const handleDeleteRun = async (runId) => {
+  const idStr = String(runId)
+  runs.value = runs.value.filter((r) => String(r.id) !== idStr)
+
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const list = raw ? JSON.parse(raw) : []
+    const updated = Array.from(new Set([...list.map(String), idStr]))
+    localStorage.setItem('hidden_workflow_runs', JSON.stringify(updated))
+  } catch {}
+
+  // Broadcast event so DashboardLayout and DashboardView remove it immediately
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('workflow-runs-updated', { detail: { deletedRunId: idStr } }))
+  }
+
+  // Remove linked chat session if present
+  const linked = chatStore.sessions.filter((s) =>
+    String(s.id) === `chat_wf_${idStr}` ||
+    s.messages?.some((m) => String(m.workflow?.runId) === idStr)
+  )
+  linked.forEach((s) => chatStore.deleteSession(s.id))
+
+  try {
+    await api.deleteRun(idStr)
+  } catch (err) {
+    console.warn('Backend deleteRun error:', err)
+  }
+}
+
+const onWorkflowRunsUpdated = (event) => {
+  const deletedId = event?.detail?.deletedRunId
+  if (deletedId) {
+    runs.value = runs.value.filter((r) => String(r.id) !== String(deletedId))
+  }
+}
+
+onMounted(() => {
+  load()
+  window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
 </script>
 
 <style scoped>
@@ -394,5 +462,23 @@ onMounted(load)
   .pagination-controls {
     justify-content: space-between;
   }
+}
+.history-delete-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.history-delete-btn:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
 }
 </style>
