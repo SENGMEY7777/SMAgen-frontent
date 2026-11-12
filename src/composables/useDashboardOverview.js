@@ -2,6 +2,17 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, ApiError } from '@/services/api'
 import { createSocketClient } from '@/services/socket'
 import { useChatStore } from '@/stores/chat'
+import { getWorkflowRunId } from '@/utils/workflow'
+
+const getHiddenRunIds = () => {
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
 
 const collectionFrom = (response, keys = []) => {
   const payload = response?.data ?? response
@@ -69,7 +80,10 @@ export function useDashboardOverview() {
         api.listApprovals().catch(() => ({ data: [] })),
       ])
 
-      runs.value = collectionFrom(runsRes, ['runs', 'items'])
+      const hiddenSet = new Set(getHiddenRunIds())
+      runs.value = collectionFrom(runsRes, ['runs', 'items']).filter(
+        (r) => !hiddenSet.has(String(getWorkflowRunId(r) || r?.id))
+      )
       approvals.value = collectionFrom(approvalsRes, ['approvals', 'items'])
     } catch (error) {
       if (!silent) {
@@ -89,8 +103,17 @@ export function useDashboardOverview() {
   let timer = null
   let socket = null
 
+  const onWorkflowRunsUpdated = (event) => {
+    const deletedId = event?.detail?.deletedRunId
+    if (deletedId) {
+      const delStr = String(deletedId)
+      runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== delStr)
+    }
+  }
+
   onMounted(() => {
     loadData()
+    window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
 
     timer = window.setInterval(() => {
       loadData(true)
@@ -121,6 +144,7 @@ export function useDashboardOverview() {
   })
 
   onBeforeUnmount(() => {
+    window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
     if (timer) {
       window.clearInterval(timer)
       timer = null
