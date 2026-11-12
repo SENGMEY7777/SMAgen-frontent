@@ -40,6 +40,7 @@
                   v-if="message.workflow"
                   :workflow="message.workflow"
                   :message-index="index"
+                  :timer-tick="timerTick"
                   :approval-options="workflowApprovalOptions"
                   :get-elapsed-text="getWorkflowElapsedText"
                   :get-plan-text="getWorkflowPlanText"
@@ -368,6 +369,7 @@ import {
   getWorkflowRunId,
   getWorkflowTaskStatus,
   isWorkflowRunning,
+  parseWorkflowTimestamp,
   stringifyWorkflowValue,
 } from '@/utils/workflow'
 
@@ -508,10 +510,63 @@ const getWorkflowSteps = (workflow) => {
   return []
 }
 
+const workflowFallbackStartedAtByRun = new Map()
+const workflowFallbackStartedAtByObj = new WeakMap()
+const workflowFallbackFinishedAtByRun = new Map()
+const workflowFallbackFinishedAtByObj = new WeakMap()
+
+const resolveWorkflowStartMs = (workflow) => {
+  const explicit = parseWorkflowTimestamp(
+    workflow?.startedAt
+    ?? workflow?.started_at
+    ?? workflow?.createdAt
+    ?? workflow?.created_at,
+  )
+  if (explicit) return explicit
+
+  if (workflow?.runId) {
+    const runKey = String(workflow.runId)
+    if (!workflowFallbackStartedAtByRun.has(runKey)) {
+      workflowFallbackStartedAtByRun.set(runKey, Date.now())
+    }
+    return workflowFallbackStartedAtByRun.get(runKey)
+  }
+
+  if (workflow && typeof workflow === 'object') {
+    if (!workflowFallbackStartedAtByObj.has(workflow)) {
+      workflowFallbackStartedAtByObj.set(workflow, Date.now())
+    }
+    return workflowFallbackStartedAtByObj.get(workflow)
+  }
+
+  return Date.now()
+}
+
+const resolveWorkflowFinishMs = (workflow) => {
+  const explicit = parseWorkflowTimestamp(workflow?.completedAt ?? workflow?.completed_at)
+  if (explicit) return explicit
+
+  if (workflow?.runId) {
+    const runKey = String(workflow.runId)
+    if (!workflowFallbackFinishedAtByRun.has(runKey)) {
+      workflowFallbackFinishedAtByRun.set(runKey, Date.now())
+    }
+    return workflowFallbackFinishedAtByRun.get(runKey)
+  }
+
+  if (workflow && typeof workflow === 'object') {
+    if (!workflowFallbackFinishedAtByObj.has(workflow)) {
+      workflowFallbackFinishedAtByObj.set(workflow, Date.now())
+    }
+    return workflowFallbackFinishedAtByObj.get(workflow)
+  }
+
+  return Date.now()
+}
+
 const getWorkflowElapsedText = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
 
-  // If time was locked upon completion or termination, permanently return that stopped time!
   if (workflow?.finalSeconds) {
     if (status === 'COMPLETED' || status === 'SUCCESS') {
       return `Completed in ${workflow.finalSeconds}s`
@@ -519,35 +574,32 @@ const getWorkflowElapsedText = (workflow) => {
     return `Stopped after ${workflow.finalSeconds}s`
   }
 
-  // If status is completed or stopped, compute and freeze finalSeconds right now so it never changes
   if (status === 'COMPLETED' || status === 'SUCCESS') {
-    const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
-    const finished = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
+    const started = resolveWorkflowStartMs(workflow)
+    const finished = resolveWorkflowFinishMs(workflow)
     const sec = started ? Math.max(1, Math.round((finished - started) / 1000)) : (workflow?.elapsedSeconds || 1)
-    workflow.finalSeconds = sec
     return `Completed in ${sec}s`
   }
 
-  if (status === 'FAILED' || status === 'CANCELLED') {
+  if (['FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(status)) {
     // A rejected start request has no run to time. Do not show a misleading
     // "Stopped after 1s" label when the API rejected the workflow immediately.
     if (!workflow?.runId && workflow?.error) {
       return 'Unable to start workflow'
     }
-    const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
-    const finished = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
+    const started = resolveWorkflowStartMs(workflow)
+    const finished = resolveWorkflowFinishMs(workflow)
     const sec = started ? Math.max(1, Math.round((finished - started) / 1000)) : (workflow?.elapsedSeconds || 1)
-    workflow.finalSeconds = sec
     return `Stopped after ${sec}s`
   }
 
-  // Still actively running: tick dynamically every second
-  const _ = timerTick.value
-  const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
-  const seconds = started ? Math.max(1, Math.round((Date.now() - started) / 1000)) : (workflow?.elapsedSeconds || 1)
-  workflow.elapsedSeconds = seconds
+  // Subscribe cleanly to reactive 1s heartbeat without mutating store state in render
+  void timerTick.value
+  const started = resolveWorkflowStartMs(workflow)
+  const elapsedMs = Math.max(0, Date.now() - started)
+  const seconds = Math.max(1, Math.floor((elapsedMs + 100) / 1000) + 1)
 
-  if (status === 'AWAITING_APPROVAL') {
+  if (status === 'AWAITING_APPROVAL' || status === 'WAITING_APPROVAL') {
     return `Paused for approval (${seconds}s)`
   }
   return `Working for ${seconds}s`
@@ -609,7 +661,9 @@ const getWorkflowGoalPreview = (workflow) => {
 
 const getCurrentWorkingText = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
-  const phaseIndex = Math.floor(timerTick.value / 3) % 4
+  void timerTick.value
+  const workflowElapsedSec = Math.max(0, Math.floor((Date.now() - resolveWorkflowStartMs(workflow)) / 1000))
+  const phaseIndex = Math.floor(workflowElapsedSec / 3) % 4
   const connectionStatus = String(workflow?.connectionStatus || '').toUpperCase()
   const isConnectionRecovering = ['RECONNECTING', 'OFFLINE'].includes(connectionStatus)
   const reconnectAttempt = Math.min(
@@ -619,8 +673,11 @@ const getCurrentWorkingText = (workflow) => {
   if (status === 'COMPLETED' || status === 'SUCCESS') {
     return ''
   }
-  if (status === 'FAILED' || status === 'CANCELLED') {
+  if (['FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(status)) {
     return workflow?.runId ? 'Workflow stopped' : 'Unable to start workflow'
+  }
+  if (status === 'CANCELLING') {
+    return 'Stopping workflow'
   }
   if (isConnectionRecovering && isWorkflowRunning(workflow)) {
     if (connectionStatus === 'OFFLINE') {
@@ -639,15 +696,22 @@ const getCurrentWorkingText = (workflow) => {
     const tool = runningTask.assigned_tool || runningTask.assignedTool
     return `Running ${tool ? tool + ': ' : ''}${runningTask.title || runningTask.instruction || 'task execution'}`
   }
+  const awaitingTask = (workflow?.tasks || []).find((t) => getWorkflowTaskStatus(t) === 'AWAITING_APPROVAL')
+  if (workflow?.approval || ['AWAITING_APPROVAL', 'WAITING_APPROVAL'].includes(status) || awaitingTask) {
+    const tool = workflow?.approval?.assignedTool || awaitingTask?.assigned_tool || awaitingTask?.assignedTool
+    const approvalTitle = workflow?.approval?.taskTitle
+      || awaitingTask?.title
+      || awaitingTask?.instruction
+      || workflow?.approval?.actionSummary
+      || 'security authorization'
+    return `Waiting for approval${tool ? ` (${tool})` : ''}: ${approvalTitle}`
+  }
   const pendingTask = (workflow?.tasks || []).find((t) => ['PENDING', 'QUEUED', 'WAITING'].includes(getWorkflowTaskStatus(t)))
   if (pendingTask) {
     const tool = pendingTask.assigned_tool || pendingTask.assignedTool
     return `Queued ${tool ? tool + ': ' : ''}${pendingTask.title || pendingTask.instruction || 'step'}`
   }
-  if (workflow?.approval || status === 'AWAITING_APPROVAL') {
-    return 'Paused: Awaiting security authorization'
-  }
-  if (status === 'STARTING') {
+  if (['STARTING', 'PENDING', 'QUEUED', 'PLANNING', 'WAITING'].includes(status)) {
     const goal = getWorkflowGoalPreview(workflow)
     const phase = [
       'Preparing workflow',
@@ -657,7 +721,7 @@ const getCurrentWorkingText = (workflow) => {
     ][phaseIndex]
     return goal ? `${phase}: ${goal}` : phase
   }
-  if (status === 'RUNNING') {
+  if (['RUNNING', 'EXECUTING', 'IN_PROGRESS'].includes(status)) {
     const goal = getWorkflowGoalPreview(workflow)
     const phase = [
       'Executing workflow',
