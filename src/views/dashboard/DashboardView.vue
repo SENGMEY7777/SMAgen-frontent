@@ -796,10 +796,35 @@ watch(activeMode, async (mode) => {
 
 const userScrolledUp = ref(false)
 let isProgrammaticScrolling = false
+let programmaticScrollTimer = null
+let lastProgrammaticScrollAt = 0
+let lastScrollTop = 0
 let isRestoringScroll = false
 let restoreTimeout = null
 let resizeObserver = null
+let resizeRafId = null
 let scrollSaveTimer = null
+
+const markProgrammaticScroll = (durationMs = 100) => {
+  isProgrammaticScrolling = true
+  lastProgrammaticScrollAt = Date.now()
+  if (programmaticScrollTimer) {
+    clearTimeout(programmaticScrollTimer)
+  }
+  programmaticScrollTimer = setTimeout(() => {
+    programmaticScrollTimer = null
+    isProgrammaticScrolling = false
+  }, durationMs)
+}
+
+const syncScrollToBottomNow = () => {
+  const el = chatThreadRef.value
+  if (!el) return
+  markProgrammaticScroll(100)
+  el.scrollTop = el.scrollHeight
+  lastScrollTop = el.scrollTop
+  showScrollButton.value = false
+}
 
 const SCROLL_STORAGE_PREFIX = 'kairo_chat_scroll_'
 const getScrollStorageKey = () => `${SCROLL_STORAGE_PREFIX}${chatStore.activeSessionId || 'default'}`
@@ -830,23 +855,82 @@ const getSavedScrollState = () => {
 }
 
 const handleScroll = () => {
-  if (!chatThreadRef.value || isProgrammaticScrolling || isRestoringScroll) return
-  const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
+  const el = chatThreadRef.value
+  if (!el) return
+  const { scrollTop, scrollHeight, clientHeight } = el
   const distanceToBottom = scrollHeight - scrollTop - clientHeight
-  const isUp = distanceToBottom > 40
-  showScrollButton.value = isUp
-  userScrolledUp.value = isUp
+  const movedUp = scrollTop < lastScrollTop - 2
+  lastScrollTop = scrollTop
+
+  if (isRestoringScroll) return
+
+  if (isProgrammaticScrolling || Date.now() - lastProgrammaticScrollAt < 100) {
+    if (distanceToBottom <= 40) {
+      userScrolledUp.value = false
+      showScrollButton.value = false
+    } else if (!userScrolledUp.value) {
+      showScrollButton.value = false
+    }
+    return
+  }
+
+  // Only pause auto-follow when the user actually scrolls upward away from the bottom.
+  // Growing response height during streaming must never flip userScrolledUp = true.
+  if (distanceToBottom <= 40) {
+    userScrolledUp.value = false
+    showScrollButton.value = false
+  } else {
+    if (movedUp) {
+      userScrolledUp.value = true
+    }
+    showScrollButton.value = userScrolledUp.value
+  }
 
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
   scrollSaveTimer = setTimeout(() => {
-    saveScrollState(scrollTop, !isUp)
+    saveScrollState(scrollTop, distanceToBottom <= 40)
   }, 100)
 }
 
-const onUserScrollStart = () => {
+const onUserScrollStart = (event) => {
   if (isRestoringScroll) {
     isRestoringScroll = false
     if (restoreTimeout) clearTimeout(restoreTimeout)
+  }
+
+  const el = chatThreadRef.value
+  if (!el) return
+
+  if (event?.type === 'wheel') {
+    if (event.deltaY < 0 && el.scrollHeight > el.clientHeight + 8) {
+      isProgrammaticScrolling = false
+      lastProgrammaticScrollAt = 0
+      if (programmaticScrollTimer) {
+        clearTimeout(programmaticScrollTimer)
+        programmaticScrollTimer = null
+      }
+      if (pendingScrollRafId !== null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(pendingScrollRafId)
+        pendingScrollRafId = null
+      }
+      userScrolledUp.value = true
+      showScrollButton.value = el.scrollHeight - el.scrollTop - el.clientHeight > 40
+    } else if (event.deltaY > 0) {
+      const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (distanceToBottom <= 60) {
+        userScrolledUp.value = false
+        showScrollButton.value = false
+      }
+    }
+    return
+  }
+
+  // Touch or pointer interaction (e.g., dragging scrollbar or mobile swipe)
+  isProgrammaticScrolling = false
+  lastProgrammaticScrollAt = 0
+  if (programmaticScrollTimer) {
+    clearTimeout(programmaticScrollTimer)
+    programmaticScrollTimer = null
   }
 }
 
@@ -864,6 +948,7 @@ const restoreScrollPosition = () => {
     if (!chatThreadRef.value || !isRestoringScroll) return
     if (!saved) {
       chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      lastScrollTop = chatThreadRef.value.scrollTop
       showScrollButton.value = false
       userScrolledUp.value = false
       return
@@ -871,10 +956,12 @@ const restoreScrollPosition = () => {
 
     if (saved.isAtBottom) {
       chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      lastScrollTop = chatThreadRef.value.scrollTop
       showScrollButton.value = false
       userScrolledUp.value = false
     } else {
       chatThreadRef.value.scrollTop = saved.scrollTop
+      lastScrollTop = chatThreadRef.value.scrollTop
       const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
       const isUp = scrollHeight - scrollTop - clientHeight > 60
       showScrollButton.value = isUp
@@ -903,6 +990,10 @@ const handleBeforeUnload = () => {
 
 const scrollToBottom = async (behavior = 'auto', { force = true } = {}) => {
   if (!force && userScrolledUp.value) return
+  if (force) {
+    userScrolledUp.value = false
+    showScrollButton.value = false
+  }
   if (behavior === 'auto' && typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
     if (pendingScrollRafId !== null) return
     pendingScrollRafId = window.requestAnimationFrame(async () => {
@@ -911,31 +1002,18 @@ const scrollToBottom = async (behavior = 'auto', { force = true } = {}) => {
       if (!chatThreadRef.value) return
       if (!force && userScrolledUp.value) return
       isRestoringScroll = false
-      if (force) {
-        userScrolledUp.value = false
-        showScrollButton.value = false
-      }
-      isProgrammaticScrolling = true
-      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      syncScrollToBottomNow()
       saveScrollState(chatThreadRef.value.scrollHeight, true)
-      window.setTimeout(() => {
-        isProgrammaticScrolling = false
-        if (chatThreadRef.value) {
-          const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
-          const isUp = scrollHeight - scrollTop - clientHeight > 40
-          showScrollButton.value = isUp
-          userScrolledUp.value = isUp
-        }
-      }, 60)
     })
     return
   }
   await nextTick()
   if (chatThreadRef.value) {
+    if (!force && userScrolledUp.value) return
     isRestoringScroll = false
     userScrolledUp.value = false
     showScrollButton.value = false
-    isProgrammaticScrolling = true
+    markProgrammaticScroll(behavior === 'smooth' ? 500 : 100)
     if (typeof chatThreadRef.value.scrollTo === 'function') {
       chatThreadRef.value.scrollTo({
         top: chatThreadRef.value.scrollHeight,
@@ -944,16 +1022,20 @@ const scrollToBottom = async (behavior = 'auto', { force = true } = {}) => {
     } else {
       chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
     }
+    lastScrollTop = chatThreadRef.value.scrollTop
     saveScrollState(chatThreadRef.value.scrollHeight, true)
-    setTimeout(() => {
-      isProgrammaticScrolling = false
-      if (chatThreadRef.value) {
+    if (behavior === 'smooth') {
+      window.setTimeout(() => {
+        if (!chatThreadRef.value || userScrolledUp.value) return
         const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
-        const isUp = scrollHeight - scrollTop - clientHeight > 40
-        showScrollButton.value = isUp
-        userScrolledUp.value = isUp
-      }
-    }, behavior === 'smooth' ? 500 : 80)
+        if (scrollHeight - scrollTop - clientHeight > 40) {
+          syncScrollToBottomNow()
+        } else {
+          lastScrollTop = scrollTop
+          showScrollButton.value = false
+        }
+      }, 500)
+    }
   }
 }
 
@@ -978,22 +1060,31 @@ const setupScrollObserver = () => {
       } else {
         chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
       }
+      lastScrollTop = chatThreadRef.value.scrollTop
     } else if (!userScrolledUp.value) {
-      window.requestAnimationFrame(() => {
+      if (resizeRafId !== null) return
+      resizeRafId = window.requestAnimationFrame(() => {
+        resizeRafId = null
         if (!chatThreadRef.value || userScrolledUp.value) return
-        chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
-        showScrollButton.value = false
+        syncScrollToBottomNow()
       })
     }
   })
   resizeObserver.observe(target)
 }
 
-watch(chatThreadRef, (el) => {
+watch(chatThreadRef, (el, prevEl) => {
+  if (prevEl && prevEl !== el) {
+    prevEl.removeEventListener('scroll', handleScroll)
+    prevEl.removeEventListener('wheel', onUserScrollStart)
+    prevEl.removeEventListener('touchmove', onUserScrollStart)
+    prevEl.removeEventListener('pointerdown', onUserScrollStart)
+  }
   if (el) {
     el.addEventListener('scroll', handleScroll, { passive: true })
     el.addEventListener('wheel', onUserScrollStart, { passive: true })
     el.addEventListener('touchmove', onUserScrollStart, { passive: true })
+    el.addEventListener('pointerdown', onUserScrollStart, { passive: true })
     setupScrollObserver()
     restoreScrollPosition()
   } else if (resizeObserver) {
@@ -1022,7 +1113,7 @@ const {
 
 watch([() => currentMessages.value.length, loading], () => {
   if (!userScrolledUp.value) {
-    scrollToBottom('smooth', { force: false })
+    scrollToBottom('auto', { force: false })
   }
 })
 
@@ -1789,6 +1880,7 @@ onMounted(() => {
     chatThreadRef.value.addEventListener('scroll', handleScroll, { passive: true })
     chatThreadRef.value.addEventListener('wheel', onUserScrollStart, { passive: true })
     chatThreadRef.value.addEventListener('touchmove', onUserScrollStart, { passive: true })
+    chatThreadRef.value.addEventListener('pointerdown', onUserScrollStart, { passive: true })
     setupScrollObserver()
   }
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -1801,6 +1893,10 @@ onUnmounted(() => {
     window.cancelAnimationFrame(pendingScrollRafId)
     pendingScrollRafId = null
   }
+  if (resizeRafId !== null && typeof window !== 'undefined') {
+    window.cancelAnimationFrame(resizeRafId)
+    resizeRafId = null
+  }
   window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
   if (timeInterval) {
     window.clearInterval(timeInterval)
@@ -1810,12 +1906,14 @@ onUnmounted(() => {
     chatThreadRef.value.removeEventListener('scroll', handleScroll)
     chatThreadRef.value.removeEventListener('wheel', onUserScrollStart)
     chatThreadRef.value.removeEventListener('touchmove', onUserScrollStart)
+    chatThreadRef.value.removeEventListener('pointerdown', onUserScrollStart)
   }
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
   }
+  if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer)
   if (restoreTimeout) clearTimeout(restoreTimeout)
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
 })
