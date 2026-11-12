@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, ApiError } from '@/services/api'
 import { createSocketClient, SOCKET_RECONNECT_ATTEMPTS } from '@/services/socket'
 import {
@@ -10,10 +10,11 @@ import {
   isTerminalWorkflowStatus,
   isWorkflowRunning,
   normalizeWorkflowLog,
+  parseWorkflowTimestamp,
   stringifyWorkflowValue,
 } from '@/utils/workflow'
 
-const WORKFLOW_POLL_INTERVAL_MS = 4000
+const WORKFLOW_POLL_INTERVAL_MS = 1500
 const REFLECTION_EVENTS = new Set([
   'self_healing_started',
   'self_healing_required',
@@ -323,7 +324,17 @@ export function useWorkflowRuntime({
     const nextTasks = eventTask
       ? mergeWorkflowTasks(workflow.tasks, [eventTask])
       : (workflow.tasks || [])
+    const resolvedStartedAt = parseWorkflowTimestamp(
+      workflow.startedAt
+      ?? data?.startedAt
+      ?? data?.started_at
+      ?? workflow.createdAt
+      ?? data?.createdAt
+      ?? data?.created_at
+      ?? message.createdAt,
+    ) || Date.now()
     const nextWorkflow = {
+      startedAt: resolvedStartedAt,
       logs: mergeWorkflowLogs(workflow.logs, [liveLog]),
       tasks: nextTasks,
     }
@@ -363,6 +374,10 @@ export function useWorkflowRuntime({
         data?.error || data?.message || data?.reason,
       )
       nextWorkflow.completedAt = data?.completedAt || data?.completed_at || workflow.completedAt || new Date().toISOString()
+      const completedMs = parseWorkflowTimestamp(nextWorkflow.completedAt) || Date.now()
+      if (!workflow.finalSeconds) {
+        nextWorkflow.finalSeconds = Math.max(1, Math.round((completedMs - resolvedStartedAt) / 1000))
+      }
       nextWorkflow.approval = null
       nextWorkflow.currentActivity = ''
       nextWorkflow.currentActivityEvent = ''
@@ -478,6 +493,15 @@ export function useWorkflowRuntime({
       const connectionLost = (typeof navigator !== 'undefined' && navigator.onLine === false)
         || Boolean(workflowSocket && !workflowSocket.connected)
       const connectionStatus = connectionLost ? 'RECONNECTING' : 'CONNECTED'
+      const resolvedStartedAt = parseWorkflowTimestamp(
+        currentWorkflow.startedAt
+        ?? workflowRun.started_at
+        ?? workflowRun.startedAt
+        ?? currentWorkflow.createdAt
+        ?? workflowRun.created_at
+        ?? workflowRun.createdAt
+        ?? currentMessages.value[index]?.createdAt,
+      ) || Date.now()
 
       if (awaitingApproval) {
         const existingTaskId = existingApproval?.taskId || existingApproval?.task_id
@@ -488,6 +512,7 @@ export function useWorkflowRuntime({
           : await findWorkflowApproval(workflowRun, awaitingTask, runId, existingApproval)
         updateWorkflowMessage(index, {
           status: 'AWAITING_APPROVAL',
+          startedAt: resolvedStartedAt,
           approval,
           tasks,
           logs,
@@ -515,14 +540,13 @@ export function useWorkflowRuntime({
 
         if (isTerminal && !finalSeconds) {
           completedAt = completedAt || new Date().toISOString()
-          const started = currentWorkflow.startedAt || (currentWorkflow.createdAt ? new Date(currentWorkflow.createdAt).getTime() : null)
-          finalSeconds = started
-            ? Math.max(1, Math.round((new Date(completedAt).getTime() - started) / 1000))
-            : (currentWorkflow.elapsedSeconds || 1)
+          const completedMs = parseWorkflowTimestamp(completedAt) || Date.now()
+          finalSeconds = Math.max(1, Math.round((completedMs - resolvedStartedAt) / 1000))
         }
 
         updateWorkflowMessage(index, {
           status,
+          startedAt: resolvedStartedAt,
           approval: null,
           tasks: reconcileTerminalTasks(tasks, status, workflowError),
           logs,
@@ -563,6 +587,14 @@ export function useWorkflowRuntime({
     if (workflowPollers.has(key)) return
 
     refreshWorkflowMessage(index, runId)
+    // Catch fast initial tasks or approval gates that transition before the async
+    // socket room join finishes on the backend.
+    window.setTimeout(() => {
+      const workflow = currentMessages.value[index]?.workflow
+      if (workflow && String(workflow.runId) === key && !isTerminalWorkflowStatus(workflow.status)) {
+        refreshWorkflowMessage(index, runId)
+      }
+    }, 350)
     const poller = window.setInterval(() => {
       if (!currentMessages.value[index]?.workflow) {
         stopWorkflowPolling(runId)
@@ -667,6 +699,26 @@ export function useWorkflowRuntime({
     }
   }
 
+  const resumeActiveWorkflows = () => {
+    currentMessages.value.forEach((message, index) => {
+      if (!message?.workflow || isTerminalWorkflowStatus(message.workflow.status)) return
+      if (!parseWorkflowTimestamp(message.workflow.startedAt)) {
+        const startedAt = parseWorkflowTimestamp(
+          message.workflow.createdAt
+          ?? message.createdAt,
+        ) || Date.now()
+        updateWorkflowMessage(index, { startedAt })
+      }
+      if (message.workflow.runId) {
+        startWorkflowPolling(index, message.workflow.runId)
+      }
+    })
+  }
+
+  watch(() => chatStore.activeSessionId, () => {
+    resumeActiveWorkflows()
+  })
+
   onMounted(() => {
     handleBrowserOffline = () => {
       latestReconnectAttempt = 0
@@ -686,11 +738,7 @@ export function useWorkflowRuntime({
     window.addEventListener('offline', handleBrowserOffline)
     window.addEventListener('online', handleBrowserOnline)
 
-    currentMessages.value.forEach((message, index) => {
-      if (message.workflow?.runId && !isTerminalWorkflowStatus(message.workflow.status)) {
-        startWorkflowPolling(index, message.workflow.runId)
-      }
-    })
+    resumeActiveWorkflows()
 
     workflowSocket = createSocketClient()
     if (workflowSocket) {
@@ -768,6 +816,7 @@ export function useWorkflowRuntime({
       workflowSocket.io.on('reconnect', () => {
         latestReconnectAttempt = 0
         updateActiveConnectionState('CONNECTED')
+        joinActiveRuns()
       })
       workflowSocket.io.on('reconnect_failed', () => {
         latestReconnectAttempt = SOCKET_RECONNECT_ATTEMPTS
