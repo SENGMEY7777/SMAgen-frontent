@@ -344,9 +344,43 @@ export const formatWorkflowError = (value) => {
   return `${explanation.title}. ${explanation.message} Next step: ${explanation.nextStep}`
 }
 
+export const parseWorkflowTimestamp = (value) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : null
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    if (/^\d+$/.test(trimmed)) {
+      const numeric = Number(trimmed)
+      return Number.isFinite(numeric) && numeric > 0 ? numeric : null
+    }
+    const parsed = Date.parse(trimmed)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }
+  if (value instanceof Date) {
+    const ms = value.getTime()
+    return Number.isFinite(ms) && ms > 0 ? ms : null
+  }
+  return null
+}
+
 export const isWorkflowRunning = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
-  return ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(status)
+  if (!status) return false
+  return [
+    'STARTING',
+    'PENDING',
+    'QUEUED',
+    'PLANNING',
+    'EXECUTING',
+    'RUNNING',
+    'IN_PROGRESS',
+    'WAITING',
+    'WAITING_APPROVAL',
+    'AWAITING_APPROVAL',
+    'CANCELLING',
+  ].includes(status)
 }
 
 export const isTerminalWorkflowStatus = (status) => [
