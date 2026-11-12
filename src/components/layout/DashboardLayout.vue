@@ -486,7 +486,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useProjectsStore } from '@/stores/projects'
-import { getWorkflowRunId } from '@/utils/workflow'
+import { getWorkflowRunId, parseWorkflowTimestamp } from '@/utils/workflow'
 
 import { api } from '@/services/api'
 
@@ -714,6 +714,13 @@ const selectWorkflowHistory = (item) => {
               runId: item.id,
               goalPrompt: title,
               status: item.status || 'COMPLETED',
+              startedAt: parseWorkflowTimestamp(
+                item.startedAt
+                ?? item.started_at
+                ?? item.createdAt
+                ?? item.created_at
+                ?? item.updatedAt,
+              ) || Date.now(),
               isStreamOpen: true,
             },
           },
