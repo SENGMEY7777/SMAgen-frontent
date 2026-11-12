@@ -76,8 +76,7 @@
     </div>
 
     <Transition name="stream-completion-enter">
-    <div v-if="(isWorkflowComplete(workflow) || reviewOpen) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
-      <template v-if="isWorkflowComplete(workflow)">
+    <div v-if="isWorkflowComplete(workflow) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
       <div class="completion-heading-row">
         <div class="completion-heading-copy">
           <h3>Done — workflow completed successfully.</h3>
@@ -106,7 +105,7 @@
                 type="button"
                 class="completion-file-link"
                 :aria-label="`Review ${file.path}`"
-                @click="openReview(workflow, file)"
+                @click.stop="openReview(workflow, file, $event)"
               >
                 <IconFile :size="16" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
                 {{ file.path }}
@@ -203,10 +202,23 @@
         </div>
       </div>
 
-      </template>
+      <div v-if="validationItems.length" class="completion-results">
+        <div class="completion-results-heading">Tests passed:</div>
+        <ul class="completion-result-list">
+          <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
+            <div class="completion-result-copy">
+              <span class="completion-result-label">{{ result.label }}</span>
+              <span> — Completed successfully</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    </Transition>
 
+    <Teleport to="body">
       <section
-        v-if="reviewOpen"
+        v-if="reviewOpen && !workflow.approval"
         class="workflow-review-panel"
         :class="{ collapsed: reviewPanelCollapsed, 'is-resizing': reviewPanelResizing }"
         :style="reviewPanelWidth ? { '--review-panel-width': `${reviewPanelWidth}px` } : undefined"
@@ -338,24 +350,7 @@
           <div v-else class="workflow-review-empty">No file output is available for review.</div>
         </div>
       </section>
-
-      <template v-if="isWorkflowComplete(workflow)">
-
-      <div v-if="validationItems.length" class="completion-results">
-        <div class="completion-results-heading">Tests passed:</div>
-        <ul class="completion-result-list">
-          <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
-            <div class="completion-result-copy">
-              <span class="completion-result-label">{{ result.label }}</span>
-              <span> — Completed successfully</span>
-            </div>
-          </li>
-        </ul>
-      </div>
-
-      </template>
-    </div>
-    </Transition>
+    </Teleport>
 
     <div v-if="isWorkflowTerminal(workflow) && !workflow.approval" class="completion-actions" aria-label="Workflow response actions">
       <button type="button" class="completion-action-btn" :title="copied ? 'Copied' : 'Copy response'" @click="copyCompletionResponse(workflow)">
@@ -1710,7 +1705,7 @@ const highlightCode = (value) => {
   background: transparent;
   margin: 0 0 24px;
   padding: 0;
-  animation: workflow-stream-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: workflow-stream-enter 220ms ease-out;
 }
 
 .stream-elapsed-header {
@@ -3337,11 +3332,9 @@ const highlightCode = (value) => {
 @keyframes workflow-stream-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
