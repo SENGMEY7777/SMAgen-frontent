@@ -1131,8 +1131,12 @@ const extractLocalDestination = (text) => {
 
   const pathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
   if (pathMatch) {
-    const path = pathMatch[2].replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
-    return path ? `${/^downloads?$/i.test(pathMatch[1]) ? 'Downloads' : 'Desktop'}/${path}` : ''
+    let extracted = pathMatch[2].replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
+    const segments = extracted.split('/').filter(Boolean)
+    if (segments.length > 1 && /\.[A-Za-z0-9]{1,8}$/.test(segments[segments.length - 1])) {
+      extracted = segments.slice(0, -1).join('/')
+    }
+    return extracted ? `${/^downloads?$/i.test(pathMatch[1]) ? 'Downloads' : 'Desktop'}/${extracted}` : ''
   }
 
   const quotedFolder = value.match(/\b(?:folder|directory|project)\s+(?:name(?:\s+is)?|named|called)\s*["“']([^"”']+)["”']/i)
@@ -1150,6 +1154,13 @@ const extractWorkflowDestination = (message) => {
     const task = tasks[index]
     const input = task?.toolInput || task?.tool_input || {}
     const action = String(input.action || '').toLowerCase().replace(/[_-]/g, '')
+    const rawCwd = String(input.cwd || input.workingDirectory || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    if (!action && rawCwd && !rawCwd.includes('..') && !rawCwd.startsWith('~') && rawCwd !== '.') {
+      const cleanCwd = rawCwd.replace(/^desktop\/+/i, '')
+      if (cleanCwd && cleanCwd !== '.') {
+        return `Desktop/${cleanCwd}`
+      }
+    }
     const path = String(input.path || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
     if (!path || path.includes('..') || path.startsWith('~')) continue
 
@@ -1196,7 +1207,7 @@ const requestsPreviousLocalDestination = (text) => {
   // "add MVC + Service layer", "please remove gitkeep"). Carry the last workflow
   // destination only when the prompt clearly modifies existing work and does
   // not request a new project, folder, or explicit destination.
-  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build)\b/i.test(value)
+  const hasContinuationIntent = /\b(?:add|install|configure|fix|update|modify|edit|extend|refactor|remove|delete|clean\s*up|clear|strip|build|push|commit|deploy|publish)\b/i.test(value)
   const requestsNewTarget = /\b(?:new|another|different)\s+(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:create|setup|set\s+up|initialize|scaffold|start)\b[\s\S]{0,60}\b(?:project|folder|directory|workspace|app(?:lication)?)\b/i.test(value)
     || /\b(?:folder|directory|project)\s+(?:name|named|called)\b/i.test(value)
@@ -1408,12 +1419,19 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
   activeAbortController = new AbortController()
   const signal = activeAbortController.signal
 
+  const activeProj = projectsStore?.activeProject
+  const projectContext = activeProj ? {
+    id: activeProj.id,
+    name: activeProj.name,
+    workspacePath: activeProj.workspacePath,
+  } : null
   const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
   let response = null
   try {
     response = await api.runWorkflow({
       goalPrompt,
       ...(localDestination ? { localDestination } : {}),
+      ...(projectContext ? { projectContext } : {}),
       ...(images && images.length > 0 ? { images } : {}),
     }, { signal })
   } catch (err) {
