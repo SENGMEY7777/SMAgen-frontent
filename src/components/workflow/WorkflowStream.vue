@@ -1,15 +1,16 @@
 <template>
   <div ref="workflowStreamRef" class="workflow-antigravity-stream">
-    <div class="stream-elapsed-header">{{ getElapsedText(workflow) }}</div>
+    <div class="stream-elapsed-header">{{ elapsedLabel }}</div>
     <hr class="stream-hairline-divider" />
 
     <div class="stream-plan-text" v-html="renderMarkdown(getPlanText(workflow))"></div>
 
     <div
-      v-if="getCurrentWorkingText(workflow)"
+      v-if="currentWorkingLabel"
       class="stream-subactivity-text"
       :class="{
-        'is-live': isWorkflowLive(workflow),
+        'is-live': isWorkflowLive(workflow) && !isWorkflowAwaitingApproval(workflow),
+        'is-awaiting': isWorkflowAwaitingApproval(workflow),
       }"
       aria-live="polite"
     >
@@ -17,10 +18,12 @@
         <IconWifiOff v-if="isConnectionRecovering(workflow)" :size="13" />
         <component v-else :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
       </span>
-      <Transition name="stream-label-swap" mode="out-in">
-        <span :key="getCurrentWorkingText(workflow)" class="stream-subactivity-label">{{ getCurrentWorkingText(workflow) }}</span>
-      </Transition>
-      <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
+      <span class="stream-subactivity-label">{{ currentWorkingLabel }}</span>
+      <span
+        v-if="isWorkflowLive(workflow) && !isWorkflowAwaitingApproval(workflow)"
+        class="stream-subactivity-dots"
+        aria-hidden="true"
+      >
         <span>.</span><span>.</span><span>.</span>
       </span>
     </div>
@@ -517,7 +520,7 @@ import {
   IconZoomOut,
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
-import { explainWorkflowError } from '@/utils/workflow'
+import { explainWorkflowError, isWorkflowRunning, parseWorkflowTimestamp } from '@/utils/workflow'
 import { getFileIconInfo } from '@/utils/fileIcons'
 
 const props = defineProps({
@@ -526,6 +529,10 @@ const props = defineProps({
     required: true,
   },
   messageIndex: {
+    type: Number,
+    default: 0,
+  },
+  timerTick: {
     type: Number,
     default: 0,
   },
@@ -563,6 +570,16 @@ const props = defineProps({
   },
 })
 
+const elapsedLabel = computed(() => {
+  void props.timerTick
+  return props.getElapsedText(props.workflow)
+})
+
+const currentWorkingLabel = computed(() => {
+  void props.timerTick
+  return props.getCurrentWorkingText(props.workflow)
+})
+
 const emit = defineEmits([
   'toggle-stream',
   'toggle-step',
@@ -587,7 +604,12 @@ const isConnectionRecovering = (workflow) => ['RECONNECTING', 'OFFLINE'].include
   String(workflow?.connectionStatus || '').toUpperCase(),
 )
 
-const isWorkflowLive = (workflow) => ['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'].includes(String(workflow?.status || '').toUpperCase())
+const isWorkflowLive = (workflow) => isWorkflowRunning(workflow)
+const isWorkflowAwaitingApproval = (workflow) => Boolean(
+  workflow?.approval
+  || String(workflow?.status || '').toUpperCase() === 'AWAITING_APPROVAL'
+  || (workflow?.tasks || []).some((task) => getTaskStatus(task) === 'AWAITING_APPROVAL'),
+)
 
 const getTaskStatus = (task) => String(
   task?.status || task?.task_status || task?.state || 'PENDING',
@@ -1549,8 +1571,13 @@ const getCompletionTimeLabel = (workflow) => {
 
 const getCompletionDuration = (workflow) => {
   if (workflow?.finalSeconds) return `${workflow.finalSeconds}s`
-  const started = workflow?.startedAt || (workflow?.createdAt ? new Date(workflow.createdAt).getTime() : null)
-  const completed = workflow?.completedAt ? new Date(workflow.completedAt).getTime() : Date.now()
+  const started = parseWorkflowTimestamp(
+    workflow?.startedAt
+    ?? workflow?.started_at
+    ?? workflow?.createdAt
+    ?? workflow?.created_at,
+  )
+  const completed = parseWorkflowTimestamp(workflow?.completedAt ?? workflow?.completed_at) || Date.now()
   return started ? `${Math.max(1, Math.round((completed - started) / 1000))}s` : 'a few seconds'
 }
 
@@ -1891,21 +1918,26 @@ const highlightCode = (value) => {
 }
 
 .stream-subactivity-text.is-live {
-  color: #8f8f99;
+  color: #71717a;
+}
+
+.stream-subactivity-text.is-awaiting {
+  color: #b45309;
+}
+
+.stream-subactivity-text.is-awaiting .stream-current-task-icon {
+  color: #d97706;
 }
 
 .stream-subactivity-label {
   color: inherit;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stream-subactivity-text.is-live .stream-subactivity-label {
-  color: transparent;
-  background: linear-gradient(90deg, #8f8f99 0%, #8f8f99 36%, #d4d4d8 50%, #8f8f99 64%, #8f8f99 100%);
-  background-size: 220% 100%;
-  background-position: -120% 0;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: subactivity-text-shimmer 1.6s ease-in-out infinite;
+  color: #71717a;
+  animation: subactivity-text-shimmer 1.8s ease-in-out infinite;
 }
 
 .stream-subactivity-dots {
@@ -1939,11 +1971,11 @@ const highlightCode = (value) => {
 }
 
 @keyframes subactivity-text-shimmer {
-  from {
-    background-position: -120% 0;
+  0%, 100% {
+    color: #71717a;
   }
-  to {
-    background-position: 100% 0;
+  50% {
+    color: #a1a1aa;
   }
 }
 
