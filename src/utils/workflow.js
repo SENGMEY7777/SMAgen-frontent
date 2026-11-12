@@ -258,6 +258,30 @@ export const explainWorkflowError = (value) => {
       message: 'KAIRO could not run the remote command because the SSH target, authentication, host key, connection, or command-safety policy was not valid.',
       nextStep: 'Check SSH_TARGETS_JSON, the deploy user, the SSH key, and known_hosts. Review the target and command, then approve the task again. KAIRO will not change credentials or host trust settings automatically.',
     }
+  } else if (code === 'GIT_PROJECT_NOT_FOUND' || code === 'COMMAND_CWD_NOT_FOUND' || /target working directory does not exist|no existing git project folder on desktop|multiple git projects were found on desktop/.test(fingerprint)) {
+    explanation = {
+      title: 'Target project folder was not found or is ambiguous',
+      message: message || 'The workflow stopped because the target Desktop project folder does not exist or no project folder was specified for this Git operation.',
+      nextStep: 'Specify the exact Desktop project folder in your prompt (for example: "push Desktop/My-Project to github") or select the active project first, then run again.',
+    }
+  } else if (code === 'GIT_REMOTE_NOT_CONFIGURED' || /remote '.*' is not configured|does not appear to be a git repository|no configured push destination/.test(fingerprint)) {
+    explanation = {
+      title: 'Git remote repository is not configured',
+      message: message || 'This local project folder does not have a GitHub remote ("origin") configured yet.',
+      nextStep: 'Add your GitHub remote in that folder (git remote add origin <repo-url>), then run push to github again.',
+    }
+  } else if (code === 'GIT_PUSH_AUTH_REQUIRED' || /github authentication required/.test(fingerprint)) {
+    explanation = {
+      title: 'GitHub authentication is required',
+      message: message || 'Git push failed because GitHub credentials (SSH key or GITHUB_TOKEN) are missing or could not authenticate.',
+      nextStep: 'Configure your SSH key or GITHUB_TOKEN on the host/backend environment, then push again.',
+    }
+  } else if (code === 'EXECUTABLE_NOT_FOUND' || /was not found in execution path/.test(fingerprint)) {
+    explanation = {
+      title: 'Required command binary was not found',
+      message: message || 'A required CLI executable could not be found in the backend execution PATH.',
+      nextStep: 'Confirm the executable is installed on the host/container and restart the backend.',
+    }
   } else if (/command is not allowed|not allowed by the executor|security policy/.test(fingerprint)) {
     explanation = {
       title: 'The requested runtime is not enabled',
