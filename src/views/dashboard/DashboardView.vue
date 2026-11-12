@@ -405,6 +405,9 @@ const attachedImages = ref([])
 const attachedFiles = ref([])
 const previewImageUrl = ref(null)
 const streamingContent = ref('')
+let targetStreamingContent = ''
+let streamingRafId = null
+let pendingScrollRafId = null
 let timeInterval = null
 const currentTime = ref(new Date())
 
@@ -606,7 +609,7 @@ const getWorkflowGoalPreview = (workflow) => {
 
 const getCurrentWorkingText = (workflow) => {
   const status = String(workflow?.status || '').toUpperCase()
-  const phaseIndex = timerTick.value % 4
+  const phaseIndex = Math.floor(timerTick.value / 3) % 4
   const connectionStatus = String(workflow?.connectionStatus || '').toUpperCase()
   const isConnectionRecovering = ['RECONNECTING', 'OFFLINE'].includes(connectionStatus)
   const reconnectAttempt = Math.min(
@@ -834,7 +837,35 @@ const handleBeforeUnload = () => {
   }
 }
 
-const scrollToBottom = async (behavior = 'auto') => {
+const scrollToBottom = async (behavior = 'auto', { force = true } = {}) => {
+  if (!force && userScrolledUp.value) return
+  if (behavior === 'auto' && typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    if (pendingScrollRafId !== null) return
+    pendingScrollRafId = window.requestAnimationFrame(async () => {
+      pendingScrollRafId = null
+      await nextTick()
+      if (!chatThreadRef.value) return
+      if (!force && userScrolledUp.value) return
+      isRestoringScroll = false
+      if (force) {
+        userScrolledUp.value = false
+        showScrollButton.value = false
+      }
+      isProgrammaticScrolling = true
+      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+      saveScrollState(chatThreadRef.value.scrollHeight, true)
+      window.setTimeout(() => {
+        isProgrammaticScrolling = false
+        if (chatThreadRef.value) {
+          const { scrollTop, scrollHeight, clientHeight } = chatThreadRef.value
+          const isUp = scrollHeight - scrollTop - clientHeight > 40
+          showScrollButton.value = isUp
+          userScrolledUp.value = isUp
+        }
+      }, 60)
+    })
+    return
+  }
   await nextTick()
   if (chatThreadRef.value) {
     isRestoringScroll = false
@@ -858,7 +889,7 @@ const scrollToBottom = async (behavior = 'auto') => {
         showScrollButton.value = isUp
         userScrolledUp.value = isUp
       }
-    }, behavior === 'smooth' ? 600 : 80)
+    }, behavior === 'smooth' ? 500 : 80)
   }
 }
 
@@ -884,8 +915,11 @@ const setupScrollObserver = () => {
         chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
       }
     } else if (!userScrolledUp.value) {
-      chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
-      showScrollButton.value = false
+      window.requestAnimationFrame(() => {
+        if (!chatThreadRef.value || userScrolledUp.value) return
+        chatThreadRef.value.scrollTop = chatThreadRef.value.scrollHeight
+        showScrollButton.value = false
+      })
     }
   })
   resizeObserver.observe(target)
@@ -922,11 +956,11 @@ const {
   scrollToBottom,
 })
 
-watch([currentMessages, loading], () => {
+watch([() => currentMessages.value.length, loading], () => {
   if (!userScrolledUp.value) {
-    scrollToBottom('auto')
+    scrollToBottom('smooth', { force: false })
   }
-}, { deep: true })
+})
 
 // Upload and Paste Handling for Images and Code/Document Files
 const processUploadedFile = (file) => {
@@ -1174,15 +1208,59 @@ const stopGeneration = async () => {
   }
 }
 
+const stopStreamingReveal = () => {
+  if (streamingRafId !== null && typeof window !== 'undefined') {
+    window.cancelAnimationFrame(streamingRafId)
+    streamingRafId = null
+  }
+}
+
+const scheduleStreamingReveal = () => {
+  if (streamingRafId !== null || typeof window === 'undefined') return
+  const step = () => {
+    streamingRafId = null
+    const target = targetStreamingContent
+    const currentLen = streamingContent.value.length
+    if (currentLen >= target.length) return
+
+    const backlog = target.length - currentLen
+    const stepSize = backlog > 240
+      ? Math.ceil(backlog * 0.3)
+      : backlog > 48
+        ? Math.ceil(backlog * 0.22)
+        : Math.max(2, Math.ceil(backlog * 0.35))
+
+    let nextEnd = Math.min(target.length, currentLen + stepSize)
+    if (nextEnd < target.length) {
+      const spaceIdx = target.indexOf(' ', nextEnd)
+      if (spaceIdx !== -1 && spaceIdx - nextEnd <= 6) {
+        nextEnd = spaceIdx + 1
+      }
+    }
+
+    streamingContent.value = target.slice(0, nextEnd)
+    scrollToBottom('auto', { force: false })
+
+    if (nextEnd < targetStreamingContent.length) {
+      streamingRafId = window.requestAnimationFrame(step)
+    }
+  }
+  streamingRafId = window.requestAnimationFrame(step)
+}
+
 const commitStreamingResponse = () => {
-  const content = streamingContent.value
+  stopStreamingReveal()
+  const content = targetStreamingContent || streamingContent.value
   if (content) {
     chatStore.addMessage({ role: 'assistant', content })
   }
+  targetStreamingContent = ''
   streamingContent.value = ''
 }
 
 const requestChatReply = async (prompt, history, signal, images = []) => {
+  stopStreamingReveal()
+  targetStreamingContent = ''
   streamingContent.value = ''
   let receivedChunk = false
 
@@ -1203,8 +1281,8 @@ const requestChatReply = async (prompt, history, signal, images = []) => {
       onChunk: (chunk) => {
         if (!chunk) return
         receivedChunk = true
-        streamingContent.value += chunk
-        scrollToBottom()
+        targetStreamingContent += chunk
+        scheduleStreamingReveal()
       },
     })
   } catch (streamError) {
@@ -1213,14 +1291,16 @@ const requestChatReply = async (prompt, history, signal, images = []) => {
     // Preserve the existing history-validation fallback for older API deployments.
     if (history.length > 0 && !receivedChunk) {
       const response = await api.chat(prompt, [], { signal, projectContext, localDestination: localDest, images })
-      streamingContent.value = response?.data?.message || 'I could not generate a response.'
+      targetStreamingContent = response?.data?.message || 'I could not generate a response.'
+      streamingContent.value = targetStreamingContent
       return
     }
     throw streamError
   }
 
-  if (!streamingContent.value) {
-    streamingContent.value = 'I could not generate a response.'
+  if (!targetStreamingContent && !streamingContent.value) {
+    targetStreamingContent = 'I could not generate a response.'
+    streamingContent.value = targetStreamingContent
   }
 }
 
@@ -1634,6 +1714,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopStreamingReveal()
+  if (pendingScrollRafId !== null && typeof window !== 'undefined') {
+    window.cancelAnimationFrame(pendingScrollRafId)
+    pendingScrollRafId = null
+  }
   window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
   if (timeInterval) {
     window.clearInterval(timeInterval)
