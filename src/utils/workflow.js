@@ -282,7 +282,7 @@ export const explainWorkflowError = (value) => {
       message: 'Vite started correctly, but the project root does not contain index.html, so the production build has no entry point to load.',
       nextStep: 'KAIRO should create the missing root index.html with a #app mount element and a module script for /src/main.js, then run npm run build again.',
     }
-  } else if (/missing.*(?:build|script)|(?:build|script).*missing|npm run build.*(?:failed|error)/.test(fingerprint)) {
+  } else if (/missing.*(?:build\s+script|\bbuild\b.*script|\bvite\b)|(?:build\s+script|\bvite\b).*missing|missing script:\s*["']?build["']?|npm run build.*(?:failed|error)/.test(fingerprint)) {
     explanation = {
       title: 'The project build script is missing',
       message: 'The Vue project does not contain a usable package.json build script, so production verification could not start.',
