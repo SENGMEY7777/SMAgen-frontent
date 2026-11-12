@@ -115,7 +115,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import { IconClock, IconGitFork, IconPlayerPlay, IconArrowRight } from '@tabler/icons-vue'
@@ -142,6 +142,16 @@ const completedRuns = computed(() => {
   return runs.value.filter((r) => ['COMPLETED', 'FAILED'].includes(r.status))
 })
 
+const getHiddenRunIds = () => {
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 const load = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -150,12 +160,24 @@ const load = async () => {
       api.listRuns().catch(() => ({ data: [] })),
       api.listWorkflows().catch(() => ({ data: [] })),
     ])
-    runs.value = runsRes?.data || []
+    const hiddenSet = new Set(getHiddenRunIds())
+    const rawRuns = runsRes?.data || []
+    runs.value = Array.isArray(rawRuns)
+      ? rawRuns.filter((r) => !hiddenSet.has(String(getWorkflowRunId(r) || r?.id)))
+      : []
     workflows.value = workflowsRes?.data || []
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load workflows.'
   } finally {
     loading.value = false
+  }
+}
+
+const onWorkflowRunsUpdated = (event) => {
+  const deletedId = event?.detail?.deletedRunId
+  if (deletedId) {
+    const delStr = String(deletedId)
+    runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== delStr)
   }
 }
 
@@ -214,7 +236,14 @@ const startDagWorkflow = async () => {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
 </script>
 
 <style scoped>
