@@ -1023,11 +1023,12 @@
 }
 
 .assistant-markdown .inline-code {
-  padding: 1px 5px;
+  padding: 0 4px;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 16px;
-  line-height: inherit;
+  font-size: 0.875em;
+  line-height: 1.4;
+  vertical-align: baseline;
   color: #e11d48;
   background: #fff1f2;
   border: 1px solid #ffe4e6;
