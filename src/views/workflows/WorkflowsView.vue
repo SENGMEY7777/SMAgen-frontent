@@ -219,6 +219,8 @@ const startDagWorkflow = async () => {
             runId: String(runId),
             goalPrompt: goal,
             status: 'RUNNING',
+            startedAt: Date.now(),
+            elapsedSeconds: 0,
             isStreamOpen: true,
           },
         },
