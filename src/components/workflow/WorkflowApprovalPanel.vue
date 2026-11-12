@@ -277,7 +277,7 @@ const STRIPPED_COMMAND_PREFIX_RE = /^(?:\s*(?:file[\s_-]*manager|export[\s_-]*wo
 const commandLabel = computed(() => {
   const rawTool = String(props.approval.assignedTool || '').trim()
   if (!rawTool) return ''
-  if (/^file[\s_-]*manager$/i.test(rawTool)) return ''
+  if (/^(?:file[\s_-]*manager|execute[\s_-]*command)$/i.test(rawTool)) return ''
   return rawTool
 })
 
@@ -293,7 +293,7 @@ const highlightedCommand = computed(() => {
     if (/^\s*[\[{]/.test(cleaned)) {
       return highlightJsonText(cleaned) || highlightCode(cleaned, 'json')
     }
-    return cleaned.split('\n').map((line) => (line.trim() ? highlightValue(line) : '')).join('\n')
+    return highlightWorkflowCommand(cleaned)
   }
   return highlightWorkflowCommand(rawCommand)
 })
