@@ -158,16 +158,31 @@
                     class="project-sidebar-item"
                     :class="{ active: isItemActive(item) }"
                   >
+                    <!-- Title or Inline Rename Input -->
+                    <div v-if="renamingId === item.id" class="inline-rename-box" @click.stop>
+                      <input
+                        v-model="renameDraft"
+                        class="rename-input"
+                        autofocus
+                        @keydown.enter="saveRename(item)"
+                        @keydown.esc="cancelRename"
+                        @blur="saveRename(item)"
+                      />
+                    </div>
+
+                    <!-- Chat Item Link -->
                     <button
-                      v-if="item.type === 'chat'"
+                      v-else-if="item.type === 'chat'"
                       class="project-sidebar-item-link"
                       type="button"
                       :title="item.title"
-                      @click="selectChat(item.id)"
+                      @click="selectChat(item.id, project.id)"
                     >
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
                     </button>
+
+                    <!-- Workflow Item Link -->
                     <button
                       v-else
                       class="project-sidebar-item-link"
@@ -178,6 +193,47 @@
                       <span class="project-sidebar-item-title">{{ item.title }}</span>
                       <span class="project-sidebar-item-time">{{ formatRecentTime(item.updatedAt) }}</span>
                     </button>
+
+                    <!-- 3-Dots Button -->
+                    <button
+                      class="item-options-btn"
+                      :class="{ active: activeMenuId === `${project.id}-${item.id}` }"
+                      type="button"
+                      aria-label="Options"
+                      title="More options"
+                      @click.stop="toggleMenu(`${project.id}-${item.id}`, $event)"
+                    >
+                      <IconDotsVertical :size="13" />
+                    </button>
+
+                    <!-- Floating Dropdown Menu Card -->
+                    <div
+                      v-if="activeMenuId === `${project.id}-${item.id}`"
+                      class="item-dropdown-menu"
+                      :class="{ 'open-upward': menuOpenUpward }"
+                      @click.stop
+                    >
+                      <button class="dropdown-item" type="button" @click.stop="handlePin(item)">
+                        <IconPin :size="15" />
+                        <span class="dropdown-label">{{ item.pinned ? 'Unpin' : 'Pin' }}</span>
+                        <span class="dropdown-shortcut">P</span>
+                      </button>
+                      <button class="dropdown-item" type="button" @click.stop="startRename(item)">
+                        <IconPencil :size="15" />
+                        <span class="dropdown-label">Rename</span>
+                        <span class="dropdown-shortcut">R</span>
+                      </button>
+                      <button class="dropdown-item" type="button" @click.stop="handleRemoveFromProject(item, project.id)">
+                        <IconFolderMinus :size="15" />
+                        <span class="dropdown-label">Remove from project</span>
+                      </button>
+                      <div class="dropdown-divider"></div>
+                      <button class="dropdown-item danger" type="button" @click.stop="handleDelete(item)">
+                        <IconTrash :size="15" />
+                        <span class="dropdown-label">Delete</span>
+                        <span class="dropdown-shortcut">D</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Transition>
@@ -423,12 +479,14 @@ import {
   IconChevronDown,
   IconDevices,
   IconLogout,
+  IconFolderMinus,
 } from '@tabler/icons-vue'
 import BrandMark from '@/components/branding/BrandMark.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useProjectsStore } from '@/stores/projects'
+import { getWorkflowRunId } from '@/utils/workflow'
 
 import { api } from '@/services/api'
 
@@ -856,7 +914,7 @@ const readHiddenWorkflowIds = () => {
 const hiddenWorkflowIds = ref(readHiddenWorkflowIds())
 
 const isWorkflowHidden = (id) => {
-  if (!id) return true
+  if (id === undefined || id === null || id === '') return false
   const strId = String(id)
   return hiddenWorkflowIds.value.some((h) => String(h) === strId)
 }
@@ -865,15 +923,24 @@ const hideAndRemoveWorkflowRun = async (rawRunId) => {
   const runId = String(rawRunId || '').trim()
   if (!runId) return
 
-  if (!isWorkflowHidden(runId)) {
-    hiddenWorkflowIds.value.push(runId)
+  const currentSet = new Set(hiddenWorkflowIds.value.map(String))
+  if (!currentSet.has(runId)) {
+    hiddenWorkflowIds.value = [...hiddenWorkflowIds.value, runId]
     try {
       localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
     } catch {}
   }
 
   // Remove from loadedRuns immediately so UI reacts instantly
-  loadedRuns.value = loadedRuns.value.filter((r) => String(r.id) !== runId)
+  loadedRuns.value = loadedRuns.value.filter((r) => {
+    const id = getWorkflowRunId(r) || r?.id
+    return String(id) !== runId
+  })
+
+  // Broadcast event so DashboardView, HistoryView, and other components update immediately
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('workflow-runs-updated', { detail: { deletedRunId: runId } }))
+  }
 
   try {
     await api.deleteRun(runId)
@@ -882,8 +949,24 @@ const hideAndRemoveWorkflowRun = async (rawRunId) => {
   }
 }
 
+const handleRemoveFromProject = (item, projectId) => {
+  projectsStore.unassignItemFromProject?.(item.id, projectId)
+  if (item.type === 'chat') {
+    const session = chatStore.sessions.find((s) => String(s.id) === String(item.id))
+    if (session && String(session.projectId) === String(projectId)) {
+      delete session.projectId
+    }
+  }
+  closeAllMenus()
+}
+
 const handleDelete = async (item) => {
   const itemId = String(item.id)
+  const itemTitleNorm = normalizeTitle(item.title)
+
+  // 1. Remove from all projects
+  projectsStore.unassignItemFromAllProjects?.(item.id)
+  projectsStore.unassignItemFromAllProjects?.(itemId)
 
   if (item.type === 'chat') {
     const session = chatStore.sessions.find((s) => String(s.id) === itemId)
@@ -895,14 +978,30 @@ const handleDelete = async (item) => {
     }
     if (session?.messages) {
       session.messages.forEach((m) => {
-        if (m.workflow?.runId) {
-          linkedRunIds.add(String(m.workflow.runId))
+        const wfRunId = m.workflow?.runId || m.workflow?.run_id || m.workflowRunId || m.runId
+        if (wfRunId) {
+          linkedRunIds.add(String(wfRunId))
         }
       })
     }
 
+    // Also match any workflow run with identical title or pointing to this session
+    const allRuns = [...(props.recentItems || []), ...(loadedRuns.value || [])]
+    allRuns.forEach((r) => {
+      const rId = String(getWorkflowRunId(r) || r?.id || '')
+      if (!rId) return
+      const rTitleNorm = normalizeTitle(r.goal_prompt || r.title || r.name)
+      if (rTitleNorm && itemTitleNorm && rTitleNorm === itemTitleNorm) {
+        linkedRunIds.add(rId)
+      }
+      if (r.chatSessionId && String(r.chatSessionId) === itemId) {
+        linkedRunIds.add(rId)
+      }
+    })
+
     const isCurrentActive = String(chatStore.activeSessionId) === itemId
     chatStore.deleteSession(item.id)
+    chatStore.deleteSession(itemId)
 
     // Hide/delete linked workflow runs
     for (const runId of linkedRunIds) {
@@ -917,10 +1016,17 @@ const handleDelete = async (item) => {
     await hideAndRemoveWorkflowRun(itemId)
 
     // Also remove any linked chat session
-    const linkedSessions = chatStore.sessions.filter((s) =>
-      String(s.id) === `chat_wf_${itemId}` ||
-      s.messages?.some((m) => String(m.workflow?.runId) === itemId)
-    )
+    const linkedSessions = chatStore.sessions.filter((s) => {
+      if (String(s.id) === `chat_wf_${itemId}`) return true
+      if (s.messages?.some((m) => {
+        const wfRunId = m.workflow?.runId || m.workflow?.run_id || m.workflowRunId || m.runId
+        return String(wfRunId) === itemId
+      })) return true
+      const sTitleNorm = normalizeTitle(s.title)
+      if (sTitleNorm && itemTitleNorm && sTitleNorm === itemTitleNorm) return true
+      return false
+    })
+
     linkedSessions.forEach((s) => {
       const isCurrentActive = String(chatStore.activeSessionId) === String(s.id)
       chatStore.deleteSession(s.id)
@@ -944,7 +1050,10 @@ const loadAllRuns = async () => {
   try {
     const res = await api.listRuns()
     if (res?.data && Array.isArray(res.data)) {
-      loadedRuns.value = res.data.filter((r) => !isWorkflowHidden(r?.id))
+      loadedRuns.value = res.data.filter((r) => {
+        const id = getWorkflowRunId(r) || r?.id
+        return !isWorkflowHidden(id)
+      })
     }
   } catch (err) {
     console.warn('Failed to load runs in DashboardLayout:', err)
@@ -968,28 +1077,44 @@ const combinedRecentItems = computed(() => {
   const allRuns = [...(props.recentItems || []), ...(loadedRuns.value || [])]
   const seenRunIds = new Set()
   const uniqueRuns = allRuns.filter((r) => {
-    if (!r?.id) return false
-    const idStr = String(r.id)
+    if (!r) return false
+    const id = getWorkflowRunId(r) || r?.id
+    if (!id) return false
+    const idStr = String(id)
     if (seenRunIds.has(idStr) || isWorkflowHidden(idStr)) return false
     seenRunIds.add(idStr)
     return true
   })
 
-  const workflowItems = uniqueRuns.map((r) => ({
-    id: r.id,
-    title: r.goal_prompt || r.title || 'Workflow run',
-    type: 'workflow',
-    status: r.status,
-    chatSessionId: getChatSessionForWorkflow(r.id)?.id || null,
-    pinned: false,
-    updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
-  }))
+  const workflowItems = uniqueRuns.map((r) => {
+    const runId = getWorkflowRunId(r) || r.id
+    return {
+      id: runId,
+      title: r.goal_prompt || r.title || r.name || 'Workflow run',
+      type: 'workflow',
+      status: r.status,
+      chatSessionId: getChatSessionForWorkflow(runId)?.id || null,
+      pinned: false,
+      updatedAt: new Date(r.created_at || r.updatedAt || 0).getTime(),
+    }
+  })
 
   const chatItems = chatStore.sessions.map((s) => ({
     id: s.id,
     title: s.title,
     type: 'chat',
     pinned: Boolean(s.pinned),
+    updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
+  }))
+
+  const merged = [...chatItems, ...workflowItems]
+  merged.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1
+    if (!a.pinned && b.pinned) return 1
+    return b.updatedAt - a.updatedAt
+  })
+  return merged
+})
     updatedAt: new Date(s.updatedAt || s.createdAt || 0).getTime(),
   }))
 
@@ -1352,8 +1477,12 @@ const unassignedItems = computed(() => {
 }
 
 .project-sidebar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
   min-width: 0;
   border-radius: 7px;
+  padding-right: 4px;
 }
 
 .project-sidebar-item:hover,
@@ -1501,6 +1630,7 @@ const unassignedItems = computed(() => {
 }
 
 .recent-row:hover .item-options-btn,
+.project-sidebar-item:hover .item-options-btn,
 .item-options-btn.active {
   opacity: 1;
 }
