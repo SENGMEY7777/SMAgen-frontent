@@ -98,6 +98,28 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
+  const unassignItemFromProject = (itemId, projectId) => {
+    const proj = projects.value.find((p) => p.id === projectId)
+    if (proj && Array.isArray(proj.linkedItems)) {
+      const strId = String(itemId)
+      proj.linkedItems = proj.linkedItems.filter((id) => String(id) !== strId)
+      proj.updatedAt = new Date().toISOString()
+    }
+  }
+
+  const unassignItemFromAllProjects = (itemId) => {
+    const strId = String(itemId)
+    projects.value.forEach((proj) => {
+      if (Array.isArray(proj.linkedItems)) {
+        const initialLen = proj.linkedItems.length
+        proj.linkedItems = proj.linkedItems.filter((id) => String(id) !== strId)
+        if (proj.linkedItems.length !== initialLen) {
+          proj.updatedAt = new Date().toISOString()
+        }
+      }
+    })
+  }
+
   return {
     projects,
     activeProjectId,
@@ -106,5 +128,7 @@ export const useProjectsStore = defineStore('projects', () => {
     updateProject,
     deleteProject,
     assignItemToProject,
+    unassignItemFromProject,
+    unassignItemFromAllProjects,
   }
 })
