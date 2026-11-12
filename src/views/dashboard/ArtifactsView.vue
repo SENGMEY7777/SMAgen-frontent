@@ -91,12 +91,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import { IconClock, IconFolder, IconFileText, IconCopy, IconCheck, IconCode } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate } from '@/utils/formatters'
 import { getFileIconInfo } from '@/utils/fileIcons'
+import { getWorkflowRunId } from '@/utils/workflow'
 
 const runs = ref([])
 const loading = ref(true)
@@ -192,12 +193,25 @@ const generatedArtifacts = computed(() => {
   return list
 })
 
+const getHiddenRunIds = () => {
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 const load = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
     const res = await api.listRuns()
-    const rawRuns = res?.data || []
+    const hiddenSet = new Set(getHiddenRunIds())
+    const rawRuns = (res?.data || []).filter(
+      (r) => !hiddenSet.has(String(getWorkflowRunId(r) || r?.id))
+    )
 
     // Fetch full run details with tasks for recent runs in parallel (up to 20 runs)
     const detailedRuns = await Promise.all(
@@ -224,7 +238,25 @@ const load = async () => {
   }
 }
 
-onMounted(load)
+const onWorkflowRunsUpdated = (event) => {
+  const deletedId = event?.detail?.deletedRunId
+  if (deletedId) {
+    const delStr = String(deletedId)
+    runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== delStr)
+    if (selectedFile.value && String(selectedFile.value.runId) === delStr) {
+      selectedFile.value = generatedArtifacts.value[0] || null
+    }
+  }
+}
+
+onMounted(() => {
+  load()
+  window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
 </script>
 
 <style scoped>
