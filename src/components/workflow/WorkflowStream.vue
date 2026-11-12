@@ -1936,8 +1936,14 @@ const highlightCode = (value) => {
 }
 
 .stream-subactivity-text.is-live .stream-subactivity-label {
-  color: #71717a;
-  animation: subactivity-text-shimmer 1.8s ease-in-out infinite;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(90deg, #71717a 0%, #71717a 36%, #e4e4e7 50%, #71717a 64%, #71717a 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: subactivity-text-shimmer 1.6s linear infinite;
 }
 
 .stream-subactivity-dots {
@@ -1971,11 +1977,11 @@ const highlightCode = (value) => {
 }
 
 @keyframes subactivity-text-shimmer {
-  0%, 100% {
-    color: #71717a;
+  from {
+    background-position: 100% 0;
   }
-  50% {
-    color: #a1a1aa;
+  to {
+    background-position: 0% 0;
   }
 }
 
@@ -3427,6 +3433,13 @@ const highlightCode = (value) => {
   :global(.approval-panel-slide-leave-active) {
     animation: none;
     transition: none;
+  }
+
+  .stream-subactivity-text.is-live .stream-subactivity-label {
+    animation: none;
+    background: none;
+    color: inherit;
+    -webkit-text-fill-color: currentColor;
   }
 }
 
