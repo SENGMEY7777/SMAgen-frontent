@@ -371,7 +371,7 @@ export function useWorkflowRuntime({
     }
 
     updateWorkflowMessage(index, nextWorkflow)
-    scrollToBottom()
+    scrollToBottom('auto', { force: false })
   }
 
   const stopWorkflowPolling = (runId) => {
@@ -554,7 +554,7 @@ export function useWorkflowRuntime({
       }
     } finally {
       workflowRefreshes.delete(key)
-      scrollToBottom()
+      scrollToBottom('auto', { force: false })
     }
   }
 
@@ -606,7 +606,7 @@ export function useWorkflowRuntime({
     if (runId) stopWorkflowPolling(runId)
 
     const startTime = Date.now()
-    const STANDARD_DELAY_MS = 600
+    const STANDARD_DELAY_MS = 250
 
     try {
       if (isRealApproval) {
@@ -640,7 +640,7 @@ export function useWorkflowRuntime({
         }
       }
 
-      // Enforce standard smooth delay (minimum 600ms) for clear visual confirmation
+      // Keep a brief visual confirmation before transitioning back to RUNNING
       const elapsed = Date.now() - startTime
       if (elapsed < STANDARD_DELAY_MS) {
         await new Promise((resolve) => window.setTimeout(resolve, STANDARD_DELAY_MS - elapsed))
@@ -654,7 +654,6 @@ export function useWorkflowRuntime({
       })
 
       if (runId) {
-        await new Promise((resolve) => window.setTimeout(resolve, 500))
         await refreshWorkflowMessage(index, runId)
         if (!isTerminalWorkflowStatus(currentMessages.value[index]?.workflow?.status)) {
           startWorkflowPolling(index, runId)
