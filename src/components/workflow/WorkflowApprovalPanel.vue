@@ -11,11 +11,11 @@
       </span>
     </div>
 
-    <div class="workflow-command-box">
-      <span class="workflow-command-label">
-        {{ approval.assignedTool || 'workflow action' }}
+    <div v-if="commandLabel || highlightedCommand" class="workflow-command-box">
+      <span v-if="commandLabel" class="workflow-command-label">
+        {{ commandLabel }}
       </span>
-      <code v-html="highlightedCommand"></code>
+      <code v-if="highlightedCommand" v-html="highlightedCommand"></code>
     </div>
 
     <div class="workflow-choice-list" role="radiogroup" aria-label="Workflow approval choice">
@@ -272,12 +272,30 @@ const highlightWorkflowCommand = (rawText) => {
   return text.split('\n').map(highlightLine).join('\n')
 }
 
+const STRIPPED_COMMAND_PREFIX_RE = /^(?:\s*(?:file[\s_-]*manager|export[\s_-]*workspace[\s_-]*to[\s_-]*desktop)\s*:?\s*)+/i
+
+const commandLabel = computed(() => {
+  const rawTool = String(props.approval.assignedTool || '').trim()
+  if (!rawTool) return ''
+  if (/^file[\s_-]*manager$/i.test(rawTool)) return ''
+  return rawTool
+})
+
 const highlightedCommand = computed(() => {
-  const command = props.stringifyValue(
+  const rawCommand = props.stringifyValue(
     props.approval.actionSummary || props.approval.toolInput,
     'Approval required for this action.',
   )
-  return highlightWorkflowCommand(command)
+  const trimmed = String(rawCommand || '').trim()
+  if (STRIPPED_COMMAND_PREFIX_RE.test(trimmed)) {
+    const cleaned = trimmed.replace(STRIPPED_COMMAND_PREFIX_RE, '').trim()
+    if (!cleaned) return ''
+    if (/^\s*[\[{]/.test(cleaned)) {
+      return highlightJsonText(cleaned) || highlightCode(cleaned, 'json')
+    }
+    return cleaned.split('\n').map((line) => (line.trim() ? highlightValue(line) : '')).join('\n')
+  }
+  return highlightWorkflowCommand(rawCommand)
 })
 
 defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
@@ -289,10 +307,10 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   width: min(768px, 100%);
   max-width: 100%;
   box-sizing: border-box;
-  max-height: min(520px, calc(100dvh - 190px));
+  max-height: min(400px, calc(100dvh - 180px));
   overflow-y: auto;
-  margin: 0 auto 16px;
-  padding: clamp(18px, 1.5vw, 26px);
+  margin: 0 auto 14px;
+  padding: 16px 20px;
   border: 1px solid #e2e4e8;
   border-radius: 15px;
   background: #ffffff;
@@ -308,16 +326,16 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 .workflow-approval-meta {
   display: flex;
   align-items: center;
-  gap: clamp(10px, 0.9vw, 15px);
+  gap: 10px;
   color: #202124;
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1.25;
   font-weight: 650;
 }
 
 .workflow-approval-meta svg {
-  width: clamp(18px, 1.5vw, 24px);
-  height: clamp(18px, 1.5vw, 24px);
+  width: 19px;
+  height: 19px;
   flex: 0 0 auto;
   color: #5f6368;
 }
@@ -329,17 +347,18 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
 .workflow-command-box {
   display: grid;
-  gap: clamp(4px, 0.4vw, 7px);
-  margin-top: clamp(14px, 1.2vw, 20px);
-  padding: clamp(12px, 1vw, 17px) clamp(14px, 1.2vw, 20px);
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 14px;
   border: 1px solid #eceef1;
-  border-radius: clamp(12px, 1.1vw, 18px);
+  border-radius: 12px;
   background: #f5f6f7;
 }
 
 .workflow-command-label {
   color: #000000;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.2;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -347,12 +366,12 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
 .workflow-command-box code {
   display: block;
-  max-height: 180px;
+  max-height: 110px;
   overflow: auto;
   color: #0f172a;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 17px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -395,8 +414,8 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
 .workflow-choice-list {
   display: grid;
-  gap: clamp(4px, 0.55vw, 9px);
-  margin-top: clamp(14px, 1.35vw, 22px);
+  gap: 5px;
+  margin-top: 12px;
 }
 
 .workflow-choice-row {
@@ -411,15 +430,15 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: clamp(10px, 1vw, 16px);
+  gap: 12px;
   min-width: 0;
-  min-height: clamp(50px, 3.2vw, 58px);
-  padding: 9px clamp(12px, 1vw, 17px);
+  min-height: 42px;
+  padding: 6px 12px;
   border: 1px solid transparent;
-  border-radius: clamp(12px, 1vw, 17px);
+  border-radius: 11px;
   color: #383b40;
-  font-size: 16px;
-  line-height: 1;
+  font-size: 14.5px;
+  line-height: 1.25;
   cursor: pointer;
   background: #ffffff;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
@@ -452,12 +471,12 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: clamp(30px, 2.2vw, 38px);
-  height: clamp(30px, 2.2vw, 38px);
-  border-radius: clamp(8px, 0.7vw, 12px);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   color: #52565c;
   background: #eceef0;
-  font-size: 16px;
+  font-size: 13.5px;
   font-weight: 700;
 }
 
@@ -502,13 +521,13 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 }
 
 .workflow-skip-btn {
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 11px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   background: transparent;
   color: #5f6368;
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
@@ -524,17 +543,17 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 15px;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 13px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   background: #000000;
   color: #ffffff;
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
@@ -582,16 +601,16 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 @media (max-width: 560px) {
   .workflow-approval-panel {
     width: 100%;
-    max-height: min(560px, calc(100dvh - 160px));
-    margin-top: 14px;
-    padding: 14px;
+    max-height: min(400px, calc(100dvh - 150px));
+    margin-top: 12px;
+    padding: 13px;
     border-radius: 14px;
   }
 
   .workflow-choice {
     align-items: flex-start;
     min-height: 0;
-    padding: 10px;
+    padding: 8px 10px;
   }
 
   .workflow-choice input {
@@ -609,7 +628,7 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 
   .workflow-skip-btn,
   .workflow-submit-btn {
-    min-height: 40px;
+    min-height: 36px;
   }
 }
 </style>
