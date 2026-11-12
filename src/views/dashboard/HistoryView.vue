@@ -34,7 +34,7 @@
         Start a workflow from Home to see it here.
       </div>
       <div v-else class="data-list">
-        <article v-for="run in paginatedRuns" :key="run.id" class="data-row">
+        <article v-for="run in paginatedRuns" :key="getWorkflowRunId(run) || run.id" class="data-row">
           <div class="row-main">
             <div class="row-title" :title="run.goal_prompt">{{ run.goal_prompt }}</div>
             <div class="row-meta">
@@ -45,7 +45,7 @@
           </div>
           <div class="row-actions">
             <StatusPill :status="run.status" />
-            <RouterLink class="secondary-btn sm" :to="`/runs/${run.id}`">
+            <RouterLink class="secondary-btn sm" :to="`/runs/${getWorkflowRunId(run) || run.id}`">
               View run <IconArrowRight :size="12" />
             </RouterLink>
             <button
@@ -53,7 +53,7 @@
               type="button"
               title="Delete run"
               aria-label="Delete run"
-              @click="handleDeleteRun(run.id)"
+              @click="handleDeleteRun(getWorkflowRunId(run) || run.id)"
             >
               <IconTrash :size="14" />
             </button>
@@ -123,9 +123,12 @@ import {
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate, formatTokens } from '@/utils/formatters'
+import { getWorkflowRunId } from '@/utils/workflow'
 import { useChatStore } from '@/stores/chat'
+import { useProjectsStore } from '@/stores/projects'
 
 const chatStore = useChatStore()
+const projectsStore = useProjectsStore()
 const runs = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
@@ -186,23 +189,43 @@ const displayedPages = computed(() => {
   return pages
 })
 
+const normalizeTitle = (title) => String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+const matchesNormalizedTitle = (a, b) => {
+  const normA = normalizeTitle(a)
+  const normB = normalizeTitle(b)
+  if (!normA || !normB) return false
+  if (normA === normB) return true
+  const stripEllipsis = (s) => s.replace(/(?:\.\.\.|…)+$/, '').trim()
+  const baseA = stripEllipsis(normA)
+  const baseB = stripEllipsis(normB)
+  if (normA !== baseA && baseA.length >= 16 && normB.startsWith(baseA)) return true
+  if (normB !== baseB && baseB.length >= 16 && normA.startsWith(baseB)) return true
+  return false
+}
+
+const getHiddenRunIds = () => {
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 const load = async () => {
   loading.value = true
   try {
     const response = await api.listRuns()
-    const hiddenSet = new Set(
-      (() => {
-        try {
-          const raw = localStorage.getItem('hidden_workflow_runs')
-          const parsed = raw ? JSON.parse(raw) : []
-          return Array.isArray(parsed) ? parsed.map(String) : []
-        } catch {
-          return []
-        }
-      })()
-    )
+    const hiddenSet = new Set(getHiddenRunIds())
     const rawRuns = response?.data || []
-    runs.value = Array.isArray(rawRuns) ? rawRuns.filter((r) => !hiddenSet.has(String(r?.id))) : []
+    runs.value = Array.isArray(rawRuns)
+      ? rawRuns.filter((r) => !hiddenSet.has(String(getWorkflowRunId(r) || r?.id)))
+      : []
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value
+    }
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load run history.'
   } finally {
@@ -211,13 +234,21 @@ const load = async () => {
 }
 
 const handleDeleteRun = async (runId) => {
-  const idStr = String(runId)
-  runs.value = runs.value.filter((r) => String(r.id) !== idStr)
+  const idStr = String(runId || '').trim()
+  if (!idStr) return
+
+  const targetRun = runs.value.find((r) => String(getWorkflowRunId(r) || r?.id) === idStr)
+  const targetTitle = targetRun?.goal_prompt || targetRun?.title || targetRun?.name || ''
+  const activeStatuses = new Set(['STARTING', 'PENDING', 'RUNNING', 'AWAITING_APPROVAL'])
+  const isActiveRun = targetRun && activeStatuses.has(String(targetRun.status || '').toUpperCase())
+
+  runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== idStr)
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value
+  }
 
   try {
-    const raw = localStorage.getItem('hidden_workflow_runs')
-    const list = raw ? JSON.parse(raw) : []
-    const updated = Array.from(new Set([...list.map(String), idStr]))
+    const updated = Array.from(new Set([...getHiddenRunIds(), idStr]))
     localStorage.setItem('hidden_workflow_runs', JSON.stringify(updated))
   } catch {}
 
@@ -226,12 +257,32 @@ const handleDeleteRun = async (runId) => {
     window.dispatchEvent(new CustomEvent('workflow-runs-updated', { detail: { deletedRunId: idStr } }))
   }
 
+  projectsStore.unassignItemFromAllProjects?.(idStr)
+  projectsStore.unassignItemFromAllProjects?.(`chat_wf_${idStr}`)
+
   // Remove linked chat session if present
   const linked = chatStore.sessions.filter((s) =>
     String(s.id) === `chat_wf_${idStr}` ||
-    s.messages?.some((m) => String(m.workflow?.runId) === idStr)
+    s.messages?.some((m) => {
+      const wfRunId = m.workflow?.runId || m.workflow?.run_id || m.workflowRunId || m.runId
+      return String(wfRunId) === idStr
+    }) ||
+    matchesNormalizedTitle(s.title, targetTitle)
   )
-  linked.forEach((s) => chatStore.deleteSession(s.id))
+  linked.forEach((s) => {
+    projectsStore.unassignItemFromAllProjects?.(s.id)
+    const isCurrentActive = String(chatStore.activeSessionId) === String(s.id)
+    chatStore.deleteSession(s.id)
+    if (isCurrentActive) {
+      chatStore.startNewChat()
+    }
+  })
+
+  if (isActiveRun) {
+    try {
+      await api.cancelWorkflow(idStr).catch(() => {})
+    } catch {}
+  }
 
   try {
     await api.deleteRun(idStr)
@@ -243,7 +294,11 @@ const handleDeleteRun = async (runId) => {
 const onWorkflowRunsUpdated = (event) => {
   const deletedId = event?.detail?.deletedRunId
   if (deletedId) {
-    runs.value = runs.value.filter((r) => String(r.id) !== String(deletedId))
+    const delStr = String(deletedId)
+    runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== delStr)
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value
+    }
   }
 }
 
