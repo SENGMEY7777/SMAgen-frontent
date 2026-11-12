@@ -17,7 +17,9 @@
         <IconWifiOff v-if="isConnectionRecovering(workflow)" :size="13" />
         <component v-else :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
       </span>
-      <span class="stream-subactivity-label">{{ getCurrentWorkingText(workflow) }}</span>
+      <Transition name="stream-label-swap" mode="out-in">
+        <span :key="getCurrentWorkingText(workflow)" class="stream-subactivity-label">{{ getCurrentWorkingText(workflow) }}</span>
+      </Transition>
       <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
         <span>.</span><span>.</span><span>.</span>
       </span>
@@ -29,6 +31,7 @@
         <IconChevronDown :size="12" :class="{ 'rotate-180': workflow.isStreamOpen }" />
       </button>
 
+      <Transition name="stream-expand">
       <div v-if="workflow.isStreamOpen" class="stream-steps-list">
         <div
           v-for="(step, stepIndex) in getWorkflowSteps(workflow)"
@@ -51,6 +54,7 @@
           <div v-if="step.isFailed && step.output" class="stream-step-error-preview">
             {{ step.output }}
           </div>
+          <Transition name="stream-expand">
           <div v-if="isStepExpanded(workflow, step.id || stepIndex)" class="stream-step-details">
             <div v-if="step.toolInput" class="stream-code-block">
               <div class="stream-code-header">
@@ -65,10 +69,13 @@
               <pre class="stream-step-code"><code v-html="highlightCode(step.output)"></code></pre>
             </div>
           </div>
+          </Transition>
         </div>
       </div>
+      </Transition>
     </div>
 
+    <Transition name="stream-completion-enter">
     <div v-if="(isWorkflowComplete(workflow) || reviewOpen) && !workflow.approval" class="workflow-completion-response" aria-live="polite">
       <template v-if="isWorkflowComplete(workflow)">
       <div class="completion-heading-row">
@@ -348,6 +355,7 @@
 
       </template>
     </div>
+    </Transition>
 
     <div v-if="isWorkflowTerminal(workflow) && !workflow.approval" class="completion-actions" aria-label="Workflow response actions">
       <button type="button" class="completion-action-btn" :title="copied ? 'Copied' : 'Copy response'" @click="copyCompletionResponse(workflow)">
@@ -425,20 +433,22 @@
     </section>
 
     <Teleport to=".composer-container">
-      <WorkflowApprovalPanel
-        v-if="workflow.approval"
-        :approval="workflow.approval"
-        :options="approvalOptions(workflow.approval.assignedTool)"
-        :run-id="workflow.runId"
-        :message-index="messageIndex"
-        :decision-pending="workflow.decisionPending"
-        :error="workflow.error"
-        :stringify-value="stringifyValue"
-        @skip="$emit('skip-approval')"
-        @submit="$emit('submit-approval')"
-        @update:choice="$emit('update-approval-choice', $event)"
-        @update:rejection-reason="$emit('update-approval-rejection', $event)"
-      />
+      <Transition name="approval-panel-slide">
+        <WorkflowApprovalPanel
+          v-if="workflow.approval"
+          :approval="workflow.approval"
+          :options="approvalOptions(workflow.approval.assignedTool)"
+          :run-id="workflow.runId"
+          :message-index="messageIndex"
+          :decision-pending="workflow.decisionPending"
+          :error="workflow.error"
+          :stringify-value="stringifyValue"
+          @skip="$emit('skip-approval')"
+          @submit="$emit('submit-approval')"
+          @update:choice="$emit('update-approval-choice', $event)"
+          @update:rejection-reason="$emit('update-approval-rejection', $event)"
+        />
+      </Transition>
     </Teleport>
 
     <div v-if="workflow.runId" class="workflow-subtle-footer">
@@ -1700,6 +1710,7 @@ const highlightCode = (value) => {
   background: transparent;
   margin: 0 0 24px;
   padding: 0;
+  animation: workflow-stream-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .stream-elapsed-header {
@@ -1894,12 +1905,12 @@ const highlightCode = (value) => {
 
 .stream-subactivity-text.is-live .stream-subactivity-label {
   color: transparent;
-  background: linear-gradient(90deg, #8f8f99 0%, #8f8f99 38%, #d4d4d8 50%, #8f8f99 62%, #8f8f99 100%);
+  background: linear-gradient(90deg, #8f8f99 0%, #8f8f99 36%, #d4d4d8 50%, #8f8f99 64%, #8f8f99 100%);
   background-size: 220% 100%;
   background-position: -120% 0;
   background-clip: text;
   -webkit-background-clip: text;
-  animation: subactivity-text-shimmer 1.25s linear infinite;
+  animation: subactivity-text-shimmer 1.6s ease-in-out infinite;
 }
 
 .stream-subactivity-dots {
@@ -3320,6 +3331,77 @@ const highlightCode = (value) => {
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes workflow-stream-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stream-label-swap-enter-active,
+.stream-label-swap-leave-active {
+  transition: opacity 170ms ease, transform 170ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stream-label-swap-enter-from {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
+.stream-label-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+.stream-expand-enter-active,
+.stream-expand-leave-active {
+  transition: opacity 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stream-expand-enter-from,
+.stream-expand-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.stream-completion-enter-enter-active {
+  transition: opacity 280ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stream-completion-enter-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+:global(.approval-panel-slide-enter-active),
+:global(.approval-panel-slide-leave-active) {
+  transition: opacity 240ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:global(.approval-panel-slide-enter-from),
+:global(.approval-panel-slide-leave-to) {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-antigravity-stream,
+  .stream-label-swap-enter-active,
+  .stream-label-swap-leave-active,
+  .stream-expand-enter-active,
+  .stream-expand-leave-active,
+  .stream-completion-enter-enter-active,
+  :global(.approval-panel-slide-enter-active),
+  :global(.approval-panel-slide-leave-active) {
+    animation: none;
+    transition: none;
   }
 }
 
