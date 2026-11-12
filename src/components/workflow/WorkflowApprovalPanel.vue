@@ -11,11 +11,8 @@
       </span>
     </div>
 
-    <div v-if="commandLabel || highlightedCommand" class="workflow-command-box">
-      <span v-if="commandLabel" class="workflow-command-label">
-        {{ commandLabel }}
-      </span>
-      <code v-if="highlightedCommand" v-html="highlightedCommand"></code>
+    <div v-if="highlightedCommand" class="workflow-command-box">
+      <code v-html="highlightedCommand"></code>
     </div>
 
     <div class="workflow-choice-list" role="radiogroup" aria-label="Workflow approval choice">
@@ -274,13 +271,6 @@ const highlightWorkflowCommand = (rawText) => {
 
 const STRIPPED_COMMAND_PREFIX_RE = /^(?:\s*(?:file[\s_-]*manager|export[\s_-]*workspace[\s_-]*to[\s_-]*desktop)\s*:?\s*)+/i
 
-const commandLabel = computed(() => {
-  const rawTool = String(props.approval.assignedTool || '').trim()
-  if (!rawTool) return ''
-  if (/^(?:file[\s_-]*manager|execute[\s_-]*command)$/i.test(rawTool)) return ''
-  return rawTool
-})
-
 const highlightedCommand = computed(() => {
   const rawCommand = props.stringifyValue(
     props.approval.actionSummary || props.approval.toolInput,
@@ -353,15 +343,6 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   border: 1px solid #eceef1;
   border-radius: 12px;
   background: #f5f6f7;
-}
-
-.workflow-command-label {
-  color: #000000;
-  font-size: 11px;
-  line-height: 1.2;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .workflow-command-box code {
