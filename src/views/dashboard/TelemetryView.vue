@@ -139,27 +139,50 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import { IconClock } from '@tabler/icons-vue'
 import { api, ApiError } from '@/services/api'
 import { formatCost, formatDate, formatTokens } from '@/utils/formatters'
+import { getWorkflowRunId } from '@/utils/workflow'
 
 const runs = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
 const selectedTimeframe = ref('7d')
 
+const getHiddenRunIds = () => {
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 const loadData = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
     const res = await api.listRuns().catch(() => ({ data: [] }))
-    runs.value = res?.data || []
+    const hiddenSet = new Set(getHiddenRunIds())
+    const rawRuns = res?.data || []
+    runs.value = Array.isArray(rawRuns)
+      ? rawRuns.filter((r) => !hiddenSet.has(String(getWorkflowRunId(r) || r?.id)))
+      : []
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'Unable to load telemetry.'
   } finally {
     loading.value = false
+  }
+}
+
+const onWorkflowRunsUpdated = (event) => {
+  const deletedId = event?.detail?.deletedRunId
+  if (deletedId) {
+    const delStr = String(deletedId)
+    runs.value = runs.value.filter((r) => String(getWorkflowRunId(r) || r?.id) !== delStr)
   }
 }
 
@@ -206,7 +229,14 @@ const modelBreakdown = computed(() => [
   },
 ])
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
+})
 </script>
 
 <style scoped>
