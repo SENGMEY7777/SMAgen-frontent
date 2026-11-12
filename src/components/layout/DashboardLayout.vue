@@ -1786,10 +1786,12 @@ const unassignedItems = computed(() => {
 }
 
 .topbar-chat-title {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 14.5px;
   font-weight: 550;
   color: #18181b;
-  max-width: clamp(160px, 40vw, 480px);
+  max-width: min(480px, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
