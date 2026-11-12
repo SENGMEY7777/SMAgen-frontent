@@ -843,22 +843,94 @@ const handleMoveToGroup = (item) => {
   closeAllMenus()
 }
 
-const hiddenWorkflowIds = ref(JSON.parse(localStorage.getItem('hidden_workflow_runs') || '[]'))
+const readHiddenWorkflowIds = () => {
+  try {
+    const raw = localStorage.getItem('hidden_workflow_runs')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
 
-const handleDelete = (item) => {
+const hiddenWorkflowIds = ref(readHiddenWorkflowIds())
+
+const isWorkflowHidden = (id) => {
+  if (!id) return true
+  const strId = String(id)
+  return hiddenWorkflowIds.value.some((h) => String(h) === strId)
+}
+
+const hideAndRemoveWorkflowRun = async (rawRunId) => {
+  const runId = String(rawRunId || '').trim()
+  if (!runId) return
+
+  if (!isWorkflowHidden(runId)) {
+    hiddenWorkflowIds.value.push(runId)
+    try {
+      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
+    } catch {}
+  }
+
+  // Remove from loadedRuns immediately so UI reacts instantly
+  loadedRuns.value = loadedRuns.value.filter((r) => String(r.id) !== runId)
+
+  try {
+    await api.deleteRun(runId)
+  } catch (err) {
+    console.warn('Backend deleteRun error (locally hidden):', err)
+  }
+}
+
+const handleDelete = async (item) => {
+  const itemId = String(item.id)
+
   if (item.type === 'chat') {
-    const isCurrentActive = chatStore.activeSessionId === item.id
+    const session = chatStore.sessions.find((s) => String(s.id) === itemId)
+
+    // Collect all linked workflow run IDs so deleting a chat won't leave orphaned workflow runs
+    const linkedRunIds = new Set()
+    if (itemId.startsWith('chat_wf_')) {
+      linkedRunIds.add(itemId.replace('chat_wf_', ''))
+    }
+    if (session?.messages) {
+      session.messages.forEach((m) => {
+        if (m.workflow?.runId) {
+          linkedRunIds.add(String(m.workflow.runId))
+        }
+      })
+    }
+
+    const isCurrentActive = String(chatStore.activeSessionId) === itemId
     chatStore.deleteSession(item.id)
+
+    // Hide/delete linked workflow runs
+    for (const runId of linkedRunIds) {
+      await hideAndRemoveWorkflowRun(runId)
+    }
+
     if (isCurrentActive) {
       chatStore.startNewChat()
       if (route.name !== 'chat') router.push({ name: 'chat' })
     }
   } else if (item.type === 'workflow') {
-    hiddenWorkflowIds.value.push(item.id)
-    try {
-      localStorage.setItem('hidden_workflow_runs', JSON.stringify(hiddenWorkflowIds.value))
-    } catch {}
+    await hideAndRemoveWorkflowRun(itemId)
+
+    // Also remove any linked chat session
+    const linkedSessions = chatStore.sessions.filter((s) =>
+      String(s.id) === `chat_wf_${itemId}` ||
+      s.messages?.some((m) => String(m.workflow?.runId) === itemId)
+    )
+    linkedSessions.forEach((s) => {
+      const isCurrentActive = String(chatStore.activeSessionId) === String(s.id)
+      chatStore.deleteSession(s.id)
+      if (isCurrentActive) {
+        chatStore.startNewChat()
+        if (route.name !== 'chat') router.push({ name: 'chat' })
+      }
+    })
   }
+
   closeAllMenus()
 }
 
@@ -872,7 +944,7 @@ const loadAllRuns = async () => {
   try {
     const res = await api.listRuns()
     if (res?.data && Array.isArray(res.data)) {
-      loadedRuns.value = res.data
+      loadedRuns.value = res.data.filter((r) => !isWorkflowHidden(r?.id))
     }
   } catch (err) {
     console.warn('Failed to load runs in DashboardLayout:', err)
@@ -893,11 +965,13 @@ watch(
 
 const combinedRecentItems = computed(() => {
   // Combine runs from props and backend API so sidebar ALWAYS shows all history on every page!
-  const allRuns = [...props.recentItems, ...loadedRuns.value]
+  const allRuns = [...(props.recentItems || []), ...(loadedRuns.value || [])]
   const seenRunIds = new Set()
   const uniqueRuns = allRuns.filter((r) => {
-    if (!r?.id || seenRunIds.has(String(r.id)) || hiddenWorkflowIds.value.includes(r.id)) return false
-    seenRunIds.add(String(r.id))
+    if (!r?.id) return false
+    const idStr = String(r.id)
+    if (seenRunIds.has(idStr) || isWorkflowHidden(idStr)) return false
+    seenRunIds.add(idStr)
     return true
   })
 
