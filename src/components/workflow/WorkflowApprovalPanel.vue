@@ -23,10 +23,9 @@
 
     <div class="workflow-choice-list" role="radiogroup" aria-label="Workflow approval choice">
       <div
-        v-for="(option, index) in options"
+        v-for="option in options"
         :key="option.value"
         class="workflow-choice-row"
-        :class="{ 'has-actions': String(option.number) === '5' || option.value === 'reject' || index === options.length - 1 }"
       >
         <label
           class="workflow-choice"
@@ -40,25 +39,8 @@
             @change="$emit('update:choice', option.value)"
           />
           <span class="workflow-choice-number">{{ option.number }}</span>
-          <span class="workflow-choice-text">{{ option.label }}</span>
+          <span>{{ option.label }}</span>
         </label>
-
-        <!-- Feature buttons placed directly on Row Option 5 -->
-        <div
-          v-if="String(option.number) === '5' || option.value === 'reject' || index === options.length - 1"
-          class="workflow-approval-actions"
-          role="group"
-          aria-label="Approval actions"
-        >
-          <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
-            Skip
-          </button>
-          <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
-            <IconLoader2 v-if="decisionPending" :size="14" class="spin-icon" />
-            <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
-            <IconCornerDownLeft v-if="!decisionPending" :size="13" />
-          </button>
-        </div>
       </div>
     </div>
 
@@ -67,9 +49,26 @@
       class="workflow-rejection-input"
       rows="2"
       :value="approval.rejectionReason"
-      placeholder="Tell KAIRO what to do instead…"
+      placeholder="Tell SMAgen what to do instead…"
       @input="$emit('update:rejectionReason', $event.target.value)"
     ></textarea>
+
+    <!-- Dedicated action button row dropped below Option 5 and textarea -->
+    <div class="workflow-approval-footer">
+      <div
+        class="workflow-approval-actions"
+        role="group"
+        aria-label="Approval actions"
+      >
+        <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
+          Skip
+        </button>
+        <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
+          <IconLoader2 v-if="decisionPending" :size="14" class="spin-icon" />
+          <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
+        </button>
+      </div>
+    </div>
 
     <div v-if="error" class="workflow-card-error">{{ error }}</div>
   </div>
@@ -77,7 +76,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { IconLoader2, IconTerminal2, IconCornerDownLeft } from '@tabler/icons-vue'
+import { IconLoader2, IconTerminal2 } from '@tabler/icons-vue'
 import { highlightCode } from '@/utils/markdown'
 
 const props = defineProps({
@@ -118,23 +117,91 @@ const escapeHtml = (value) => String(value)
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
 
+const highlightValue = (val) => {
+  if (!val) return ''
+  const trimmed = val.trim()
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return `<span class="hl-number">${escapeHtml(val)}</span>`
+  }
+  return `<span class="hl-string">${escapeHtml(val)}</span>`
+}
+
+const highlightWorkflowCommand = (rawText) => {
+  if (!rawText) return ''
+  const text = String(rawText).trim()
+
+  if (/^\s*[\[{]/.test(text)) {
+    return highlightCode(text, 'json')
+  }
+
+  const highlightLine = (line) => {
+    if (!line.trim()) return ''
+
+    // Whole-line comment
+    if (/^\s*(#|\/\/)/.test(line)) {
+      return `<span class="hl-comment">${escapeHtml(line)}</span>`
+    }
+
+    // Pattern 1: Tool + key: + value (e.g. "httpRequester task: Test live API endpoint")
+    const matchToolAction = line.match(/^(\s*)(\S+)(\s+)([^:\s]+:)(\s*)([\s\S]*)$/)
+    if (matchToolAction) {
+      const [, leading, tool, sp1, action, sp2, val] = matchToolAction
+      return `${escapeHtml(leading)}<span class="hl-fn">${escapeHtml(tool)}</span>${escapeHtml(sp1)}<span class="hl-keyword">${escapeHtml(action)}</span>${escapeHtml(sp2)}${highlightValue(val)}`
+    }
+
+    // Pattern 2: Single key: + value (e.g. "createdesktopdirectory: data/src/controllers" or "path: src/app.js")
+    const matchSingleKey = line.match(/^(\s*)([^:\s]+:)(\s*)([\s\S]*)$/)
+    if (matchSingleKey) {
+      const [, leading, keyWithColon, sp, val] = matchSingleKey
+      const keyName = keyWithColon.slice(0, -1)
+      return `${escapeHtml(leading)}<span class="hl-fn">${escapeHtml(keyName)}</span><span class="hl-keyword">:</span>${escapeHtml(sp)}${highlightValue(val)}`
+    }
+
+    // Pattern 3: CLI / Bash / Word tokens
+    const tokens = line.split(/(\s+)/)
+    let isFirst = true
+    let result = ''
+    for (const token of tokens) {
+      if (/^\s+$/.test(token)) {
+        result += escapeHtml(token)
+        continue
+      }
+      if (isFirst) {
+        result += `<span class="hl-fn">${escapeHtml(token)}</span>`
+        isFirst = false
+      } else if (/^--?[a-zA-Z0-9_-]+(=.*)?$/.test(token)) {
+        result += `<span class="hl-flag">${escapeHtml(token)}</span>`
+      } else if (/^\d+(\.\d+)?$/.test(token)) {
+        result += `<span class="hl-number">${escapeHtml(token)}</span>`
+      } else if (/[:=]/.test(token)) {
+        const parts = token.split(/([:=])/)
+        result += `<span class="hl-keyword">${escapeHtml(parts[0])}</span>`
+        for (let i = 1; i < parts.length; i += 2) {
+          result += `<span class="hl-operator">${escapeHtml(parts[i])}</span>`
+          if (parts[i + 1]) {
+            result += highlightValue(parts[i + 1])
+          }
+        }
+      } else if (/[/\\]|\.[a-zA-Z0-9]+$/.test(token)) {
+        result += `<span class="hl-string">${escapeHtml(token)}</span>`
+      } else if (/^(run|build|install|dev|test|start|checkout|commit|push|pull|clone|add|status|exec)$/i.test(token)) {
+        result += `<span class="hl-keyword">${escapeHtml(token)}</span>`
+      } else {
+        result += `<span class="hl-string">${escapeHtml(token)}</span>`
+      }
+    }
+    return result
+  }
+
+  return text.split('\n').map(highlightLine).join('\n')
+}
+
 const highlightedCommand = computed(() => {
   const command = props.stringifyValue(
     props.approval.actionSummary || props.approval.toolInput,
     'Approval required for this action.',
   )
-
-  if (/^\s*[\[{]/.test(command)) {
-    return highlightCode(command, 'json')
-  }
-
-  const commandParts = command.match(/^(\s*)(\S+)(\s+)([^:\s]+:)(\s*)([\s\S]*)$/)
-  if (!commandParts) {
-    return highlightCode(command, 'javascript')
-  }
-
-  const [, leadingSpace, tool, spacing, key, valueSpacing, value] = commandParts
-  return `${escapeHtml(leadingSpace)}<span class="hl-fn">${escapeHtml(tool)}</span>${escapeHtml(spacing)}<span class="hl-keyword">${escapeHtml(key)}</span>${escapeHtml(valueSpacing)}<span class="hl-string">${escapeHtml(value)}</span>`
+  return highlightWorkflowCommand(command)
 })
 
 defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
@@ -198,18 +265,14 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #000000;
+  color: #0284c7;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.workflow-command-label.is-file-manager {
-  color: #0284c7;
-}
-
-.workflow-command-label.is-file-manager::before {
+.workflow-command-label::before {
   content: '';
   display: inline-block;
   width: 7px;
@@ -218,14 +281,22 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   background: #0284c7;
 }
 
+.workflow-command-label.is-file-manager {
+  color: #0284c7;
+}
+
+.workflow-command-label.is-file-manager::before {
+  background: #0284c7;
+}
+
 .workflow-command-box code {
   display: block;
   max-height: 180px;
   overflow: auto;
-  color: #000000;
+  color: #0f172a;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 18px;
-  line-height: 1.35;
+  font-size: 17px;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -236,7 +307,8 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 }
 
 .workflow-command-box :deep(.hl-string) {
-  color: #65a30d;
+  color: #16a34a;
+  font-weight: 500;
 }
 
 .workflow-command-box :deep(.hl-keyword) {
@@ -245,23 +317,30 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 }
 
 .workflow-command-box :deep(.hl-number) {
-  color: #f472b6;
+  color: #ea580c;
+  font-weight: 600;
 }
 
 .workflow-command-box :deep(.hl-fn) {
-  color: #0891b2;
-  font-weight: 600;
+  color: #0284c7;
+  font-weight: 650;
 }
 
 .workflow-command-box :deep(.hl-flag),
 .workflow-command-box :deep(.hl-option) {
   color: #7c3aed;
+  font-weight: 550;
+}
+
+.workflow-command-box :deep(.hl-operator) {
+  color: #db2777;
+  font-weight: 600;
 }
 
 .workflow-choice-list {
   display: grid;
-  gap: 4px;
-  margin-top: clamp(12px, 1.1vw, 18px);
+  gap: clamp(4px, 0.55vw, 9px);
+  margin-top: clamp(14px, 1.35vw, 22px);
 }
 
 .workflow-choice-row {
@@ -269,7 +348,6 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   gap: 10px;
   min-width: 0;
-  width: 100%;
 }
 
 .workflow-choice {
@@ -277,40 +355,29 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 12px;
+  gap: clamp(10px, 1vw, 16px);
   min-width: 0;
-  min-height: 42px;
-  padding: 6px 12px;
+  min-height: clamp(50px, 3.2vw, 58px);
+  padding: 9px clamp(12px, 1vw, 17px);
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: clamp(12px, 1vw, 17px);
   color: #383b40;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  background: transparent;
+  background: #ffffff;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .workflow-choice:hover {
   border-color: #e2e4e8;
-  background: #f4f5f7;
-  color: #18181b;
-}
-
-.workflow-choice:hover .workflow-choice-number {
-  background: #e2e4e7;
-  color: #18181b;
+  background: #f8f9fa;
 }
 
 .workflow-choice.selected {
   border-color: #dedfe2;
-  color: #18181b;
+  color: #202124;
   background: #f0f1f2;
-}
-
-.workflow-choice.selected .workflow-choice-number {
-  color: #18181b;
-  background: #dedfe2;
 }
 
 .workflow-choice input {
@@ -329,22 +396,18 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: clamp(30px, 2.2vw, 38px);
+  height: clamp(30px, 2.2vw, 38px);
+  border-radius: clamp(8px, 0.7vw, 12px);
   color: #52565c;
   background: #eceef0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  transition: background 0.15s ease, color 0.15s ease;
+  font-size: 16px;
+  font-weight: 700;
 }
 
-.workflow-choice-text {
-  display: inline-flex;
-  align-items: center;
-  font-size: 15px;
-  line-height: 1;
+.workflow-choice.selected .workflow-choice-number {
+  color: #35393e;
+  background: #e1e3e6;
 }
 
 .workflow-choice:has(input:focus-visible) {
@@ -369,39 +432,39 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-.workflow-choice-row.has-actions {
+.workflow-approval-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
+  margin-top: clamp(12px, 1vw, 16px);
+  width: 100%;
 }
 
 .workflow-approval-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
-  gap: 8px;
-  margin-left: auto;
+  gap: 10px;
 }
 
 .workflow-skip-btn {
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 42px;
+  padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
-  color: #71717a;
-  font-size: 14px;
-  font-weight: 500;
+  color: #5f6368;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .workflow-skip-btn:hover {
-  border-color: #e4e4e7;
-  color: #18181b;
-  background: #f4f4f5;
+  border-color: #e2e4e8;
+  color: #202124;
+  background: #f5f6f7;
 }
 
 .workflow-submit-btn {
@@ -409,28 +472,28 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 38px;
-  padding: 0 16px;
+  min-height: 42px;
+  padding: 0 14px;
   border: 1px solid transparent;
-  border-radius: 10px;
-  background: #09090b;
+  border-radius: 11px;
+  background: #1683d8;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 10px rgba(22, 131, 216, 0.18);
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .workflow-submit-btn:hover {
-  background: #27272a;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  background: #0873c5;
+  box-shadow: 0 6px 14px rgba(22, 131, 216, 0.24);
   transform: translateY(-1px);
 }
 
 .workflow-submit-btn:focus-visible,
 .workflow-skip-btn:focus-visible {
-  outline: 3px solid rgba(0, 0, 0, 0.22);
+  outline: 3px solid rgba(37, 99, 235, 0.22);
   outline-offset: 2px;
 }
 
