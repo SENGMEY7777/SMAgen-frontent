@@ -113,6 +113,9 @@ const decide = async (status) => {
 
   deciding.value = true
   errorMessage.value = ''
+  const startTime = Date.now()
+  const STANDARD_DELAY_MS = 600
+
   try {
     await api.decideApproval(selected.value.id, {
       status,
@@ -128,6 +131,12 @@ const decide = async (status) => {
       } catch (resumeError) {
         if (resumeError?.status !== 409) throw resumeError
       }
+    }
+
+    // Keep a brief visual confirmation before closing the approval panel
+    const elapsed = Date.now() - startTime
+    if (elapsed < STANDARD_DELAY_MS) {
+      await new Promise((resolve) => window.setTimeout(resolve, STANDARD_DELAY_MS - elapsed))
     }
 
     selected.value = null
