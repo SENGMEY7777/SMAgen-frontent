@@ -406,25 +406,59 @@ export function useWorkflowRuntime({
     }
   }
 
-  const cancelWorkflowRun = async (message) => {
-    const index = currentMessages.value.indexOf(message)
-    const workflow = index === -1 ? null : currentMessages.value[index]?.workflow
-    const runId = String(workflow?.runId || '')
-    if (!workflow) return
+  const cancelWorkflowRun = async (target) => {
+    let index = -1
+    let workflow = null
 
+    if (typeof target === 'number') {
+      index = target
+      workflow = currentMessages.value[index]?.workflow || null
+    } else if (target && typeof target === 'object') {
+      index = currentMessages.value.findIndex((m) => (
+        m === target
+        || m.workflow === target
+        || (target.id && m.id === target.id)
+        || (target.runId && (m.workflow?.runId === target.runId || m.runId === target.runId))
+        || (target.workflow?.runId && m.workflow?.runId === target.workflow.runId)
+      ))
+      if (index !== -1) {
+        workflow = currentMessages.value[index]?.workflow || null
+      } else if (target.workflow) {
+        workflow = target.workflow
+      } else if (target.status) {
+        workflow = target
+      }
+    }
+
+    if (index === -1) {
+      index = currentMessages.value.findIndex((m) => m?.workflow && isWorkflowRunning(m.workflow))
+      if (index !== -1) {
+        workflow = currentMessages.value[index]?.workflow || null
+      }
+    }
+
+    if (!workflow && index !== -1) {
+      workflow = currentMessages.value[index]?.workflow || null
+    }
+
+    if (!workflow && !target) return
+
+    const runId = String(workflow?.runId || target?.runId || target?.workflow?.runId || '')
     if (runId) {
       stopWorkflowPolling(runId)
     }
 
-    const stoppedTasks = reconcileTerminalTasks(workflow.tasks || [], 'CANCELLED', 'Workflow stopped by user.')
+    const stoppedTasks = reconcileTerminalTasks(workflow?.tasks || target?.tasks || [], 'CANCELLED', 'Workflow stopped by user.')
 
-    updateWorkflowMessage(index, {
-      status: 'CANCELLED',
-      cancellationPending: false,
-      approval: null,
-      tasks: stoppedTasks,
-      error: 'Workflow stopped by user.',
-    })
+    if (index !== -1) {
+      updateWorkflowMessage(index, {
+        status: 'CANCELLED',
+        cancellationPending: false,
+        approval: null,
+        tasks: stoppedTasks,
+        error: 'Workflow stopped by user.',
+      })
+    }
 
     if (runId) {
       try {
