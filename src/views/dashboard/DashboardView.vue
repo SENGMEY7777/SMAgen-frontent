@@ -524,22 +524,27 @@ const resolveWorkflowStartMs = (workflow) => {
   )
   if (explicit) return explicit
 
+  const now = Date.now()
+
+  if (workflow && typeof workflow === 'object') {
+    if (!workflow.startedAt && !workflow.started_at) {
+      workflow.startedAt = now
+    }
+    if (!workflowFallbackStartedAtByObj.has(workflow)) {
+      workflowFallbackStartedAtByObj.set(workflow, workflow.startedAt || now)
+    }
+    return workflowFallbackStartedAtByObj.get(workflow) || workflow.startedAt || now
+  }
+
   if (workflow?.runId) {
     const runKey = String(workflow.runId)
     if (!workflowFallbackStartedAtByRun.has(runKey)) {
-      workflowFallbackStartedAtByRun.set(runKey, Date.now())
+      workflowFallbackStartedAtByRun.set(runKey, now)
     }
-    return workflowFallbackStartedAtByRun.get(runKey)
+    return workflowFallbackStartedAtByRun.get(runKey) || now
   }
 
-  if (workflow && typeof workflow === 'object') {
-    if (!workflowFallbackStartedAtByObj.has(workflow)) {
-      workflowFallbackStartedAtByObj.set(workflow, Date.now())
-    }
-    return workflowFallbackStartedAtByObj.get(workflow)
-  }
-
-  return Date.now()
+  return now
 }
 
 const resolveWorkflowFinishMs = (workflow) => {
