@@ -488,7 +488,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   IconArrowRight,
   IconArrowBackUp,
@@ -570,14 +570,54 @@ const props = defineProps({
   },
 })
 
+const isWorkflowLive = (workflow) => isWorkflowRunning(workflow)
+
+const localTimerTick = ref(0)
+let localTimerInterval = null
+
+const startLocalTimer = () => {
+  if (localTimerInterval || typeof window === 'undefined') return
+  localTimerInterval = window.setInterval(() => {
+    localTimerTick.value++
+  }, 1000)
+}
+
+const stopLocalTimer = () => {
+  if (localTimerInterval) {
+    window.clearInterval(localTimerInterval)
+    localTimerInterval = null
+  }
+}
+
+watch(
+  () => isWorkflowLive(props.workflow),
+  (isLive) => {
+    if (isLive) startLocalTimer()
+    else stopLocalTimer()
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  if (isWorkflowLive(props.workflow)) {
+    startLocalTimer()
+  }
+})
+
+onBeforeUnmount(() => {
+  stopLocalTimer()
+})
+
 const elapsedLabel = computed(() => {
+  void localTimerTick.value
   void props.timerTick
-  return props.getElapsedText(props.workflow)
+  return props.getElapsedText ? props.getElapsedText(props.workflow) : ''
 })
 
 const currentWorkingLabel = computed(() => {
+  void localTimerTick.value
   void props.timerTick
-  return props.getCurrentWorkingText(props.workflow)
+  return props.getCurrentWorkingText ? props.getCurrentWorkingText(props.workflow) : ''
 })
 
 const emit = defineEmits([
@@ -603,8 +643,6 @@ const isWorkflowTerminal = (workflow) => [
 const isConnectionRecovering = (workflow) => ['RECONNECTING', 'OFFLINE'].includes(
   String(workflow?.connectionStatus || '').toUpperCase(),
 )
-
-const isWorkflowLive = (workflow) => isWorkflowRunning(workflow)
 const isWorkflowAwaitingApproval = (workflow) => Boolean(
   workflow?.approval
   || String(workflow?.status || '').toUpperCase() === 'AWAITING_APPROVAL'
