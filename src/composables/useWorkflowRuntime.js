@@ -35,6 +35,15 @@ export function useWorkflowRuntime({
   const workflowRefreshes = new Set()
   const timerTick = ref(0)
   let timerInterval = null
+
+  const startTimer = () => {
+    if (timerInterval || typeof window === 'undefined') return
+    timerInterval = window.setInterval(() => {
+      timerTick.value++
+    }, 1000)
+  }
+
+  startTimer()
   let workflowSocket = null
   let latestReconnectAttempt = 0
   let handleBrowserOffline = null
@@ -739,8 +748,10 @@ export function useWorkflowRuntime({
     window.addEventListener('online', handleBrowserOnline)
 
     resumeActiveWorkflows()
+    startTimer()
 
-    workflowSocket = createSocketClient()
+    try {
+      workflowSocket = createSocketClient()
     if (workflowSocket) {
       const refreshEvents = [
         'run_started',
@@ -806,30 +817,29 @@ export function useWorkflowRuntime({
         if (reason === 'io client disconnect') return
         updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
       })
-      workflowSocket.io.on('reconnect_attempt', (attempt) => {
-        latestReconnectAttempt = Math.min(Number(attempt) || 0, SOCKET_RECONNECT_ATTEMPTS)
-        updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
-      })
-      workflowSocket.io.on('reconnect_error', () => {
-        updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
-      })
-      workflowSocket.io.on('reconnect', () => {
-        latestReconnectAttempt = 0
-        updateActiveConnectionState('CONNECTED')
+        if (workflowSocket.io) {
+          workflowSocket.io.on('reconnect_attempt', (attempt) => {
+            latestReconnectAttempt = Math.min(Number(attempt) || 0, SOCKET_RECONNECT_ATTEMPTS)
+            updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
+          })
+          workflowSocket.io.on('reconnect_error', () => {
+            updateActiveConnectionState('RECONNECTING', latestReconnectAttempt)
+          })
+          workflowSocket.io.on('reconnect', () => {
+            latestReconnectAttempt = 0
+            updateActiveConnectionState('CONNECTED')
+            joinActiveRuns()
+          })
+          workflowSocket.io.on('reconnect_failed', () => {
+            latestReconnectAttempt = SOCKET_RECONNECT_ATTEMPTS
+            updateActiveConnectionState('OFFLINE', latestReconnectAttempt)
+          })
+        }
         joinActiveRuns()
-      })
-      workflowSocket.io.on('reconnect_failed', () => {
-        latestReconnectAttempt = SOCKET_RECONNECT_ATTEMPTS
-        updateActiveConnectionState('OFFLINE', latestReconnectAttempt)
-      })
-      joinActiveRuns()
-    }
-
-    timerInterval = window.setInterval(() => {
-      if (currentMessages.value.some((message) => message.workflow && isWorkflowRunning(message.workflow))) {
-        timerTick.value++
       }
-    }, 1000)
+    } catch (socketErr) {
+      console.warn('Socket client initialization warning:', socketErr)
+    }
   })
 
   onUnmounted(() => {
