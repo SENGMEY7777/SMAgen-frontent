@@ -990,6 +990,8 @@ const submitDecision = async (status) => {
   const approvalId = selectedApproval.value.id
   const targetTaskId = selectedApproval.value.targetTaskId || selectedApproval.value.task_id
   const runId = String(route.params.runId)
+  const startTime = Date.now()
+  const STANDARD_DELAY_MS = 600
 
   try {
     let decisionRecorded = false
@@ -1048,6 +1050,12 @@ const submitDecision = async (status) => {
             : `Security checkpoint REJECTED: "${rejectionReason.value.trim()}"`,
         })
       }
+    }
+
+    // Keep a brief visual confirmation before closing the approval dialog
+    const elapsed = Date.now() - startTime
+    if (elapsed < STANDARD_DELAY_MS) {
+      await new Promise((resolve) => window.setTimeout(resolve, STANDARD_DELAY_MS - elapsed))
     }
 
     approvalModalOpen.value = false
