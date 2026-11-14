@@ -638,7 +638,7 @@ export function useWorkflowRuntime({
     if (runId) stopWorkflowPolling(runId)
 
     const startTime = Date.now()
-    const STANDARD_DELAY_MS = 250
+    const STANDARD_DELAY_MS = 600
 
     try {
       if (isRealApproval) {
