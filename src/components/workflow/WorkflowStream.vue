@@ -177,7 +177,7 @@
                 type="button"
                 class="completion-edit-file-toggle"
                 :aria-label="`Review ${file.path}`"
-                :aria-pressed="reviewOpen && String(reviewTaskId) === String(file.taskId)"
+                :aria-pressed="reviewOpen && isReviewFileActive(file)"
                 :title="`Review ${file.path}`"
                 @click.stop="openReview(workflow, file, $event)"
               >
@@ -328,8 +328,8 @@
               :key="file.id"
               type="button"
               class="review-file-pill-btn"
-              :class="{ active: String(file.taskId) === String(reviewTaskId) }"
-              @click="reviewTaskId = file.taskId"
+              :class="{ active: isReviewFileActive(file) }"
+              @click="selectReviewFile(file)"
             >
               <IconFile :size="13" class="file-language-icon" :style="{ color: getFileIconInfo(file.path).color }" aria-hidden="true" />
               <span>{{ file.path }}</span>
@@ -650,6 +650,21 @@ const copiedCode = ref(false)
 const reaction = ref(null)
 const reviewOpen = ref(false)
 const reviewTaskId = ref(null)
+const reviewFileId = ref(null)
+
+const isReviewFileActive = (file) => {
+  if (!file) return false
+  if (reviewFileId.value) {
+    return String(file.id) === String(reviewFileId.value)
+  }
+  return String(file.taskId) === String(reviewTaskId.value)
+}
+
+const selectReviewFile = (file) => {
+  if (!file) return
+  reviewFileId.value = file.id
+  reviewTaskId.value = file.taskId
+}
 const reviewPanelCollapsed = ref(false)
 const reviewPanelWidth = ref(null)
 const reviewPanelResizing = ref(false)
@@ -1258,6 +1273,10 @@ const highlightReviewLine = (rawLine, filename = '') => {
 }
 
 const getSelectedFile = (workflow, files = getEditedFileItems(workflow)) => {
+  if (reviewFileId.value) {
+    const matchedById = files.find((file) => String(file.id) === String(reviewFileId.value))
+    if (matchedById) return matchedById
+  }
   return files.find((file) => String(file.taskId) === String(reviewTaskId.value)) || files[0] || null
 }
 
@@ -1346,10 +1365,10 @@ const getRawTaskValue = (task, keys) => keys
   .find((value) => value !== undefined && value !== null && value !== '')
 
 const getReviewTask = (workflow, files = getEditedFileItems(workflow)) => {
-  const selectedFile = files.find((file) => String(file.taskId) === String(reviewTaskId.value)) || files[0]
-  if (!selectedFile) return null
+  const selected = getSelectedFile(workflow, files)
+  if (!selected) return null
 
-  return getCompletedTasks(workflow).find((task, index) => String(task.id || `task-${index}`) === String(selectedFile.taskId)) || null
+  return getCompletedTasks(workflow).find((task, index) => String(task.id || `task-${index}`) === String(selected.taskId)) || null
 }
 
 const getReviewLines = (task, workflow = null, targetPath = '') => {
@@ -1481,7 +1500,11 @@ const reviewLines = computed(() => getReviewLines(reviewTask.value, props.workfl
 const completionTimeLabel = computed(() => getCompletionTimeLabel(props.workflow))
 
 watch(editedFiles, (files) => {
+  if (reviewFileId.value && files.some((file) => String(file.id) === String(reviewFileId.value))) {
+    return
+  }
   if (!files.some((file) => String(file.taskId) === String(reviewTaskId.value))) {
+    reviewFileId.value = files[0]?.id || null
     reviewTaskId.value = files[0]?.taskId || null
   }
 })
@@ -1504,7 +1527,9 @@ const copyReviewCode = async (workflow) => {
 const openReview = (workflow, selectedFile = null, event = null) => {
   preserveWorkflowViewport(() => {
     const files = workflow === props.workflow ? editedFiles.value : getEditedFileItems(workflow)
-    reviewTaskId.value = selectedFile?.taskId || files[0]?.taskId || null
+    const target = selectedFile || (reviewFileId.value ? files.find((f) => String(f.id) === String(reviewFileId.value)) : null) || files[0] || null
+    reviewFileId.value = target?.id || null
+    reviewTaskId.value = target?.taskId || null
     reviewPanelCollapsed.value = false
     reviewOpen.value = true
   }, event?.currentTarget)
@@ -3088,6 +3113,14 @@ const highlightCode = (value) => {
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
   overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.workflow-review-file-pills::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .review-file-pill-btn {
@@ -3131,7 +3164,8 @@ const highlightCode = (value) => {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
   padding: 0;
   background: #ffffff;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -3139,8 +3173,22 @@ const highlightCode = (value) => {
   line-height: 1.6;
 }
 
-.workflow-review-code-body::-webkit-scrollbar:vertical {
-  width: 0;
+.workflow-review-code-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.workflow-review-code-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workflow-review-code-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
+}
+
+.workflow-review-code-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
 }
 
 .workflow-review-unmodified-pill {
