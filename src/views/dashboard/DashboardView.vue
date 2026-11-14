@@ -57,6 +57,7 @@
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
                   @open-run="openWorkflowDestination"
                   @open-workflow="openWorkflowDestination"
+                  @cancel-workflow="cancelWorkflowRun($event)"
                 />
 
                 <template v-else>
@@ -423,7 +424,7 @@ const timeGreeting = computed(() => {
 
 const currentMessages = computed(() => chatStore.messages)
 const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse().find((message) => (
-  message?.workflow?.runId && isWorkflowRunning(message.workflow)
+  message?.workflow && isWorkflowRunning(message.workflow)
 )) || null)
 const hasActiveWorkflowRun = computed(() => Boolean(activeWorkflowMessage.value))
 
@@ -1371,10 +1372,10 @@ const stopGeneration = async () => {
   const runningWorkflowMsg = [...currentMessages.value].reverse().find((m) => {
     if (!m?.workflow) return false
     const s = String(m.workflow.status || '').toUpperCase()
-    return !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED'].includes(s)
+    return isWorkflowRunning(m.workflow) || !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(s)
   })
 
-  if (runningWorkflowMsg?.workflow) {
+  if (runningWorkflowMsg) {
     await cancelWorkflowRun(runningWorkflowMsg)
   }
 }
