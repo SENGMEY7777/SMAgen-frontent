@@ -54,6 +54,18 @@
           <StatusPill v-if="run" :status="runStatus" />
 
           <button
+            v-if="isActive || hasPendingApproval || runStatus === 'RUNNING'"
+            class="zyn-stop-btn"
+            type="button"
+            :disabled="cancelling"
+            title="Stop this running workflow"
+            @click="stopWorkflowRun"
+          >
+            <IconPlayerStop :size="14" />
+            <span>{{ cancelling ? 'Stopping...' : 'Stop' }}</span>
+          </button>
+
+          <button
             v-if="hasPendingApproval"
             class="zyn-primary-btn awaiting-approve-btn"
             type="button"
@@ -385,6 +397,7 @@
                         :class="{
                           'awaiting-icon': isTaskAwaiting(tasks[0]),
                           'failed-icon': isTaskFailed(tasks[0]),
+                          'running-icon': taskStatus(tasks[0]) === 'RUNNING',
                         }"
                       >
                         <component :is="taskStatusIcon(tasks[0])" :size="12" />
@@ -470,6 +483,7 @@
                         :class="{
                           'awaiting-icon': isTaskAwaiting(tasks[1]),
                           'failed-icon': isTaskFailed(tasks[1]),
+                          'running-icon': taskStatus(tasks[1]) === 'RUNNING',
                         }"
                       >
                         <component :is="taskStatusIcon(tasks[1])" :size="12" />
@@ -663,6 +677,8 @@ import {
   IconArrowLeft,
   IconArrowRight,
   IconPlayerPlay,
+  IconPlayerStop,
+  IconLoader2,
   IconClock,
   IconCheck,
   IconDotsVertical,
@@ -762,6 +778,7 @@ const taskStatusLabel = (task) => {
 const taskStatusIcon = (task) => {
   if (isTaskAwaiting(task)) return IconAlertTriangle
   if (isTaskFailed(task)) return IconX
+  if (taskStatus(task) === 'RUNNING') return IconLoader2
   return IconCheck
 }
 const progress = computed(() => {
@@ -1029,6 +1046,13 @@ const submitDecision = async (status) => {
         if (idx !== -1) {
           run.value.tasks[idx].status = status === 'APPROVED' ? 'SUCCESS' : 'SKIPPED'
         }
+        if (String(route.params.runId).toLowerCase() === 'demo' && status === 'APPROVED') {
+          run.value.tasks.forEach((t) => {
+            if (t.status === 'RUNNING') {
+              t.status = 'SUCCESS'
+            }
+          })
+        }
       }
 
       // Check if all tasks in run are now active or completed
@@ -1069,6 +1093,56 @@ const submitDecision = async (status) => {
     approvalError.value = error instanceof ApiError ? error.message : 'Unable to submit decision.'
   } finally {
     deciding.value = false
+  }
+}
+
+const cancelling = ref(false)
+
+const stopWorkflowRun = async () => {
+  if (cancelling.value) return
+  cancelling.value = true
+  errorMessage.value = ''
+  try {
+    const currentRunId = String(route.params.runId || '')
+    if (currentRunId.toLowerCase() === 'demo' || !run.value || run.value.id === 'demo') {
+      if (run.value) {
+        run.value.status = 'CANCELLED'
+        if (Array.isArray(run.value.tasks)) {
+          run.value.tasks.forEach((t) => {
+            if (['RUNNING', 'PENDING', 'AWAITING_APPROVAL', 'QUEUED'].includes(taskStatus(t))) {
+              t.status = 'CANCELLED'
+            }
+          })
+        }
+        if (Array.isArray(run.value.logs)) {
+          run.value.logs.unshift({
+            id: Date.now(),
+            level: 'WARN',
+            source: 'OPERATOR',
+            created_at: new Date().toISOString(),
+            message: 'Workflow execution stopped by operator.',
+          })
+        }
+      }
+      return
+    }
+
+    await api.cancelWorkflow(currentRunId)
+    if (run.value) {
+      run.value.status = 'CANCELLED'
+      if (Array.isArray(run.value.tasks)) {
+        run.value.tasks.forEach((t) => {
+          if (['RUNNING', 'PENDING', 'AWAITING_APPROVAL', 'QUEUED'].includes(taskStatus(t))) {
+            t.status = 'CANCELLED'
+          }
+        })
+      }
+    }
+    await load(true).catch(() => {})
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'Unable to cancel this workflow run.'
+  } finally {
+    cancelling.value = false
   }
 }
 
@@ -1395,6 +1469,43 @@ onBeforeUnmount(() => {
   color: #6d28d9;
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.zyn-stop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zyn-stop-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #b91c1c;
+}
+
+.zyn-stop-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.circle-check-icon.running-icon {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .zyn-primary-btn {
