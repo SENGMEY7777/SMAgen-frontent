@@ -202,23 +202,58 @@
         </div>
       </div>
 
-      <!-- Floating scroll down button -->
-      <button
-        v-if="showScrollButton"
-        class="scroll-down-btn"
-        type="button"
-        aria-label="Scroll to bottom"
-        @click="scrollToBottom('smooth')"
-      >
-        <IconChevronDown :size="16" />
-      </button>
-
       <div class="composer-container">
+        <!-- Floating scroll down button placed safely above composer -->
+        <button
+          v-if="showScrollButton"
+          class="scroll-down-btn"
+          type="button"
+          aria-label="Scroll to bottom"
+          @click="scrollToBottom('smooth')"
+        >
+          <IconChevronDown :size="16" />
+        </button>
+
         <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
 
         <div class="composer" :class="{ 'workflow-composer': activeMode === 'workflow' }">
-          <!-- Attachments (Images & Files) Previews in Composer -->
-          <div v-if="attachedImages.length || attachedFiles.length" class="composer-attachments">
+          <!-- Attachments (Images & Files & Long Prompt Chip) Previews in Composer -->
+          <div v-if="promptChip || attachedImages.length || attachedFiles.length" class="composer-attachments">
+            <!-- Long Prompt File Card Attachment matching User Mockup -->
+            <div v-if="promptChip" class="prompt-file-chip">
+              <div class="prompt-chip-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+                  <path d="M4 16v2a2 2 0 0 0 2 2h2" />
+                  <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+                  <path d="M16 20h2a2 2 0 0 0 2-2v-2" />
+                  <line x1="9" y1="10" x2="15" y2="10" />
+                  <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
+              </div>
+              <div class="prompt-chip-info">
+                <span class="prompt-chip-title" :title="promptChip.title">{{ promptChip.title }}</span>
+                <button
+                  class="prompt-chip-action"
+                  type="button"
+                  title="Expand into text field"
+                  @click="expandPromptToTextarea"
+                >
+                  <span class="action-underline">Show in text field</span>
+                  <IconChevronRight :size="12" />
+                </button>
+              </div>
+              <button
+                class="prompt-chip-close"
+                type="button"
+                title="Remove prompt text"
+                aria-label="Remove prompt text"
+                @click="clearPromptChip"
+              >
+                <IconX :size="10" stroke-width="2.5" />
+              </button>
+            </div>
+
             <!-- Images -->
             <div
               v-for="(img, idx) in attachedImages"
@@ -286,6 +321,21 @@
 
             <div class="composer-actions-right">
               <button
+                v-if="(input.length >= 180 || input.split('\n').filter(Boolean).length >= 3) && !promptChip"
+                class="collapse-prompt-btn"
+                type="button"
+                title="Collapse prompt into file card"
+                @click="collapseTextToChip"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+                  <path d="M4 16v2a2 2 0 0 0 2 2h2" />
+                  <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+                  <path d="M16 20h2a2 2 0 0 0 2-2v-2" />
+                </svg>
+                <span>Turn into file</span>
+              </button>
+              <button
                 class="tool-btn-pill"
                 type="button"
                 :class="{ active: activeMode === 'workflow' }"
@@ -310,7 +360,7 @@
                 v-else
                 class="send-button"
                 type="button"
-                :disabled="!input.trim() && !attachedImages.length && !attachedFiles.length"
+                :disabled="!input.trim() && !promptChip && !attachedImages.length && !attachedFiles.length"
                 title="Send message"
                 aria-label="Send message"
                 @click="send"
@@ -349,6 +399,7 @@ import {
   IconRefresh,
   IconPencil,
   IconChevronDown,
+  IconChevronRight,
   IconX,
   IconPlus,
   IconBulb,
@@ -399,6 +450,7 @@ const textareaRef = ref(null)
 const fileInputRef = ref(null)
 const runs = ref([])
 const input = ref('')
+const promptChip = ref(null)
 const activeMode = ref('chat')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -779,7 +831,7 @@ const autoResizeTextarea = () => {
   nextTick(() => {
     if (!textareaRef.value) return
     textareaRef.value.style.height = 'auto'
-    const newHeight = Math.min(textareaRef.value.scrollHeight, 180)
+    const newHeight = Math.min(textareaRef.value.scrollHeight, 260)
     textareaRef.value.style.height = `${newHeight}px`
   })
 }
@@ -1156,6 +1208,90 @@ const processUploadedFile = (file) => {
   }
 }
 
+const extractPromptChipTitle = (text = '') => {
+  const trimmed = text.trim()
+  if (!trimmed) return '~/Desktop/Project...'
+
+  // 1. Look for explicit desktop or file/folder paths like ~/Desktop/... or Desktop/...
+  const pathMatch = trimmed.match(/(?:~|\/|[A-Za-z]:[\\/])?[A-Za-z0-9_.-]*[\\/](?:Desktop|Documents|Projects?|workspace)[\\/][A-Za-z0-9_.-]+/i)
+    || trimmed.match(/(?:~[\\/])?Desktop[\\/][A-Za-z0-9_.-]+/i)
+    || trimmed.match(/`([^`\n]*(?:[\\/]|test\.js|controller|model)[^`\n]*)`/i)
+    || trimmed.match(/(?:inside|in|to|at)\s+`?([A-Za-z0-9_.~/-]+)`?/i)
+
+  if (pathMatch) {
+    let p = pathMatch[1] || pathMatch[0]
+    p = p.replace(/^[`'"]+|[`'"]+$/g, '').trim()
+    if (!p.startsWith('~') && !p.startsWith('/')) {
+      p = `~/${p}`
+    }
+    return p.length > 20 ? p.slice(0, 18) + '...' : p
+  }
+
+  // 2. Look for markdown title or bold name
+  const boldMatch = trimmed.match(/\*\*([^*]+)\*\*/)
+  if (boldMatch && boldMatch[1]) {
+    const t = boldMatch[1].trim()
+    return t.length > 20 ? t.slice(0, 18) + '...' : t
+  }
+
+  const h1Match = trimmed.match(/^#+\s+(.+)$/m)
+  if (h1Match && h1Match[1]) {
+    const t = h1Match[1].trim()
+    return t.length > 20 ? t.slice(0, 18) + '...' : t
+  }
+
+  // 3. Fallback to first line
+  const firstLine = trimmed.split('\n')[0].replace(/^[#*`\s-]+/, '').trim()
+  if (firstLine) {
+    return firstLine.length > 20 ? firstLine.slice(0, 18) + '...' : firstLine
+  }
+
+  return '~/Desktop/Prompt...'
+}
+
+const createPromptChip = (text) => {
+  if (!text || typeof text !== 'string') return
+  const trimmed = text.trim()
+  if (!trimmed) return
+  promptChip.value = {
+    title: extractPromptChipTitle(trimmed),
+    content: trimmed,
+  }
+  activeMode.value = detectRequestMode(trimmed)
+  nextTick(() => {
+    textareaRef.value?.focus()
+  })
+}
+
+const expandPromptToTextarea = () => {
+  if (!promptChip.value?.content) return
+  const fullText = promptChip.value.content
+  promptChip.value = null
+  activeMode.value = 'workflow'
+  input.value = fullText
+  nextTick(() => {
+    if (textareaRef.value) {
+      textareaRef.value.style.height = 'auto'
+      const scrollH = textareaRef.value.scrollHeight
+      const targetHeight = Math.min(scrollH, 260)
+      textareaRef.value.style.height = `${Math.max(targetHeight, 80)}px`
+      textareaRef.value.scrollTop = 0
+      textareaRef.value.focus()
+    }
+  })
+}
+
+const collapseTextToChip = () => {
+  if (!input.value.trim()) return
+  createPromptChip(input.value)
+  input.value = ''
+  autoResizeTextarea()
+}
+
+const clearPromptChip = () => {
+  promptChip.value = null
+}
+
 const handlePaste = (e) => {
   const items = e.clipboardData?.items || []
   for (const item of items) {
@@ -1164,9 +1300,15 @@ const handlePaste = (e) => {
       if (file) {
         e.preventDefault()
         processUploadedFile(file)
+        return
       }
     }
   }
+
+  // Allow all text and long prompts to paste directly into the input goal textarea without being blocked
+  nextTick(() => {
+    autoResizeTextarea()
+  })
 }
 
 const handleFileSelect = (e) => {
@@ -1191,14 +1333,49 @@ const copiedUserIndex = ref(null)
 const editingIndex = ref(null)
 const editDraft = ref('')
 
+const fallbackCopyText = (text) => {
+  if (!text) return
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.top = '0'
+  ta.style.left = '0'
+  ta.style.width = '2em'
+  ta.style.height = '2em'
+  ta.style.padding = '0'
+  ta.style.border = 'none'
+  ta.style.outline = 'none'
+  ta.style.boxShadow = 'none'
+  ta.style.background = 'transparent'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  ta.setSelectionRange(0, text.length)
+  try {
+    document.execCommand('copy')
+  } catch (e) {
+    console.error('execCommand copy failed:', e)
+  } finally {
+    document.body.removeChild(ta)
+  }
+}
+
 const copyUserMessage = async (content, index) => {
   try {
-    await navigator.clipboard.writeText(content)
-    copiedUserIndex.value = index
-    setTimeout(() => {
-      if (copiedUserIndex.value === index) copiedUserIndex.value = null
-    }, 2000)
-  } catch {}
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(content).catch(() => {
+        fallbackCopyText(content)
+      })
+    } else {
+      fallbackCopyText(content)
+    }
+  } catch {
+    fallbackCopyText(content)
+  }
+  copiedUserIndex.value = index
+  setTimeout(() => {
+    if (copiedUserIndex.value === index) copiedUserIndex.value = null
+  }, 2000)
 }
 
 const formatPromptWithFiles = (text, files = []) => {
@@ -1746,12 +1923,20 @@ const retryUserMessage = async (index) => {
 
 const copyMessage = async (content, index) => {
   try {
-    await navigator.clipboard.writeText(content)
-    copiedIndex.value = index
-    setTimeout(() => {
-      if (copiedIndex.value === index) copiedIndex.value = null
-    }, 2000)
-  } catch {}
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(content).catch(() => {
+        fallbackCopyText(content)
+      })
+    } else {
+      fallbackCopyText(content)
+    }
+  } catch {
+    fallbackCopyText(content)
+  }
+  copiedIndex.value = index
+  setTimeout(() => {
+    if (copiedIndex.value === index) copiedIndex.value = null
+  }, 2000)
 }
 
 const setMessageReaction = (index, nextReaction) => {
@@ -1794,7 +1979,13 @@ const loadRuns = async () => {
 }
 
 const send = async () => {
-  const message = input.value.trim()
+  let rawText = input.value.trim()
+  if (promptChip.value?.content) {
+    const chipContent = promptChip.value.content
+    rawText = rawText ? `${rawText}\n\n${chipContent}` : chipContent
+    promptChip.value = null
+  }
+  const message = rawText
   const images = [...attachedImages.value.map((img) => img.dataUrl)]
   const files = [...attachedFiles.value]
 
@@ -2180,8 +2371,138 @@ onUnmounted(() => {
 .composer-attachments {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   padding: 10px 14px 4px;
+}
+
+/* Long Prompt File Chip Matching User Mockup */
+.prompt-file-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 8px 16px 8px 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  width: fit-content;
+  min-width: 220px;
+  max-width: 340px;
+  flex-shrink: 0;
+  user-select: none;
+  animation: prompt-chip-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes prompt-chip-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.prompt-chip-icon {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 10px;
+  background: #f4f4f5;
+  color: #52525b;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.prompt-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.25;
+}
+
+.prompt-chip-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.prompt-chip-action {
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.prompt-chip-action:hover {
+  color: #111827;
+}
+
+.action-underline {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prompt-chip-close {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #111827;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.12s ease, background 0.12s ease;
+  z-index: 2;
+}
+
+.prompt-chip-close:hover {
+  background: #000000;
+  transform: scale(1.08);
+}
+
+.collapse-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f4f4f5;
+  color: #52525b;
+  border: 1px solid #e4e4e7;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.collapse-prompt-btn:hover {
+  background: #e4e4e7;
+  color: #18181b;
 }
 
 .attachment-chip {
@@ -2371,6 +2692,17 @@ onUnmounted(() => {
   color: #111827;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.composer-input {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.composer-input::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @media (max-width: 560px) {
