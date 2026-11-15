@@ -34,12 +34,12 @@
             aria-label="Workflow goal"
             placeholder="e.g. Audit repository dependencies, generate unit tests, and create a security summary report..."
             rows="2"
-            maxlength="2000"
+            maxlength="20000"
             @keydown.enter.exact.prevent="startDagWorkflow"
           ></textarea>
           <div class="goal-input-meta">
             <span>Press Enter to launch · Shift + Enter for a new line</span>
-            <span>{{ goalPrompt.length.toLocaleString() }} / 2,000</span>
+            <span>{{ goalPrompt.length.toLocaleString() }} / 20,000</span>
           </div>
           <div class="builder-actions">
             <button
