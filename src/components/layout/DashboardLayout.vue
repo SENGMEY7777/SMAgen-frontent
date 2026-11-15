@@ -549,7 +549,13 @@ const getChatSessionForWorkflow = (runId) => {
   return (
     chatStore.sessions.find((session) =>
       session.messages?.some(
-        (message) => message?.workflow?.runId && String(message.workflow.runId) === String(runId),
+        (message) => {
+          const messageRunId = message?.workflow?.runId
+            || message?.workflow?.run_id
+            || message?.workflowRunId
+            || message?.runId
+          return messageRunId && String(messageRunId) === String(runId)
+        },
       ),
     ) || null
   )
@@ -666,8 +672,11 @@ const newChat = () => {
 }
 
 const selectChat = (sessionId, fallbackProjectId = null) => {
-  chatStore.selectSession(sessionId)
-  const projId = getProjectIdForItem({ id: sessionId, type: 'chat' }) || fallbackProjectId
+  const session = chatStore.sessions.find((item) => String(item.id) === String(sessionId))
+  if (!session) return
+
+  chatStore.selectSession(session.id)
+  const projId = getProjectIdForItem({ id: session.id, type: 'chat' }) || fallbackProjectId
   projectsStore.activeProjectId = projId || null
   if (projId && collapsedProjectIds.value.has(projId)) {
     toggleProjectHistory(projId)
@@ -685,7 +694,13 @@ const selectWorkflowHistory = (item) => {
 
   if (!linkedSession) {
     const existing = chatStore.sessions.find(
-      (s) => s.id === `chat_wf_${item.id}` || s.messages?.some((m) => String(m?.workflow?.runId) === String(item.id))
+      (s) => s.id === `chat_wf_${item.id}` || s.messages?.some((m) => {
+        const messageRunId = m?.workflow?.runId
+          || m?.workflow?.run_id
+          || m?.workflowRunId
+          || m?.runId
+        return String(messageRunId || '') === String(item.id)
+      })
     )
     if (existing) {
       linkedSession = existing
