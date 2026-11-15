@@ -1362,6 +1362,15 @@ const stopGeneration = async () => {
   loading.value = false
   workflowStopRequested = true
 
+  const activeWorkflowTargets = currentMessages.value
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => {
+      if (!message?.workflow) return false
+      const status = String(message.workflow.status || '').toUpperCase()
+      return isWorkflowRunning(message.workflow)
+        || !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(status)
+    })
+
   if (activeAbortController) {
     try {
       activeAbortController.abort()
@@ -1369,15 +1378,21 @@ const stopGeneration = async () => {
     activeAbortController = null
   }
 
-  // Find any active/running workflow message
-  const runningWorkflowMsg = [...currentMessages.value].reverse().find((m) => {
-    if (!m?.workflow) return false
-    const s = String(m.workflow.status || '').toUpperCase()
-    return isWorkflowRunning(m.workflow) || !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(s)
+  // Update the visible card before waiting for the backend. This keeps the UI
+  // responsive even when the planning request is cancelled before it returns.
+  activeWorkflowTargets.forEach(({ index }) => {
+    updateWorkflowMessage(index, {
+      status: 'CANCELLED',
+      cancellationPending: false,
+      approval: null,
+      error: 'Workflow stopped by user.',
+    })
   })
 
-  if (runningWorkflowMsg) {
-    await cancelWorkflowRun(runningWorkflowMsg)
+  if (activeWorkflowTargets.length) {
+    await Promise.allSettled(
+      activeWorkflowTargets.map(({ message }) => cancelWorkflowRun(message)),
+    )
   }
 }
 
