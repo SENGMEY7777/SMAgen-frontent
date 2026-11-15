@@ -421,7 +421,9 @@ const timeGreeting = computed(() => {
   return 'Good Night'
 })
 
-const currentMessages = computed(() => chatStore.messages)
+const currentMessages = computed(() => (
+  Array.isArray(chatStore.messages) ? chatStore.messages : []
+))
 const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse().find((message) => (
   message?.workflow && isWorkflowRunning(message.workflow)
 )) || null)
