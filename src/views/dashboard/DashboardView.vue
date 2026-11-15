@@ -277,7 +277,7 @@
               class="composer-input"
               :class="{ 'workflow-goal-input': activeMode === 'workflow' }"
               :aria-label="activeMode === 'workflow' ? 'Workflow goal' : 'Message'"
-              :maxlength="activeMode === 'workflow' ? 2000 : undefined"
+              :maxlength="20000"
               :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
               rows="1"
               @paste="handlePaste"
