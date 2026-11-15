@@ -329,6 +329,17 @@ export function useWorkflowRuntime({
       payload: eventName === 'telemetry' ? payload?.payload : data,
     }, (workflow.logs || []).length)
     const nextStatus = getEventStatus(event, data)
+    const currentStatus = String(workflow.status || '').toUpperCase()
+
+    // A cancellation is terminal from the user's perspective. Ignore stale
+    // socket events that were already queued before the cancel request; they
+    // must not make the visible card look active again.
+    if (isTerminalWorkflowStatus(currentStatus)
+      && nextStatus
+      && !isTerminalWorkflowStatus(nextStatus)) {
+      return
+    }
+
     const eventTask = getEventTask(event, data, runId)
     const nextTasks = eventTask
       ? mergeWorkflowTasks(workflow.tasks, [eventTask])
