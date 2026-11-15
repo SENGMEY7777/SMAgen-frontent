@@ -11,6 +11,102 @@ const escapeHtml = (str) => {
     .replace(/'/g, '&#039;')
 }
 
+// Global browser helpers for robust code block copying and downloading
+if (typeof window !== 'undefined') {
+  window.__copyCodeBlock = function (btn) {
+    if (!btn) return
+    try {
+      const codeBlock = btn.closest('.code-block')
+      const rawEl = codeBlock ? codeBlock.querySelector('.code-raw-source') : null
+      const codeEl = codeBlock ? codeBlock.querySelector('pre code') : null
+      let text = ''
+      if (rawEl && typeof rawEl.value === 'string' && rawEl.value.length > 0) {
+        text = rawEl.value
+      } else if (codeEl) {
+        text = codeEl.innerText || codeEl.textContent || ''
+      } else {
+        text = btn.getAttribute('data-copy') || ''
+      }
+
+      text = String(text).replace(/\r\n/g, '\n').replace(/\n$/, '')
+      if (!text) return
+
+      const setCopiedState = () => {
+        const origHtml = btn.innerHTML
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span style="color:#4ade80;font-weight:600;margin-left:4px;font-size:11.5px;">Copied!</span>`
+        setTimeout(() => {
+          btn.innerHTML = origHtml
+        }, 2000)
+      }
+
+      const fallbackCopy = () => {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.top = '0'
+        ta.style.left = '0'
+        ta.style.width = '2em'
+        ta.style.height = '2em'
+        ta.style.padding = '0'
+        ta.style.border = 'none'
+        ta.style.outline = 'none'
+        ta.style.boxShadow = 'none'
+        ta.style.background = 'transparent'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        ta.setSelectionRange(0, text.length)
+        let success = false
+        try {
+          success = document.execCommand('copy')
+        } catch (e) {
+          console.error('execCommand copy failed:', e)
+        } finally {
+          document.body.removeChild(ta)
+        }
+        if (success) setCopiedState()
+      }
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text).then(setCopiedState).catch(() => {
+          fallbackCopy()
+        })
+      } else {
+        fallbackCopy()
+      }
+    } catch (err) {
+      console.error('Copy code block error:', err)
+    }
+  }
+
+  window.__downloadCodeBlock = function (btn) {
+    if (!btn) return
+    try {
+      const codeBlock = btn.closest('.code-block')
+      const rawEl = codeBlock ? codeBlock.querySelector('.code-raw-source') : null
+      const codeEl = codeBlock ? codeBlock.querySelector('pre code') : null
+      let text = ''
+      if (rawEl && typeof rawEl.value === 'string' && rawEl.value.length > 0) {
+        text = rawEl.value
+      } else if (codeEl) {
+        text = codeEl.innerText || codeEl.textContent || ''
+      }
+      const filename = btn.getAttribute('data-filename') || 'code.txt'
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Download code block error:', err)
+    }
+  }
+}
+
 /**
  * High-performance, zero-dependency syntax highlighter.
  */
@@ -254,13 +350,14 @@ export function renderMarkdown(raw) {
 
         output.push(`
 <div class="code-block" data-code-id="${codeId}">
+  <textarea class="code-raw-source" style="display:none!important;" aria-hidden="true" readonly>${escapedRawForAttr}</textarea>
   <div class="code-header">
     <span class="code-lang">${langDisplay}</span>
     <div class="code-header-actions">
-      <button class="code-action-btn" type="button" title="Download code" data-filename="${fileName}" data-code="${escapedRawForAttr}" onclick="const b=new Blob([this.getAttribute('data-code')],{type:'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=this.getAttribute('data-filename');a.click();URL.revokeObjectURL(u);">
+      <button class="code-action-btn" type="button" title="Download code" data-filename="${fileName}" onclick="window.__downloadCodeBlock && window.__downloadCodeBlock(this)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
-      <button class="code-action-btn" type="button" title="Copy code" data-copy="${escapedRawForAttr}" onclick="navigator.clipboard.writeText(this.getAttribute('data-copy')).then(()=>{const orig=this.innerHTML;this.innerHTML='<span style=\\'color:#4ade80\\'>Copied!</span>';setTimeout(()=>{this.innerHTML=orig;},2000);})">
+      <button class="code-action-btn" type="button" title="Copy code" onclick="window.__copyCodeBlock && window.__copyCodeBlock(this)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
       </button>
     </div>
