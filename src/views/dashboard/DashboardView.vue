@@ -126,7 +126,6 @@
                     </div>
                   </div>
                 </div>
-
                 <!-- Inline Editing Box matching User Mockup -->
                 <div v-if="editingIndex === index" class="user-inline-editor-wrapper">
                   <div class="user-inline-edit-bubble">
@@ -162,7 +161,7 @@
                       type="button"
                       title="Retry response"
                       :disabled="loading"
-                      @click="retryUserMessage(index)"
+                      @click.stop.prevent="retryUserMessage(index)"
                     >
                       <IconRefresh :size="13" />
                     </button>
@@ -1386,6 +1385,29 @@ const stopStreamingReveal = () => {
     streamingRafId = null
   }
 }
+
+// A request belongs to the chat session that started it. Abort stale work
+// when the user opens another history item so the old request cannot keep the
+// retry controls disabled or append its response to the wrong conversation.
+watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
+  // Creating the first chat changes the ID from null to a new value while
+  // the user's request is starting. Do not abort that new workflow.
+  if (!previousSessionId || sessionId === previousSessionId) return
+
+  if (activeAbortController) {
+    try {
+      activeAbortController.abort()
+    } catch {}
+    activeAbortController = null
+  }
+
+  stopStreamingReveal()
+  targetStreamingContent = ''
+  streamingContent.value = ''
+  loading.value = false
+  errorMessage.value = ''
+  activeMode.value = 'chat'
+})
 
 const scheduleStreamingReveal = () => {
   if (streamingRafId !== null || typeof window === 'undefined') return
