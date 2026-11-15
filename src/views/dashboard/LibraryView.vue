@@ -70,7 +70,7 @@
           <textarea
             id="run-goal"
             v-model="runGoal"
-            maxlength="2000"
+            maxlength="20000"
             placeholder="What should this run accomplish?"
             @keydown.enter.exact.prevent="runWorkflow"
           ></textarea>
