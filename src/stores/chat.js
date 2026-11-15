@@ -10,6 +10,10 @@ const PROJECT_LINKING_CLEANUP_KEY = 'kairo_chat_project_linking_cleanup_v2'
 
 const createMessageId = () => `message_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
+const sameSessionId = (left, right) => (
+  left != null && right != null && String(left) === String(right)
+)
+
 const readStorage = () => {
   try {
     const raw = localStorage.getItem(CHATS_STORAGE_KEY)
@@ -109,11 +113,11 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   const activeSession = computed(() => {
-    return sessions.value.find((s) => s.id === activeSessionId.value) || null
+    return sessions.value.find((s) => sameSessionId(s.id, activeSessionId.value)) || null
   })
 
   const messages = computed(() => {
-    return activeSession.value ? activeSession.value.messages : []
+    return Array.isArray(activeSession.value?.messages) ? activeSession.value.messages : []
   })
 
   const startNewChat = () => {
@@ -121,9 +125,11 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const selectSession = (sessionId) => {
-    const exists = sessions.value.some((s) => s.id === sessionId)
-    if (exists) {
-      activeSessionId.value = sessionId
+    const session = sessions.value.find((s) => sameSessionId(s.id, sessionId))
+    if (session) {
+      // Keep the canonical ID stored on the session. This prevents old
+      // numeric IDs and newer string IDs from resolving to different views.
+      activeSessionId.value = session.id
     }
   }
 
