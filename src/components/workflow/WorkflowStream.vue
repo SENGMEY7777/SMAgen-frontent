@@ -1,19 +1,6 @@
 <template>
   <div ref="workflowStreamRef" class="workflow-antigravity-stream">
-    <div class="stream-header-row">
-      <div class="stream-elapsed-header">{{ elapsedLabel }}</div>
-      <button
-        v-if="isWorkflowLive(workflow)"
-        type="button"
-        class="stream-stop-btn"
-        title="Stop workflow"
-        aria-label="Stop workflow"
-        @click.stop="$emit('cancel-workflow', workflow)"
-      >
-        <IconPlayerStop :size="11" />
-        <span>Stop</span>
-      </button>
-    </div>
+    <div class="stream-elapsed-header">{{ elapsedLabel }}</div>
     <hr class="stream-hairline-divider" />
 
     <div class="stream-plan-text" v-html="renderMarkdown(getPlanText(workflow))"></div>
@@ -1813,41 +1800,12 @@ const highlightCode = (value) => {
   animation: workflow-stream-enter 220ms ease-out;
 }
 
-.stream-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
 .stream-elapsed-header {
   font-size: 13.5px;
   font-weight: 600;
   color: #71717a;
   letter-spacing: -0.01em;
-  margin-bottom: 0;
-}
-
-.stream-stop-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.stream-stop-btn:hover {
-  background: rgba(239, 68, 68, 0.16);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #dc2626;
+  margin-bottom: 10px;
 }
 
 .stream-hairline-divider {
