@@ -57,7 +57,7 @@
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
                   @open-run="openWorkflowDestination"
                   @open-workflow="openWorkflowDestination"
-                  @cancel-workflow="cancelWorkflowRun($event)"
+                  @cancel-workflow="stopGeneration"
                 />
 
                 <template v-else>
@@ -1687,6 +1687,7 @@ const retryUserMessage = async (index) => {
         error: error instanceof ApiError ? error.message : 'Unable to start the workflow.',
       })
     } finally {
+      activeAbortController = null
       loading.value = false
       scrollToBottom()
     }
