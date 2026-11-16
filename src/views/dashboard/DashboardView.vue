@@ -1224,26 +1224,38 @@ const extractPromptChipTitle = (text = '') => {
     if (!p.startsWith('~') && !p.startsWith('/')) {
       p = `~/${p}`
     }
-    return p.length > 20 ? p.slice(0, 18) + '...' : p
+    return p.length > 21 ? p.slice(0, 19) + '...' : p
   }
 
-  // 2. Look for markdown title or bold name
+  // 2. Check active project name
+  const activeProjName = projectsStore?.activeProject?.name
+  if (activeProjName && !['SMAgen Workspace', 'Default Project', 'KAIRO Workspace'].includes(activeProjName)) {
+    const cleanName = activeProjName.replace(/\s+/g, '-')
+    const formatted = `~/Desktop/${cleanName}`
+    return formatted.length > 21 ? formatted.slice(0, 19) + '...' : formatted
+  }
+
+  // 3. Look for bold title or markdown header
   const boldMatch = trimmed.match(/\*\*([^*]+)\*\*/)
   if (boldMatch && boldMatch[1]) {
-    const t = boldMatch[1].trim()
-    return t.length > 20 ? t.slice(0, 18) + '...' : t
+    const clean = boldMatch[1].trim().replace(/\s+/g, '-')
+    const formatted = `~/Desktop/${clean}`
+    return formatted.length > 21 ? formatted.slice(0, 19) + '...' : formatted
   }
 
   const h1Match = trimmed.match(/^#+\s+(.+)$/m)
   if (h1Match && h1Match[1]) {
-    const t = h1Match[1].trim()
-    return t.length > 20 ? t.slice(0, 18) + '...' : t
+    const clean = h1Match[1].trim().replace(/\s+/g, '-')
+    const formatted = `~/Desktop/${clean}`
+    return formatted.length > 21 ? formatted.slice(0, 19) + '...' : formatted
   }
 
-  // 3. Fallback to first line
+  // 4. Fallback to first line
   const firstLine = trimmed.split('\n')[0].replace(/^[#*`\s-]+/, '').trim()
   if (firstLine) {
-    return firstLine.length > 20 ? firstLine.slice(0, 18) + '...' : firstLine
+    const clean = firstLine.split(/\s+/)[0].replace(/[^A-Za-z0-9_.-]/g, '') || 'Prompt'
+    const formatted = `~/Desktop/${clean}`
+    return formatted.length > 21 ? formatted.slice(0, 19) + '...' : formatted
   }
 
   return '~/Desktop/Prompt...'
@@ -1257,9 +1269,13 @@ const createPromptChip = (text) => {
     title: extractPromptChipTitle(trimmed),
     content: trimmed,
   }
-  activeMode.value = detectRequestMode(trimmed)
+  activeMode.value = 'workflow'
+  input.value = ''
   nextTick(() => {
-    textareaRef.value?.focus()
+    if (textareaRef.value) {
+      textareaRef.value.style.height = 'auto'
+      textareaRef.value.focus()
+    }
   })
 }
 
@@ -1305,7 +1321,16 @@ const handlePaste = (e) => {
     }
   }
 
-  // Allow all text and long prompts to paste directly into the input goal textarea without being blocked
+  const pastedText = e.clipboardData?.getData('text') || ''
+  // When prompt is so long (>= 120 chars or >= 3 lines),
+  // change to text file first, matching the reference image.
+  if (pastedText.length >= 120 || pastedText.split('\n').filter(Boolean).length >= 3) {
+    e.preventDefault()
+    createPromptChip(pastedText)
+    return
+  }
+
+  // Allow short text paste to insert directly into the textarea
   nextTick(() => {
     autoResizeTextarea()
   })
