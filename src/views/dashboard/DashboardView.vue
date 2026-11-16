@@ -337,13 +337,13 @@
                 :title="isTextareaExpanded ? 'Minimize editor' : 'Expand editor'"
                 @click="toggleTextareaExpand"
               >
-                <svg v-if="!isTextareaExpanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-if="!isTextareaExpanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="15 3 21 3 21 9" />
                   <polyline points="9 21 3 21 3 15" />
                   <line x1="21" y1="3" x2="14" y2="10" />
                   <line x1="3" y1="21" x2="10" y2="14" />
                 </svg>
-                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="4 14 10 14 10 20" />
                   <polyline points="20 10 14 10 14 4" />
                   <line x1="14" y1="10" x2="21" y2="3" />
@@ -353,21 +353,6 @@
             </div>
 
             <div class="composer-actions-right">
-              <button
-                v-if="input.length >= 180 || input.split('\n').filter(Boolean).length >= 3"
-                class="collapse-prompt-btn"
-                type="button"
-                title="Collapse prompt into file card"
-                @click="collapseTextToChip"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 8V6a2 2 0 0 1 2-2h2" />
-                  <path d="M4 16v2a2 2 0 0 0 2 2h2" />
-                  <path d="M16 4h2a2 2 0 0 1 2 2v2" />
-                  <path d="M16 20h2a2 2 0 0 0 2-2v-2" />
-                </svg>
-                <span>Turn into file</span>
-              </button>
               <button
                 class="tool-btn-pill"
                 type="button"
@@ -2572,26 +2557,6 @@ onUnmounted(() => {
   transform: scale(1.08);
 }
 
-.collapse-prompt-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #f4f4f5;
-  color: #52525b;
-  border: 1px solid #e4e4e7;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.collapse-prompt-btn:hover {
-  background: #e4e4e7;
-  color: #18181b;
-}
-
 .attachment-chip {
   position: relative;
   width: 54px;
@@ -2784,6 +2749,7 @@ onUnmounted(() => {
 .composer-input {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
+  padding-right: 36px !important;
 }
 
 .composer-input::-webkit-scrollbar {
