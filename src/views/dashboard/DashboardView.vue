@@ -217,10 +217,14 @@
         <div v-if="errorMessage" class="inline-error">{{ errorMessage }}</div>
 
         <div class="composer" :class="{ 'workflow-composer': activeMode === 'workflow' }">
-          <!-- Attachments (Images & Files & Long Prompt Chip) Previews in Composer -->
-          <div v-if="promptChip || attachedImages.length || attachedFiles.length" class="composer-attachments">
-            <!-- Long Prompt File Card Attachment matching User Mockup -->
-            <div v-if="promptChip" class="prompt-file-chip">
+          <!-- Attachments (Images & Files & Long Prompt Chips) Previews in Composer -->
+          <div v-if="promptChips.length || attachedImages.length || attachedFiles.length" class="composer-attachments">
+            <!-- Long Prompt File Card Attachment(s) matching User Mockup -->
+            <div
+              v-for="(chip, chipIdx) in promptChips"
+              :key="chip.id"
+              class="prompt-file-chip"
+            >
               <div class="prompt-chip-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M4 8V6a2 2 0 0 1 2-2h2" />
@@ -232,12 +236,12 @@
                 </svg>
               </div>
               <div class="prompt-chip-info">
-                <span class="prompt-chip-title" :title="promptChip.title">{{ promptChip.title }}</span>
+                <span class="prompt-chip-title" :title="chip.title">{{ chip.title }}</span>
                 <button
                   class="prompt-chip-action"
                   type="button"
                   title="Expand into text field"
-                  @click="expandPromptToTextarea"
+                  @click="expandPromptToTextarea(chipIdx)"
                 >
                   <span class="action-underline">Show in text field</span>
                   <IconChevronRight :size="12" />
@@ -248,7 +252,7 @@
                 type="button"
                 title="Remove prompt text"
                 aria-label="Remove prompt text"
-                @click="clearPromptChip"
+                @click="removePromptChip(chipIdx)"
               >
                 <IconX :size="10" stroke-width="2.5" />
               </button>
@@ -321,7 +325,7 @@
 
             <div class="composer-actions-right">
               <button
-                v-if="(input.length >= 180 || input.split('\n').filter(Boolean).length >= 3) && !promptChip"
+                v-if="input.length >= 180 || input.split('\n').filter(Boolean).length >= 3"
                 class="collapse-prompt-btn"
                 type="button"
                 title="Collapse prompt into file card"
@@ -360,7 +364,7 @@
                 v-else
                 class="send-button"
                 type="button"
-                :disabled="!input.trim() && !promptChip && !attachedImages.length && !attachedFiles.length"
+                :disabled="!input.trim() && !promptChips.length && !attachedImages.length && !attachedFiles.length"
                 title="Send message"
                 aria-label="Send message"
                 @click="send"
@@ -450,7 +454,7 @@ const textareaRef = ref(null)
 const fileInputRef = ref(null)
 const runs = ref([])
 const input = ref('')
-const promptChip = ref(null)
+const promptChips = ref([])
 const activeMode = ref('chat')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -1265,10 +1269,11 @@ const createPromptChip = (text) => {
   if (!text || typeof text !== 'string') return
   const trimmed = text.trim()
   if (!trimmed) return
-  promptChip.value = {
+  promptChips.value.push({
+    id: `chip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     title: extractPromptChipTitle(trimmed),
     content: trimmed,
-  }
+  })
   activeMode.value = 'workflow'
   input.value = ''
   nextTick(() => {
@@ -1279,12 +1284,17 @@ const createPromptChip = (text) => {
   })
 }
 
-const expandPromptToTextarea = () => {
-  if (!promptChip.value?.content) return
-  const fullText = promptChip.value.content
-  promptChip.value = null
+const expandPromptToTextarea = (index = 0) => {
+  const chip = promptChips.value[index]
+  if (!chip?.content) return
+  const fullText = chip.content
+  promptChips.value.splice(index, 1)
   activeMode.value = 'workflow'
-  input.value = fullText
+  if (input.value.trim()) {
+    input.value = `${input.value.trim()}\n\n${fullText}`
+  } else {
+    input.value = fullText
+  }
   nextTick(() => {
     if (textareaRef.value) {
       textareaRef.value.style.height = 'auto'
@@ -1304,8 +1314,12 @@ const collapseTextToChip = () => {
   autoResizeTextarea()
 }
 
-const clearPromptChip = () => {
-  promptChip.value = null
+const removePromptChip = (index) => {
+  promptChips.value.splice(index, 1)
+}
+
+const clearPromptChips = () => {
+  promptChips.value = []
 }
 
 const handlePaste = (e) => {
@@ -2005,10 +2019,10 @@ const loadRuns = async () => {
 
 const send = async () => {
   let rawText = input.value.trim()
-  if (promptChip.value?.content) {
-    const chipContent = promptChip.value.content
-    rawText = rawText ? `${rawText}\n\n${chipContent}` : chipContent
-    promptChip.value = null
+  if (promptChips.value.length > 0) {
+    const chipsContent = promptChips.value.map((c) => c.content).join('\n\n')
+    rawText = rawText ? `${rawText}\n\n${chipsContent}` : chipsContent
+    promptChips.value = []
   }
   const message = rawText
   const images = [...attachedImages.value.map((img) => img.dataUrl)]
