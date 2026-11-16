@@ -244,7 +244,12 @@
                   @click="expandPromptToTextarea(chipIdx)"
                 >
                   <span class="action-underline">Show in text field</span>
-                  <IconChevronRight :size="12" />
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
                 </button>
               </div>
               <button
@@ -310,18 +315,42 @@
               <IconPlus :size="16" />
             </button>
 
-            <textarea
-              ref="textareaRef"
-              v-model="input"
-              class="composer-input"
-              :class="{ 'workflow-goal-input': activeMode === 'workflow' }"
-              :aria-label="activeMode === 'workflow' ? 'Workflow goal' : 'Message'"
-              :maxlength="20000"
-              :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
-              rows="1"
-              @paste="handlePaste"
-              @keydown.enter.exact.prevent="send"
-            ></textarea>
+            <div class="composer-input-wrapper">
+              <textarea
+                ref="textareaRef"
+                v-model="input"
+                class="composer-input"
+                :class="{ 'workflow-goal-input': activeMode === 'workflow', 'expanded-input': isTextareaExpanded }"
+                :aria-label="activeMode === 'workflow' ? 'Workflow goal' : 'Message'"
+                :maxlength="20000"
+                :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
+                rows="1"
+                @paste="handlePaste"
+                @keydown.enter.exact.prevent="send"
+              ></textarea>
+
+              <!-- Corner Expand/Collapse Icon Button matching user screenshot -->
+              <button
+                v-if="input.length >= 60 || isTextareaExpanded"
+                class="composer-corner-expand-btn"
+                type="button"
+                :title="isTextareaExpanded ? 'Minimize editor' : 'Expand editor'"
+                @click="toggleTextareaExpand"
+              >
+                <svg v-if="!isTextareaExpanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+            </div>
 
             <div class="composer-actions-right">
               <button
@@ -455,6 +484,7 @@ const fileInputRef = ref(null)
 const runs = ref([])
 const input = ref('')
 const promptChips = ref([])
+const isTextareaExpanded = ref(false)
 const activeMode = ref('chat')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -1295,13 +1325,29 @@ const expandPromptToTextarea = (index = 0) => {
   } else {
     input.value = fullText
   }
+  isTextareaExpanded.value = true
   nextTick(() => {
     if (textareaRef.value) {
       textareaRef.value.style.height = 'auto'
       const scrollH = textareaRef.value.scrollHeight
-      const targetHeight = Math.min(scrollH, 260)
-      textareaRef.value.style.height = `${Math.max(targetHeight, 80)}px`
+      const targetHeight = Math.min(scrollH, 320)
+      textareaRef.value.style.height = `${Math.max(targetHeight, 140)}px`
       textareaRef.value.scrollTop = 0
+      textareaRef.value.focus()
+    }
+  })
+}
+
+const toggleTextareaExpand = () => {
+  isTextareaExpanded.value = !isTextareaExpanded.value
+  nextTick(() => {
+    if (textareaRef.value) {
+      if (isTextareaExpanded.value) {
+        const scrollH = textareaRef.value.scrollHeight
+        textareaRef.value.style.height = `${Math.min(Math.max(scrollH, 220), 400)}px`
+      } else {
+        autoResizeTextarea()
+      }
       textareaRef.value.focus()
     }
   })
@@ -1311,6 +1357,7 @@ const collapseTextToChip = () => {
   if (!input.value.trim()) return
   createPromptChip(input.value)
   input.value = ''
+  isTextareaExpanded.value = false
   autoResizeTextarea()
 }
 
@@ -2024,6 +2071,7 @@ const send = async () => {
     rawText = rawText ? `${rawText}\n\n${chipsContent}` : chipsContent
     promptChips.value = []
   }
+  isTextareaExpanded.value = false
   const message = rawText
   const images = [...attachedImages.value.map((img) => img.dataUrl)]
   const files = [...attachedFiles.value]
