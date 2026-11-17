@@ -9,8 +9,7 @@
       v-if="currentWorkingLabel"
       class="stream-subactivity-text"
       :class="{
-        'is-live': isWorkflowLive(workflow) && !isWorkflowAwaitingApproval(workflow),
-        'is-awaiting': isWorkflowAwaitingApproval(workflow),
+        'is-live': isWorkflowLive(workflow),
       }"
       aria-live="polite"
     >
@@ -18,12 +17,10 @@
         <IconWifiOff v-if="isConnectionRecovering(workflow)" :size="13" />
         <component v-else :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
       </span>
-      <span class="stream-subactivity-label">{{ currentWorkingLabel }}</span>
-      <span
-        v-if="isWorkflowLive(workflow) && !isWorkflowAwaitingApproval(workflow)"
-        class="stream-subactivity-dots"
-        aria-hidden="true"
-      >
+      <Transition name="stream-label-swap" mode="out-in">
+        <span :key="currentWorkingLabel" class="stream-subactivity-label">{{ currentWorkingLabel }}</span>
+      </Transition>
+      <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
         <span>.</span><span>.</span><span>.</span>
       </span>
     </div>
@@ -436,7 +433,7 @@
           v-if="workflow.approval"
           :approval="workflow.approval"
           :options="approvalOptions(workflow.approval.assignedTool)"
-          :run-id="workflow.runId"
+          :run-id="workflowRunId"
           :message-index="messageIndex"
           :decision-pending="workflow.decisionPending"
           :error="workflow.error"
@@ -449,8 +446,8 @@
       </Transition>
     </Teleport>
 
-    <div v-if="workflow.runId" class="workflow-subtle-footer">
-      <button type="button" class="workflow-subtle-run-btn" @click="$emit('open-run', workflow.runId)">
+    <div v-if="workflowRunId" class="workflow-subtle-footer">
+      <button type="button" class="workflow-subtle-run-btn" @click="openFullWorkflowRun">
         Open full workflow run <IconArrowRight :size="12" />
       </button>
     </div>
@@ -476,7 +473,7 @@
           <button
             type="button"
             class="workflow-error-open-btn"
-            @click="$emit('open-workflow', workflow.runId || null)"
+            @click="openWorkflowCanvas"
           >
             Open workflow canvas
             <IconArrowRight :size="12" />
@@ -506,7 +503,6 @@ import {
   IconLoader2,
   IconMaximize,
   IconMinus,
-  IconPlayerStop,
   IconPlus,
   IconShieldCheck,
   IconSwitchHorizontal,
@@ -521,7 +517,7 @@ import {
   IconZoomOut,
 } from '@tabler/icons-vue'
 import WorkflowApprovalPanel from '@/components/workflow/WorkflowApprovalPanel.vue'
-import { explainWorkflowError, isWorkflowRunning, parseWorkflowTimestamp } from '@/utils/workflow'
+import { explainWorkflowError, getWorkflowRunId, isWorkflowRunning, parseWorkflowTimestamp } from '@/utils/workflow'
 import { getFileIconInfo } from '@/utils/fileIcons'
 
 const props = defineProps({
@@ -633,6 +629,16 @@ const emit = defineEmits([
   'cancel-workflow',
 ])
 
+const workflowRunId = computed(() => getWorkflowRunId(props.workflow) || props.workflow?.runId || props.workflow?.run_id || props.workflow?.id || '')
+
+const openFullWorkflowRun = () => {
+  emit('open-run', workflowRunId.value || null)
+}
+
+const openWorkflowCanvas = () => {
+  emit('open-workflow', workflowRunId.value || null)
+}
+
 const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
 const isWorkflowTerminal = (workflow) => [
   'COMPLETED',
@@ -644,11 +650,6 @@ const isWorkflowTerminal = (workflow) => [
 ].includes(String(workflow?.status || '').toUpperCase())
 const isConnectionRecovering = (workflow) => ['RECONNECTING', 'OFFLINE'].includes(
   String(workflow?.connectionStatus || '').toUpperCase(),
-)
-const isWorkflowAwaitingApproval = (workflow) => Boolean(
-  workflow?.approval
-  || String(workflow?.status || '').toUpperCase() === 'AWAITING_APPROVAL'
-  || (workflow?.tasks || []).some((task) => getTaskStatus(task) === 'AWAITING_APPROVAL'),
 )
 
 const getTaskStatus = (task) => String(
@@ -1984,14 +1985,6 @@ const highlightCode = (value) => {
 
 .stream-subactivity-text.is-live {
   color: #71717a;
-}
-
-.stream-subactivity-text.is-awaiting {
-  color: #b45309;
-}
-
-.stream-subactivity-text.is-awaiting .stream-current-task-icon {
-  color: #d97706;
 }
 
 .stream-subactivity-label {
