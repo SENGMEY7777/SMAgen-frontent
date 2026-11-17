@@ -244,11 +244,8 @@
                   @click="expandPromptToTextarea(chipIdx)"
                 >
                   <span class="action-underline">Show in text field</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9" />
-                    <polyline points="9 21 3 21 3 15" />
-                    <line x1="21" y1="3" x2="14" y2="10" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
               </div>
@@ -304,51 +301,54 @@
             </div>
           </div>
 
-          <div class="composer-main-row">
-            <!-- Upload / Attach Button -->
+          <!-- Textarea area spanning full width above bottom controls -->
+          <div class="composer-input-wrapper">
+            <textarea
+              ref="textareaRef"
+              v-model="input"
+              class="composer-input"
+              :class="{ 'workflow-goal-input': activeMode === 'workflow', 'expanded-input': isTextareaExpanded }"
+              :aria-label="activeMode === 'workflow' ? 'Workflow goal' : 'Message'"
+              :maxlength="100000"
+              :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
+              rows="1"
+              @paste="handlePaste"
+              @keydown.enter.exact.prevent="send"
+            ></textarea>
+
+            <!-- Corner Expand/Collapse Icon Button matching user screenshot -->
             <button
-              class="tool-circle-btn"
+              v-if="input.length >= 60 || isTextareaExpanded"
+              class="composer-corner-expand-btn"
               type="button"
-              title="Add attachment, code file, or image"
-              @click="triggerFileUpload"
+              :title="isTextareaExpanded ? 'Minimize editor' : 'Expand editor'"
+              @click="toggleTextareaExpand"
             >
-              <IconPlus :size="16" />
+              <svg v-if="!isTextareaExpanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 14 10 14 10 20" />
+                <polyline points="20 10 14 10 14 4" />
+                <line x1="14" y1="10" x2="21" y2="3" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
             </button>
+          </div>
 
-            <div class="composer-input-wrapper">
-              <textarea
-                ref="textareaRef"
-                v-model="input"
-                class="composer-input"
-                :class="{ 'workflow-goal-input': activeMode === 'workflow', 'expanded-input': isTextareaExpanded }"
-                :aria-label="activeMode === 'workflow' ? 'Workflow goal' : 'Message'"
-                :maxlength="20000"
-                :placeholder="activeMode === 'workflow' ? 'Describe the workflow you want SMAgen to run...' : 'Write a message, attach files or images...'"
-                rows="1"
-                @paste="handlePaste"
-                @keydown.enter.exact.prevent="send"
-              ></textarea>
-
-              <!-- Corner Expand/Collapse Icon Button matching user screenshot -->
+          <!-- Bottom Actions Bar: Plus on the left, controls on the right -->
+          <div class="composer-actions-bar">
+            <div class="composer-actions-left">
               <button
-                v-if="input.length >= 60 || isTextareaExpanded"
-                class="composer-corner-expand-btn"
+                class="tool-circle-btn"
                 type="button"
-                :title="isTextareaExpanded ? 'Minimize editor' : 'Expand editor'"
-                @click="toggleTextareaExpand"
+                title="Add attachment, code file, or image"
+                @click="triggerFileUpload"
               >
-                <svg v-if="!isTextareaExpanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="15 3 21 3 21 9" />
-                  <polyline points="9 21 3 21 3 15" />
-                  <line x1="21" y1="3" x2="14" y2="10" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </svg>
-                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="4 14 10 14 10 20" />
-                  <polyline points="20 10 14 10 14 4" />
-                  <line x1="14" y1="10" x2="21" y2="3" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </svg>
+                <IconPlus :size="18" stroke-width="2.2" />
               </button>
             </div>
 
@@ -383,7 +383,7 @@
                 aria-label="Send message"
                 @click="send"
               >
-                <IconArrowUp :size="16" />
+                <IconArrowUp :size="16" stroke-width="2.5" />
               </button>
             </div>
           </div>
@@ -850,7 +850,7 @@ const autoResizeTextarea = () => {
   nextTick(() => {
     if (!textareaRef.value) return
     textareaRef.value.style.height = 'auto'
-    const newHeight = Math.min(textareaRef.value.scrollHeight, 260)
+    const newHeight = Math.min(textareaRef.value.scrollHeight, 380)
     textareaRef.value.style.height = `${newHeight}px`
   })
 }
@@ -1315,7 +1315,7 @@ const expandPromptToTextarea = (index = 0) => {
     if (textareaRef.value) {
       textareaRef.value.style.height = 'auto'
       const scrollH = textareaRef.value.scrollHeight
-      const targetHeight = Math.min(scrollH, 320)
+      const targetHeight = Math.min(scrollH, 380)
       textareaRef.value.style.height = `${Math.max(targetHeight, 140)}px`
       textareaRef.value.scrollTop = 0
       textareaRef.value.focus()
@@ -1368,9 +1368,10 @@ const handlePaste = (e) => {
   }
 
   const pastedText = e.clipboardData?.getData('text') || ''
-  // When prompt is so long (>= 120 chars or >= 3 lines),
-  // change to text file first, matching the reference image.
-  if (pastedText.length >= 120 || pastedText.split('\n').filter(Boolean).length >= 3) {
+  // When user prompt exceeds 20 lines (លើស 20 line),
+  // create file chip with "Show in text field", matching user request.
+  const lineCount = pastedText.split(/\r\n|\r|\n/).length
+  if (lineCount > 20) {
     e.preventDefault()
     createPromptChip(pastedText)
     return
@@ -2749,7 +2750,7 @@ onUnmounted(() => {
 .composer-input {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
-  padding-right: 36px !important;
+  padding: 2px 36px 4px 0 !important;
 }
 
 .composer-input::-webkit-scrollbar {
