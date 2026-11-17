@@ -55,9 +55,9 @@
                   @submit-approval="submitWorkflowApproval(message)"
                   @update-approval-choice="updateWorkflowApproval(message, 'choice', $event)"
                   @update-approval-rejection="updateWorkflowApproval(message, 'rejectionReason', $event)"
-                  @open-run="openWorkflowDestination"
-                  @open-workflow="openWorkflowDestination"
-                  @cancel-workflow="stopGeneration"
+                  @open-run="openWorkflowDestination($event || getWorkflowRunId(message.workflow))"
+                  @open-workflow="openWorkflowDestination($event || getWorkflowRunId(message.workflow))"
+                  @cancel-workflow="cancelWorkflowRun($event)"
                 />
 
                 <template v-else>
@@ -126,6 +126,7 @@
                     </div>
                   </div>
                 </div>
+
                 <!-- Inline Editing Box matching User Mockup -->
                 <div v-if="editingIndex === index" class="user-inline-editor-wrapper">
                   <div class="user-inline-edit-bubble">
@@ -161,7 +162,7 @@
                       type="button"
                       title="Retry response"
                       :disabled="loading"
-                      @click.stop.prevent="retryUserMessage(index)"
+                      @click="retryUserMessage(index)"
                     >
                       <IconRefresh :size="13" />
                     </button>
@@ -450,16 +451,24 @@ const projectsStore = useProjectsStore()
 const openWorkflowDestination = (runId) => {
   let targetRunId = runId
   if (!targetRunId || String(targetRunId) === 'null' || String(targetRunId) === 'undefined') {
-    targetRunId = activeWorkflowMessage.value?.workflow?.runId
+    targetRunId = getWorkflowRunId(activeWorkflowMessage.value?.workflow)
   }
-  if (!targetRunId) {
-    targetRunId = runs.value?.[0]?.id
+  if (!targetRunId || String(targetRunId) === 'null' || String(targetRunId) === 'undefined') {
+    const latestWorkflowMsg = [...currentMessages.value].reverse().find((m) => m?.workflow && getWorkflowRunId(m.workflow))
+    targetRunId = getWorkflowRunId(latestWorkflowMsg?.workflow)
   }
-  if (targetRunId && String(targetRunId).trim() && String(targetRunId) !== 'null' && String(targetRunId) !== 'undefined') {
-    router.push(`/runs/${targetRunId}`)
-    return
+  if (!targetRunId || String(targetRunId) === 'null' || String(targetRunId) === 'undefined') {
+    targetRunId = getWorkflowRunId(runs.value?.[0]) || runs.value?.[0]?.id
   }
-  router.push('/runs/demo')
+  try {
+    if (targetRunId && String(targetRunId).trim() && String(targetRunId) !== 'null' && String(targetRunId) !== 'undefined') {
+      router.push(`/runs/${targetRunId}`)
+      return
+    }
+    router.push('/workflows')
+  } catch (err) {
+    console.warn('Navigation to workflow destination failed:', err)
+  }
 }
 
 const chatThreadRef = ref(null)
@@ -492,9 +501,7 @@ const timeGreeting = computed(() => {
   return 'Good Night'
 })
 
-const currentMessages = computed(() => (
-  Array.isArray(chatStore.messages) ? chatStore.messages : []
-))
+const currentMessages = computed(() => chatStore.messages)
 const activeWorkflowMessage = computed(() => [...currentMessages.value].reverse().find((message) => (
   message?.workflow && isWorkflowRunning(message.workflow)
 )) || null)
@@ -774,20 +781,13 @@ const getCurrentWorkingText = (workflow) => {
     const tool = runningTask.assigned_tool || runningTask.assignedTool
     return `Running ${tool ? tool + ': ' : ''}${runningTask.title || runningTask.instruction || 'task execution'}`
   }
-  const awaitingTask = (workflow?.tasks || []).find((t) => getWorkflowTaskStatus(t) === 'AWAITING_APPROVAL')
-  if (workflow?.approval || ['AWAITING_APPROVAL', 'WAITING_APPROVAL'].includes(status) || awaitingTask) {
-    const tool = workflow?.approval?.assignedTool || awaitingTask?.assigned_tool || awaitingTask?.assignedTool
-    const approvalTitle = workflow?.approval?.taskTitle
-      || awaitingTask?.title
-      || awaitingTask?.instruction
-      || workflow?.approval?.actionSummary
-      || 'security authorization'
-    return `Waiting for approval${tool ? ` (${tool})` : ''}: ${approvalTitle}`
-  }
   const pendingTask = (workflow?.tasks || []).find((t) => ['PENDING', 'QUEUED', 'WAITING'].includes(getWorkflowTaskStatus(t)))
   if (pendingTask) {
     const tool = pendingTask.assigned_tool || pendingTask.assignedTool
     return `Queued ${tool ? tool + ': ' : ''}${pendingTask.title || pendingTask.instruction || 'step'}`
+  }
+  if (workflow?.approval || ['AWAITING_APPROVAL', 'WAITING_APPROVAL'].includes(status)) {
+    return 'Paused: Awaiting security authorization'
   }
   if (['STARTING', 'PENDING', 'QUEUED', 'PLANNING', 'WAITING'].includes(status)) {
     const goal = getWorkflowGoalPreview(workflow)
@@ -1367,17 +1367,8 @@ const handlePaste = (e) => {
     }
   }
 
-  const pastedText = e.clipboardData?.getData('text') || ''
-  // When user prompt exceeds 20 lines (លើស 20 line),
-  // create file chip with "Show in text field", matching user request.
-  const lineCount = pastedText.split(/\r\n|\r|\n/).length
-  if (lineCount > 20) {
-    e.preventDefault()
-    createPromptChip(pastedText)
-    return
-  }
-
-  // Allow short text paste to insert directly into the textarea
+  // Allow all text prompts (short or long, JSON, code, multi-line) to paste
+  // directly into the input goal textarea without being intercepted or blocked.
   nextTick(() => {
     autoResizeTextarea()
   })
@@ -1611,15 +1602,6 @@ const stopGeneration = async () => {
   loading.value = false
   workflowStopRequested = true
 
-  const activeWorkflowTargets = currentMessages.value
-    .map((message, index) => ({ message, index }))
-    .filter(({ message }) => {
-      if (!message?.workflow) return false
-      const status = String(message.workflow.status || '').toUpperCase()
-      return isWorkflowRunning(message.workflow)
-        || !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(status)
-    })
-
   if (activeAbortController) {
     try {
       activeAbortController.abort()
@@ -1627,21 +1609,15 @@ const stopGeneration = async () => {
     activeAbortController = null
   }
 
-  // Update the visible card before waiting for the backend. This keeps the UI
-  // responsive even when the planning request is cancelled before it returns.
-  activeWorkflowTargets.forEach(({ index }) => {
-    updateWorkflowMessage(index, {
-      status: 'CANCELLED',
-      cancellationPending: false,
-      approval: null,
-      error: 'Workflow stopped by user.',
-    })
+  // Find any active/running workflow message
+  const runningWorkflowMsg = [...currentMessages.value].reverse().find((m) => {
+    if (!m?.workflow) return false
+    const s = String(m.workflow.status || '').toUpperCase()
+    return isWorkflowRunning(m.workflow) || !['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED', 'STOPPED'].includes(s)
   })
 
-  if (activeWorkflowTargets.length) {
-    await Promise.allSettled(
-      activeWorkflowTargets.map(({ message }) => cancelWorkflowRun(message)),
-    )
+  if (runningWorkflowMsg) {
+    await cancelWorkflowRun(runningWorkflowMsg)
   }
 }
 
@@ -1651,29 +1627,6 @@ const stopStreamingReveal = () => {
     streamingRafId = null
   }
 }
-
-// A request belongs to the chat session that started it. Abort stale work
-// when the user opens another history item so the old request cannot keep the
-// retry controls disabled or append its response to the wrong conversation.
-watch(() => chatStore.activeSessionId, (sessionId, previousSessionId) => {
-  // Creating the first chat changes the ID from null to a new value while
-  // the user's request is starting. Do not abort that new workflow.
-  if (!previousSessionId || sessionId === previousSessionId) return
-
-  if (activeAbortController) {
-    try {
-      activeAbortController.abort()
-    } catch {}
-    activeAbortController = null
-  }
-
-  stopStreamingReveal()
-  targetStreamingContent = ''
-  streamingContent.value = ''
-  loading.value = false
-  errorMessage.value = ''
-  activeMode.value = 'chat'
-})
 
 const scheduleStreamingReveal = () => {
   if (streamingRafId !== null || typeof window === 'undefined') return
@@ -1951,7 +1904,6 @@ const retryUserMessage = async (index) => {
         error: error instanceof ApiError ? error.message : 'Unable to start the workflow.',
       })
     } finally {
-      activeAbortController = null
       loading.value = false
       scrollToBottom()
     }
