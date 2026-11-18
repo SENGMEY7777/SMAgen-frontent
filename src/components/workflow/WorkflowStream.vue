@@ -427,7 +427,7 @@
       </div>
     </section>
 
-    <Teleport to=".composer-container">
+    <Teleport v-if="hasComposerContainer" defer to=".composer-container">
       <Transition name="approval-panel-slide">
         <WorkflowApprovalPanel
           v-if="workflow.approval"
@@ -595,7 +595,23 @@ watch(
   { immediate: true }
 )
 
+const hasComposerContainer = ref(false)
+
+const syncComposerContainer = () => {
+  hasComposerContainer.value = typeof document !== 'undefined' && Boolean(document.querySelector('.composer-container'))
+}
+
+watch(
+  () => Boolean(props.workflow?.approval),
+  (hasApproval) => {
+    if (hasApproval && !hasComposerContainer.value) {
+      nextTick(syncComposerContainer)
+    }
+  },
+)
+
 onMounted(() => {
+  nextTick(syncComposerContainer)
   if (isWorkflowLive(props.workflow)) {
     startLocalTimer()
   }
