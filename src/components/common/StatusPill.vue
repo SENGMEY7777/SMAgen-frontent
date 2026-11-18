@@ -66,8 +66,7 @@ const statusIcon = computed(() => {
 .status-pill :deep(svg) {
   flex: 0 0 auto;
 }
-
-/* FAILED / REJECTED / ERROR */
+ 
 .status-pill.failed,
 .status-pill.rejected,
 .status-pill.error {
