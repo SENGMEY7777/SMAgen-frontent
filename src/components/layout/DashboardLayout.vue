@@ -736,6 +736,9 @@ const selectWorkflowHistory = (item) => {
                 ?? item.created_at
                 ?? item.updatedAt,
               ) || Date.now(),
+              tasks: [],
+              logs: [],
+              hydrated: false,
               isStreamOpen: true,
             },
           },
@@ -881,7 +884,7 @@ const handleAccountLogout = async () => {
   closeAllMenus()
   closeMenu()
   await auth.logout()
-  router.push('/auth')
+  router.push({ name: 'login' })
 }
 
 const handlePin = (item) => {
@@ -1112,6 +1115,9 @@ const loadAllRuns = async () => {
 
 onMounted(() => {
   loadAllRuns()
+  if (typeof document !== 'undefined' && route.name !== 'chat') {
+    document.documentElement.style.removeProperty('--workflow-review-width')
+  }
   if (typeof window !== 'undefined') {
     window.addEventListener('click', closeAllMenus)
     window.addEventListener('workflow-runs-updated', onWorkflowRunsUpdated)
@@ -1129,6 +1135,9 @@ onUnmounted(() => {
 watch(
   () => route.fullPath,
   () => {
+    if (typeof document !== 'undefined' && route.name !== 'chat') {
+      document.documentElement.style.removeProperty('--workflow-review-width')
+    }
     loadAllRuns()
   },
 )
