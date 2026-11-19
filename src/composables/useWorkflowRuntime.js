@@ -12,6 +12,7 @@ import {
   normalizeWorkflowLog,
   parseWorkflowTimestamp,
   stringifyWorkflowValue,
+  WORKFLOW_APPROVAL_SETTLE_DELAY_MS,
 } from '@/utils/workflow'
 
 const WORKFLOW_POLL_INTERVAL_MS = 1500
@@ -699,7 +700,11 @@ export function useWorkflowRuntime({
       return
     }
 
-    updateWorkflowMessage(index, { decisionPending: true, error: '' })
+    updateWorkflowMessage(index, {
+      decisionPending: true,
+      currentActivity: isRejecting ? 'Saving skip decision…' : 'Saving approval…',
+      error: '',
+    })
     const approvalId = String(approval.id || '')
     const isRealApproval = approvalId && !approvalId.startsWith('virtual-')
     const status = isRejecting ? 'REJECTED' : 'APPROVED'
@@ -709,8 +714,6 @@ export function useWorkflowRuntime({
     if (runId) stopWorkflowPolling(runId)
 
     const startTime = Date.now()
-    const STANDARD_DELAY_MS = 600
-
     try {
       if (isRealApproval) {
         try {
@@ -745,14 +748,15 @@ export function useWorkflowRuntime({
 
       // Keep a brief visual confirmation before transitioning back to RUNNING
       const elapsed = Date.now() - startTime
-      if (elapsed < STANDARD_DELAY_MS) {
-        await new Promise((resolve) => window.setTimeout(resolve, STANDARD_DELAY_MS - elapsed))
+      if (elapsed < WORKFLOW_APPROVAL_SETTLE_DELAY_MS) {
+        await new Promise((resolve) => window.setTimeout(resolve, WORKFLOW_APPROVAL_SETTLE_DELAY_MS - elapsed))
       }
 
       updateWorkflowMessage(index, {
         status: 'RUNNING',
         approval: null,
-        decisionPending: false,
+        decisionPending: true,
+        currentActivity: 'Decision saved — resuming workflow…',
         error: '',
       })
 
@@ -762,9 +766,15 @@ export function useWorkflowRuntime({
           startWorkflowPolling(index, runId)
         }
       }
+
+      updateWorkflowMessage(index, {
+        decisionPending: false,
+        currentActivity: '',
+      })
     } catch (error) {
       updateWorkflowMessage(index, {
         decisionPending: false,
+        currentActivity: '',
         error: error instanceof ApiError ? error.message : 'Unable to submit this workflow decision.',
       })
     }
