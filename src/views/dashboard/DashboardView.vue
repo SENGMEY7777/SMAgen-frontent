@@ -30,7 +30,7 @@
         <div class="chat-thread-inner">
           <div
             v-for="(message, index) in currentMessages"
-            :key="message.id || `${message.role}-${index}`"
+            :key="`${chatStore.activeSessionId || 'draft'}-${message.id || `${message.role}-${index}`}`"
             class="message-row"
             :class="message.role"
           >
@@ -1172,6 +1172,10 @@ watch(chatThreadRef, (el, prevEl) => {
 })
 
 watch(() => chatStore.activeSessionId, async () => {
+  errorMessage.value = ''
+  editingIndex.value = null
+  showScrollButton.value = false
+  userScrolledUp.value = false
   await nextTick()
   restoreScrollPosition()
 })
@@ -1469,9 +1473,18 @@ const extractLocalDestination = (text) => {
 
   const pathMatch = value.match(/\b(desktop|downloads?)\s*[/\\]\s*([A-Za-z0-9._-]+(?:[/\\][A-Za-z0-9._-]+)*)/i)
   if (pathMatch) {
-    let extracted = pathMatch[2].replace(/[.,;!?]+$/, '').replace(/\\/g, '/')
+    let extracted = pathMatch[2]
+      .replace(/:\d+(?::\d+)?\)*$/g, '')
+      .replace(/[.,;!?]+$/, '')
+      .replace(/\\/g, '/')
     const segments = extracted.split('/').filter(Boolean)
-    if (segments.length > 1 && /\.[A-Za-z0-9]{1,8}$/.test(segments[segments.length - 1])) {
+    const internalCutoffIdx = segments.findIndex((seg, idx) => (
+      idx > 0
+      && /^(?:node_modules|src|controllers?|routes?|models?|services?|middlewares?|configs?|config|utils?|helpers?|validators?|schemas?|database|migrations|seeders|tests?|public|dist|build)$/i.test(seg)
+    ))
+    if (internalCutoffIdx > 0) {
+      extracted = segments.slice(0, internalCutoffIdx).join('/')
+    } else if (segments.length > 1 && /\.[A-Za-z0-9]{1,8}$/.test(segments[segments.length - 1])) {
       extracted = segments.slice(0, -1).join('/')
     }
     return extracted ? `${/^downloads?$/i.test(pathMatch[1]) ? 'Downloads' : 'Desktop'}/${extracted}` : ''
