@@ -659,7 +659,17 @@ const openWorkflowCanvas = () => {
   emit('open-workflow', workflowRunId.value || null)
 }
 
-const isWorkflowComplete = (workflow) => ['COMPLETED', 'SUCCESS'].includes(String(workflow?.status || '').toUpperCase())
+const isWorkflowComplete = (workflow) => {
+  const status = String(workflow?.status || '').toUpperCase()
+  if (!['COMPLETED', 'SUCCESS'].includes(status)) return false
+
+  const tasks = Array.isArray(workflow?.tasks) ? workflow.tasks : []
+  if (!tasks.length) return true
+
+  // Do not trust a stale run status during reconnects or delayed database
+  // updates. The success card is only valid once every task is terminal-success.
+  return tasks.every((task) => ['COMPLETED', 'SUCCESS'].includes(getTaskStatus(task)))
+}
 const isWorkflowTerminal = (workflow) => [
   'COMPLETED',
   'SUCCESS',
