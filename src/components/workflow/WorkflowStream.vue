@@ -1622,6 +1622,37 @@ const closeReview = (event = null) => {
   }, event?.currentTarget)
 }
 
+// Open the source review as soon as a live workflow finishes. Previously the
+// completion card showed only file paths until the user discovered the hidden
+// review interaction, which made successful edits look like they had no code.
+// The transition check keeps historical terminal runs from opening a panel
+// automatically when the chat is first loaded.
+const terminalWorkflowStatuses = new Set([
+  'COMPLETED',
+  'SUCCESS',
+  'FAILED',
+  'CANCELLED',
+  'REJECTED',
+  'STOPPED',
+])
+
+watch(
+  [editedFiles, () => String(props.workflow?.status || '').toUpperCase()],
+  ([files, status], [previousFiles = [], previousStatus = ''] = []) => {
+    if (!files.length || reviewOpen.value || !terminalWorkflowStatuses.has(status)) return
+
+    const becameTerminal = !terminalWorkflowStatuses.has(previousStatus) && terminalWorkflowStatuses.has(status)
+    const filesAppearedAfterTerminal = !previousFiles.length && files.length && terminalWorkflowStatuses.has(previousStatus)
+    if (!becameTerminal && !filesAppearedAfterTerminal) return
+
+    nextTick(() => {
+      if (!reviewOpen.value && editedFiles.value.length) {
+        openReview(props.workflow, editedFiles.value[0])
+      }
+    })
+  },
+)
+
 const isValidationTask = (task) => {
   const text = getTaskText(task)
   const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input'])
