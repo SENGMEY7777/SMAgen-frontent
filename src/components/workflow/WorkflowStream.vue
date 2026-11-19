@@ -207,12 +207,12 @@
       </div>
 
       <div v-if="validationItems.length" class="completion-results">
-        <div class="completion-results-heading">Tests passed:</div>
+        <div class="completion-results-heading">Verification passed:</div>
         <ul class="completion-result-list">
           <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
             <div class="completion-result-copy">
               <span class="completion-result-label">{{ result.label }}</span>
-              <span> — Completed successfully</span>
+              <span v-if="result.detail"> — {{ result.detail }}</span>
             </div>
           </li>
         </ul>
@@ -962,9 +962,14 @@ const getStepsToggleText = (workflow) => {
 const getWorkflowResultItems = (workflow) => {
   const completedTasks = getCompletedTasks(workflow)
   const imageTasks = completedTasks.filter(isImageResultTask)
-  // Keep build/test/validation tasks in the dedicated "Tests passed" section
-  // instead of presenting verification as a file change.
-  const visibleTasks = completedTasks.filter((task) => !isImageResultTask(task) && !isValidationTask(task))
+  // File-manager tasks are represented in the dedicated file list. Keeping
+  // every file write here made large projects look like hundreds of separate
+  // changes and incorrectly mixed scaffolding with meaningful actions.
+  const visibleTasks = completedTasks.filter((task) => (
+    !isImageResultTask(task)
+    && !isValidationTask(task)
+    && !isFileMutationTask(task)
+  ))
   const items = visibleTasks.map((task, index) => {
     const output = parseValue(
       task.tool_output
@@ -1005,6 +1010,15 @@ const getTaskPayload = (task, keys) => parseValue(keys
   .find((value) => value !== undefined && value !== null && value !== ''))
 
 const getTaskText = (task) => `${task?.title || ''} ${task?.instruction || ''} ${task?.description || ''} ${task?.command || ''}`.trim()
+
+const isFileMutationTask = (task) => {
+  const tool = getTaskTool(task).toLowerCase()
+  if (!tool.includes('file')) return false
+
+  const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input']) || {}
+  const action = String(input.action || '').toLowerCase()
+  return !['read', 'readdesktopfile', 'list', 'listdesktopdirectory', 'inspectdesktopfile'].includes(action)
+}
 
 const getTaskResultPaths = (task) => {
   const output = getTaskPayload(task, [
@@ -1673,24 +1687,67 @@ watch(
 )
 
 const isValidationTask = (task) => {
-  const text = getTaskText(task)
+  const tool = getTaskTool(task).toLowerCase()
   const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input'])
   const command = typeof input?.command === 'string' ? input.command : ''
-  const action = typeof input?.action === 'string' ? input.action : ''
-  // Inspect task metadata and the executable command only. Do not scan source
-  // content inside fileManager payloads, where words such as "test" may be
-  // dependency names rather than a validation step.
-  const validationText = `${text} ${command} ${action}`
-    .replace(/\b[\w.-]+\.(?:html?|css|js|mjs|cjs|ts|tsx|jsx|json|md|txt|vue)\b/gi, '')
-  return /\b(?:test|tests|lint|build|verify|validation|validate|check|checks)\b/i.test(validationText)
+  const output = getTaskPayload(task, [
+    'tool_output',
+    'toolOutput',
+    'output_data',
+    'outputData',
+    'output_payload',
+    'outputPayload',
+    'result',
+    'output',
+  ]) || {}
+
+  if (tool.includes('file')) return false
+
+  if (tool.includes('http') || tool.includes('request')) {
+    // A diagnostic GET that accepts 404/500 is not a passed verification.
+    return input?.expectedStatus !== undefined
+      || input?.failOnStatus === true
+  }
+
+  if (!tool.includes('command') && !tool.includes('terminal')) return false
+
+  const verificationCommand = command.toLowerCase()
+  const isVerificationCommand = (
+    /\b(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|lint|build|check|typecheck)\b/.test(verificationCommand)
+    || /\b(?:jest|vitest|mocha|eslint|prettier)\b/.test(verificationCommand)
+    || /\bnode\s+(?:--check|-c)\b/.test(verificationCommand)
+  )
+
+  if (!isVerificationCommand) return false
+  return output?.exitCode === undefined || Number(output.exitCode) === 0
 }
 
 const getValidationItems = (workflow) => getCompletedTasks(workflow)
   .filter(isValidationTask)
-  .map((task, index) => ({
-    id: task.id || `validation-${index}`,
-    label: task.title || task.instruction || `Validation ${index + 1}`,
-  }))
+  .map((task, index) => {
+    const input = getTaskPayload(task, ['tool_input', 'toolInput', 'input']) || {}
+    const output = getTaskPayload(task, [
+      'tool_output',
+      'toolOutput',
+      'output_data',
+      'outputData',
+      'output_payload',
+      'outputPayload',
+      'result',
+      'output',
+    ]) || {}
+    const status = Number(output.status)
+
+    return {
+      id: task.id || `validation-${index}`,
+      label: task.title || task.instruction || `Verification ${index + 1}`,
+      detail: Number.isFinite(status) && status > 0
+        ? `HTTP ${status} verified`
+        : input.command
+          ? 'Command completed successfully'
+          : 'Completed successfully',
+    }
+  })
 
 const getCompletionChanges = (workflow) => getWorkflowResultItems(workflow)
 
@@ -1739,8 +1796,8 @@ const getWorkflowResponseText = (workflow) => {
     ...changes.map((result) => `- ${result.label}${result.detail ? ` — ${result.detail}` : ''}`),
     files.length ? 'Updated files:' : '',
     ...files.map((file) => `- ${file.path} — ${file.status}`),
-    validation.length ? 'Tests passed:' : '',
-    ...validation.map((result) => `- ${result.label} — Completed successfully`),
+    validation.length ? 'Verification passed:' : '',
+    ...validation.map((result) => `- ${result.label} — ${result.detail}`),
   ].filter(Boolean).join('\n')
 }
 
