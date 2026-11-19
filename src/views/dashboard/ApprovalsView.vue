@@ -56,11 +56,13 @@
           ></textarea>
         </div>
         <div class="form-actions">
-          <button class="danger-btn" type="button" :disabled="deciding" @click="decide('REJECTED')">
-            Reject
+          <button class="danger-btn" type="button" :disabled="deciding" :aria-busy="deciding" @click="decide('REJECTED')">
+            <IconLoader2 v-if="deciding" :size="14" class="approval-spinner" />
+            {{ deciding ? 'Saving…' : 'Reject' }}
           </button>
-          <button class="primary-btn" type="button" :disabled="deciding" @click="decide('APPROVED')">
-            <IconCheck :size="14" /> Approve
+          <button class="primary-btn" type="button" :disabled="deciding" :aria-busy="deciding" @click="decide('APPROVED')">
+            <IconLoader2 v-if="deciding" :size="14" class="approval-spinner" />
+            <IconCheck v-else :size="14" /> {{ deciding ? 'Saving…' : 'Approve' }}
           </button>
         </div>
       </div>
@@ -71,10 +73,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
-import { IconClock, IconArrowRight, IconX, IconCheck } from '@tabler/icons-vue'
+import { IconClock, IconArrowRight, IconX, IconCheck, IconLoader2 } from '@tabler/icons-vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { api, ApiError } from '@/services/api'
 import { formatDate } from '@/utils/formatters'
+import { WORKFLOW_APPROVAL_SETTLE_DELAY_MS } from '@/utils/workflow'
 
 const approvals = ref([])
 const selected = ref(null)
@@ -114,8 +117,6 @@ const decide = async (status) => {
   deciding.value = true
   errorMessage.value = ''
   const startTime = Date.now()
-  const STANDARD_DELAY_MS = 600
-
   try {
     await api.decideApproval(selected.value.id, {
       status,
@@ -135,8 +136,8 @@ const decide = async (status) => {
 
     // Keep a brief visual confirmation before closing the approval panel
     const elapsed = Date.now() - startTime
-    if (elapsed < STANDARD_DELAY_MS) {
-      await new Promise((resolve) => window.setTimeout(resolve, STANDARD_DELAY_MS - elapsed))
+    if (elapsed < WORKFLOW_APPROVAL_SETTLE_DELAY_MS) {
+      await new Promise((resolve) => window.setTimeout(resolve, WORKFLOW_APPROVAL_SETTLE_DELAY_MS - elapsed))
     }
 
     selected.value = null
@@ -206,5 +207,30 @@ onMounted(load)
 .field label span {
   color: #aaaeb8;
   font-weight: 400;
+}
+
+.form-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 94px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.form-actions button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.approval-spinner {
+  animation: approval-spin 0.85s linear infinite;
+}
+
+@keyframes approval-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
