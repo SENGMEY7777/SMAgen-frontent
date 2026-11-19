@@ -7,6 +7,7 @@ const CHATS_STORAGE_KEY = STORAGE_KEYS.CHATS || 'kairo_chats'
 const ACTIVE_CHAT_STORAGE_KEY = `${CHATS_STORAGE_KEY}:active-session`
 const LEGACY_PROJECT_MIGRATION_KEY = 'kairo_chat_project_migration_v1'
 const PROJECT_LINKING_CLEANUP_KEY = 'kairo_chat_project_linking_cleanup_v2'
+const CHAT_PERSIST_DEBOUNCE_MS = 180
 
 const createMessageId = () => `message_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
@@ -74,33 +75,53 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref(storedSessions)
   const activeSessionId = ref(readActiveSessionId(sessions.value))
 
-  // Save changes to localStorage
+  let persistTimer = null
+
+  // Persisting a complete chat session can be expensive while a workflow is
+  // streaming many task events. Batch those writes so localStorage cannot
+  // block the browser's timer, socket, and rendering work.
+  const persistSessions = () => {
+    persistTimer = null
+    try {
+      localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(sessions.value))
+    } catch {
+      try {
+        // If storage quota is exceeded due to large images, keep sessions persisted safely
+        const sanitized = (sessions.value || []).map((s) => ({
+          ...s,
+          messages: (s.messages || []).map((m) => {
+            if (m.images && m.images.length) {
+              return {
+                ...m,
+                images: m.images.map((img) => (typeof img === 'string' && img.length > 5000 ? img.slice(0, 100) : img)),
+              }
+            }
+            return m
+          }),
+        }))
+        localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(sanitized))
+      } catch {}
+    }
+  }
+
+  const schedulePersist = () => {
+    if (typeof window === 'undefined') {
+      persistSessions()
+      return
+    }
+    if (persistTimer) window.clearTimeout(persistTimer)
+    persistTimer = window.setTimeout(persistSessions, CHAT_PERSIST_DEBOUNCE_MS)
+  }
+
   watch(
     sessions,
-    (val) => {
-      try {
-        localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(val))
-      } catch {
-        try {
-          // If storage quota exceeded due to large images, keep sessions persisted safely
-          const sanitized = (val || []).map((s) => ({
-            ...s,
-            messages: (s.messages || []).map((m) => {
-              if (m.images && m.images.length) {
-                return {
-                  ...m,
-                  images: m.images.map((img) => (typeof img === 'string' && img.length > 5000 ? img.slice(0, 100) : img)),
-                }
-              }
-              return m
-            }),
-          }))
-          localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(sanitized))
-        } catch {}
-      }
-    },
-    { deep: true }
+    schedulePersist,
+    { deep: true, flush: 'post' },
   )
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', persistSessions)
+  }
 
   watch(activeSessionId, (value) => {
     try {
