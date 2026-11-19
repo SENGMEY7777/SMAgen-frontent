@@ -519,12 +519,20 @@ export function useWorkflowRuntime({
   }
 
   const refreshWorkflowMessage = async (index, runId) => {
-    const key = `${chatStore.activeSessionId}:${index}:${runId}`
+    const targetSessionId = chatStore.activeSessionId
+    const targetRunKey = String(runId)
+    const key = `${targetSessionId}:${index}:${targetRunKey}`
     if (workflowRefreshes.has(key)) return
     workflowRefreshes.add(key)
 
+    const isStillCurrentTarget = () => (
+      String(chatStore.activeSessionId || '') === String(targetSessionId || '')
+      && String(currentMessages.value[index]?.workflow?.runId || '') === targetRunKey
+    )
+
     try {
-      const response = await api.getRun(String(runId))
+      const response = await api.getRun(targetRunKey)
+      if (!isStillCurrentTarget()) return
       const workflowRun = getWorkflowRunPayload(response) || {}
       const currentWorkflow = currentMessages.value[index]?.workflow || {}
       const tasks = mergeWorkflowTasks(currentWorkflow.tasks, getWorkflowTasks(workflowRun))
@@ -564,12 +572,14 @@ export function useWorkflowRuntime({
         const approval = canReuseApproval
           ? existingApproval
           : await findWorkflowApproval(workflowRun, awaitingTask, runId, existingApproval)
+        if (!isStillCurrentTarget()) return
         updateWorkflowMessage(index, {
           status: 'AWAITING_APPROVAL',
           startedAt: resolvedStartedAt,
           approval,
           tasks,
           logs,
+          hydrated: true,
           connectionStatus,
           connectionAttempt: connectionLost ? latestReconnectAttempt : 0,
           connectionMaxAttempts: SOCKET_RECONNECT_ATTEMPTS,
@@ -604,6 +614,7 @@ export function useWorkflowRuntime({
           approval: null,
           tasks: reconcileTerminalTasks(tasks, status, workflowError),
           logs,
+          hydrated: true,
           completedAt,
           finalSeconds,
           connectionStatus: 'CONNECTED',
@@ -616,6 +627,7 @@ export function useWorkflowRuntime({
         if (isTerminal) stopWorkflowPolling(runId)
       }
     } catch (error) {
+      if (!isStillCurrentTarget()) return
       if (isConnectionUnavailable(error)) {
         updateWorkflowMessage(index, {
           connectionStatus: 'RECONNECTING',
@@ -627,12 +639,16 @@ export function useWorkflowRuntime({
         })
       } else if (!currentMessages.value[index]?.workflow?.approval) {
         updateWorkflowMessage(index, {
-          error: error instanceof ApiError ? error.message : 'Unable to refresh workflow status.',
+          hydrated: true,
+          error: currentMessages.value[index]?.workflow?.error
+            || (error instanceof ApiError ? error.message : 'Unable to refresh workflow status.'),
         })
       }
     } finally {
       workflowRefreshes.delete(key)
-      scrollToBottom('auto', { force: false })
+      if (isStillCurrentTarget()) {
+        scrollToBottom('auto', { force: false })
+      }
     }
   }
 
@@ -650,7 +666,8 @@ export function useWorkflowRuntime({
       }
     }, 350)
     const poller = window.setInterval(() => {
-      if (!currentMessages.value[index]?.workflow) {
+      const workflow = currentMessages.value[index]?.workflow
+      if (!workflow || String(workflow.runId) !== key) {
         stopWorkflowPolling(runId)
         return
       }
@@ -753,9 +770,14 @@ export function useWorkflowRuntime({
     }
   }
 
+  const stopAllWorkflowPollers = () => {
+    workflowPollers.forEach((poller) => window.clearInterval(poller))
+    workflowPollers.clear()
+  }
+
   const resumeActiveWorkflows = () => {
     currentMessages.value.forEach((message, index) => {
-      if (!message?.workflow || isTerminalWorkflowStatus(message.workflow.status)) return
+      if (!message?.workflow) return
       if (!parseWorkflowTimestamp(message.workflow.startedAt)) {
         const startedAt = parseWorkflowTimestamp(
           message.workflow.createdAt
@@ -763,13 +785,24 @@ export function useWorkflowRuntime({
         ) || Date.now()
         updateWorkflowMessage(index, { startedAt })
       }
-      if (message.workflow.runId) {
-        startWorkflowPolling(index, message.workflow.runId)
+      if (!message.workflow.runId) return
+
+      if (isTerminalWorkflowStatus(message.workflow.status)) {
+        // Hydrate historical completed/failed workflow runs opened from the sidebar
+        // that do not yet have their tasks/logs loaded into localStorage.
+        const hasTasks = Array.isArray(message.workflow.tasks) && message.workflow.tasks.length > 0
+        if (!hasTasks && !message.workflow.hydrated) {
+          refreshWorkflowMessage(index, message.workflow.runId)
+        }
+        return
       }
+
+      startWorkflowPolling(index, message.workflow.runId)
     })
   }
 
   watch(() => chatStore.activeSessionId, () => {
+    stopAllWorkflowPollers()
     resumeActiveWorkflows()
   })
 
