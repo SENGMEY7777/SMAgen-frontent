@@ -18,7 +18,11 @@
         <component v-else :is="getTaskIcon(getCurrentWorkflowTask(workflow))" :size="13" />
       </span>
       <Transition name="stream-label-swap" mode="out-in">
-        <span :key="currentWorkingLabel" class="stream-subactivity-label">{{ currentWorkingLabel }}</span>
+        <span
+          :key="currentWorkingLabel"
+          :data-text="currentWorkingLabel"
+          class="stream-subactivity-label"
+        >{{ currentWorkingLabel }}</span>
       </Transition>
       <span v-if="isWorkflowLive(workflow)" class="stream-subactivity-dots" aria-hidden="true">
         <span>.</span><span>.</span><span>.</span>
@@ -2040,6 +2044,8 @@ const highlightCode = (value) => {
 }
 
 .stream-subactivity-label {
+  position: relative;
+  display: inline-block;
   color: inherit;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -2048,8 +2054,22 @@ const highlightCode = (value) => {
 .stream-subactivity-text.is-live .stream-subactivity-label {
   color: #71717a;
   -webkit-text-fill-color: currentColor;
-  background: none;
-  animation: none;
+}
+
+.stream-subactivity-text.is-live .stream-subactivity-label::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(90deg, #71717a 0%, #71717a 36%, #e4e4e7 50%, #71717a 64%, #71717a 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  filter: blur(0.25px);
+  animation: subactivity-text-shimmer 1.6s linear infinite;
 }
 
 .stream-subactivity-dots {
@@ -2105,6 +2125,7 @@ const highlightCode = (value) => {
 @media (prefers-reduced-motion: reduce) {
   .stream-subactivity-text,
   .stream-subactivity-text.is-live .stream-subactivity-label,
+  .stream-subactivity-text.is-live .stream-subactivity-label::after,
   .stream-subactivity-dots span,
   .stream-current-task-details {
     animation: none;
