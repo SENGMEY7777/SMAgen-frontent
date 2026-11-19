@@ -415,6 +415,8 @@ export const isTerminalWorkflowStatus = (status) => [
   'REJECTED',
 ].includes(String(status || '').toUpperCase())
 
+export const WORKFLOW_APPROVAL_SETTLE_DELAY_MS = 650
+
 export const deriveWorkflowStatus = (rawStatus, tasks = []) => {
   const status = String(rawStatus || 'RUNNING').toUpperCase()
   if (['COMPLETED', 'SUCCESS', 'FAILED', 'CANCELLED', 'REJECTED', 'AWAITING_APPROVAL'].includes(status)) {
