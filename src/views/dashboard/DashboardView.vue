@@ -436,6 +436,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { formatRelativeTime } from '@/utils/formatters'
 import { detectRequestMode } from '@/utils/requestRouting'
 import {
+  getWorkflowRunPayload,
   getWorkflowRunId,
   getWorkflowTaskStatus,
   isWorkflowRunning,
@@ -1854,9 +1855,13 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
     return
   }
 
+  const startedWorkflow = getWorkflowRunPayload(response) || {}
   updateWorkflowMessage(workflowMessageIndex, {
     runId: String(runId),
-    status: 'RUNNING',
+    // Planning now continues in the API background after the run ID is
+    // returned. Keep the UI in a real planning state instead of waiting on a
+    // request that may take as long as the AI planner.
+    status: startedWorkflow.status || 'PLANNING',
     error: '',
   })
 
