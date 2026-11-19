@@ -2046,14 +2046,10 @@ const highlightCode = (value) => {
 }
 
 .stream-subactivity-text.is-live .stream-subactivity-label {
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background: linear-gradient(90deg, #71717a 0%, #71717a 36%, #e4e4e7 50%, #71717a 64%, #71717a 100%);
-  background-size: 250% 100%;
-  background-position: 100% 0;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: subactivity-text-shimmer 1.6s linear infinite;
+  color: #71717a;
+  -webkit-text-fill-color: currentColor;
+  background: none;
+  animation: none;
 }
 
 .stream-subactivity-dots {
