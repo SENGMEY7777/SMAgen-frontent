@@ -482,6 +482,9 @@ const isTextareaExpanded = ref(false)
 const activeMode = ref('chat')
 const loading = ref(false)
 const errorMessage = ref('')
+// A workflow start request must never leave the chat in an indefinite
+// loading/awaiting state when the backend or an upstream model stops replying.
+const WORKFLOW_START_TIMEOUT_MS = 45_000
 const copiedIndex = ref(null)
 const attachedImages = ref([])
 const attachedFiles = ref([])
@@ -1768,7 +1771,8 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
     activeAbortController.abort()
   }
   activeAbortController = new AbortController()
-  const signal = activeAbortController.signal
+  const workflowController = activeAbortController
+  const signal = workflowController.signal
 
   const activeProj = projectsStore?.activeProject
   const projectContext = activeProj ? {
@@ -1778,6 +1782,24 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
   } : null
   const localDestination = inferWorkflowLocalDestination(goalPrompt, contextMessages)
   let response = null
+  let startTimedOut = false
+  let startTimeoutId = null
+  const clearStartTimeout = () => {
+    if (startTimeoutId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(startTimeoutId)
+      startTimeoutId = null
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    startTimeoutId = window.setTimeout(() => {
+      startTimedOut = true
+      try {
+        workflowController.abort()
+      } catch {}
+    }, WORKFLOW_START_TIMEOUT_MS)
+  }
+
   try {
     response = await api.runWorkflow({
       goalPrompt,
@@ -1786,6 +1808,15 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
       ...(images && images.length > 0 ? { images } : {}),
     }, { signal })
   } catch (err) {
+    clearStartTimeout()
+    if (startTimedOut) {
+      updateWorkflowMessage(workflowMessageIndex, {
+        status: 'FAILED',
+        cancellationPending: false,
+        error: 'Workflow start timed out after 45 seconds. The request was cancelled; please try again.',
+      })
+      return
+    }
     if (err.name === 'AbortError' || signal.aborted || workflowStopRequested) {
       updateWorkflowMessage(workflowMessageIndex, {
         status: 'CANCELLED',
@@ -1796,6 +1827,7 @@ const startWorkflowRun = async (workflowMessageIndex, goalPrompt, contextMessage
     }
     throw err
   }
+  clearStartTimeout()
 
   const runId = getWorkflowRunId(response)
   if (!runId) throw new ApiError('The workflow started without a run ID.')
