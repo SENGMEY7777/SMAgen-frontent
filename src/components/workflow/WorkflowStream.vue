@@ -963,10 +963,15 @@ const getWorkflowResultItems = (workflow) => {
         || task.output,
     )
     const paths = findResultPaths(output, [], 3).filter((path) => path !== 'local Desktop')
+    const gitDetail = output?.pushVerified && output?.commitHash
+      ? `GitHub push verified · ${String(output.commitHash).slice(0, 7)} · ${output.remote || 'origin'}/${output.branch || 'current branch'}`
+      : output?.commitHash
+        ? `Commit ${String(output.commitHash).slice(0, 7)}`
+        : ''
     return {
       id: task.id || `result-${index}`,
       label: task.title || task.instruction || `Step ${index + 1}`,
-      detail: paths.length ? paths.join(' · ') : 'Completed successfully',
+      detail: gitDetail || (paths.length ? paths.join(' · ') : 'Completed successfully'),
     }
   })
 
