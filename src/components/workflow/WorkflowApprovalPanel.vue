@@ -2,6 +2,7 @@
   <div
     class="workflow-approval-panel"
     role="region"
+    :aria-busy="decisionPending"
     :aria-label="approval.taskTitle || 'Approval required before this step can continue.'"
   >
     <div class="workflow-approval-meta">
@@ -30,6 +31,7 @@
             :name="`workflow-approval-${runId}-${messageIndex}`"
             :value="option.value"
             :checked="approval.choice === option.value"
+            :disabled="decisionPending"
             @change="$emit('update:choice', option.value)"
           />
           <span class="workflow-choice-number">{{ option.number }}</span>
@@ -45,7 +47,13 @@
           <button class="workflow-skip-btn" type="button" :disabled="decisionPending" @click="$emit('skip')">
             Skip
           </button>
-          <button class="workflow-submit-btn" type="button" :disabled="decisionPending" @click="$emit('submit')">
+          <button
+            class="workflow-submit-btn"
+            :class="{ 'is-pending': decisionPending }"
+            type="button"
+            :disabled="decisionPending"
+            @click="$emit('submit')"
+          >
             <IconLoader2 v-if="decisionPending" :size="14" class="spin-icon" />
             <span>{{ decisionPending ? 'Submitting…' : 'Submit' }}</span>
             <IconCornerDownLeft v-if="!decisionPending" :size="13" />
@@ -61,7 +69,13 @@
       :value="approval.rejectionReason"
       placeholder="Tell KAIRO what to do instead…"
       @input="$emit('update:rejectionReason', $event.target.value)"
+      :disabled="decisionPending"
     ></textarea>
+
+    <div v-if="decisionPending" class="workflow-approval-progress" role="status" aria-live="polite">
+      <IconLoader2 :size="14" class="spin-icon" />
+      <span>Saving your decision and resuming the workflow…</span>
+    </div>
 
     <div v-if="error" class="workflow-card-error">{{ error }}</div>
   </div>
@@ -538,6 +552,13 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
+.workflow-submit-btn.is-pending {
+  min-width: 112px;
+  background: #27272a;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  transform: none;
+}
+
 .workflow-submit-btn:hover {
   background: #18181b;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
@@ -554,10 +575,34 @@ defineEmits(['skip', 'submit', 'update:choice', 'update:rejectionReason'])
 .workflow-skip-btn:disabled {
   cursor: wait;
   opacity: 0.6;
+  pointer-events: none;
 }
 
 .spin-icon {
-  animation: spin 1s linear infinite;
+  animation: spin 0.85s linear infinite;
+  flex: 0 0 auto;
+}
+
+.workflow-approval-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: #70747d;
+  font-size: 12px;
+  line-height: 1.4;
+  animation: approval-progress-in 0.2s ease-out both;
+}
+
+@keyframes approval-progress-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
