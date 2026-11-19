@@ -1575,6 +1575,14 @@ const inferWorkflowLocalDestination = (goalPrompt, contextMessages = []) => {
   const directDestination = extractLocalDestination(goalPrompt)
   if (directDestination) return directDestination
 
+  // A deployment/repository URL is the source of truth for project selection.
+  // Do not attach the workflow to a stale sidebar project (for example,
+  // Computer-Api) when the request is about another repository such as
+  // computer-shop-backend.
+  if (/https?:\/\/[^\s]+/i.test(String(goalPrompt || ''))) {
+    return ''
+  }
+
   // 1. Check conversation context messages (most recent first)
   for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
     const message = contextMessages[index]
