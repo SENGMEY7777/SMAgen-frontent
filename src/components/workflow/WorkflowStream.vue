@@ -94,7 +94,10 @@
           <li v-for="result in completionChanges" :key="result.id" class="completion-result-row">
             <div class="completion-result-copy">
               <span class="completion-result-label">{{ result.label }}</span>
-              <span v-if="result.detail"> — {{ result.detail }}</span>
+              <span v-if="result.commitHash" class="commit-result-detail">
+                — {{ result.commitLabel }} · <code class="commit-hash-badge">{{ result.commitHash }}</code><span v-if="result.commitContext" class="commit-hash-context"> · {{ result.commitContext }}</span>
+              </span>
+              <span v-else-if="result.detail"> — {{ result.detail }}</span>
             </div>
           </li>
         </ul>
@@ -982,15 +985,19 @@ const getWorkflowResultItems = (workflow) => {
         || task.output,
     )
     const paths = findResultPaths(output, [], 3).filter((path) => path !== 'local Desktop')
-    const gitDetail = output?.pushVerified && output?.commitHash
-      ? `GitHub push verified · ${String(output.commitHash).slice(0, 7)} · ${output.remote || 'origin'}/${output.branch || 'current branch'}`
-      : output?.commitHash
-        ? `Commit ${String(output.commitHash).slice(0, 7)}`
-        : ''
+    const fullCommitHash = output?.commitHash ? String(output.commitHash) : ''
+    const commitHash = fullCommitHash ? fullCommitHash.slice(0, 7) : ''
+    const commitLabel = output?.pushVerified ? 'GitHub push verified' : 'Commit'
+    const commitContext = output?.pushVerified
+      ? `${output.remote || 'origin'}/${output.branch || 'current branch'}`
+      : ''
     return {
       id: task.id || `result-${index}`,
       label: task.title || task.instruction || `Step ${index + 1}`,
-      detail: gitDetail || (paths.length ? paths.join(' · ') : 'Completed successfully'),
+      detail: fullCommitHash ? '' : (paths.length ? paths.join(' · ') : 'Completed successfully'),
+      commitHash,
+      commitLabel,
+      commitContext,
     }
   })
 
@@ -2559,6 +2566,31 @@ const highlightCode = (value) => {
 }
 
 .completion-result-copy span {
+  color: #000000;
+  font-size: 16px;
+}
+
+.completion-result-copy .commit-result-detail {
+  color: #000000;
+  font-size: 16px;
+}
+
+.completion-result-copy .commit-hash-badge {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 1px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  color: #24292f;
+  background: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.completion-result-copy .commit-hash-context {
   color: #000000;
   font-size: 16px;
 }
