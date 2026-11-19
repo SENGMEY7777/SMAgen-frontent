@@ -1760,6 +1760,7 @@ const addWorkflowPlaceholder = (goalPrompt) => {
       goalPrompt,
       status: 'STARTING',
       startedAt: Date.now(),
+      currentActivity: 'Starting workflow…',
       elapsedSeconds: 0,
       approval: null,
       decisionPending: false,
