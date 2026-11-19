@@ -84,8 +84,15 @@
       <div class="completion-heading-row">
         <div class="completion-heading-copy">
           <h3>Done — workflow completed successfully.</h3>
-          <p>{{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed.</p>
+          <p>{{ completedStepCount(workflow) }} of {{ workflow.tasks?.length || 0 }} steps completed · {{ getCompletionDuration(workflow) }}</p>
         </div>
+      </div>
+
+      <div class="completion-metrics" aria-label="Workflow completion summary">
+        <span class="completion-metric"><strong>Steps</strong> {{ completionSummary.steps }}</span>
+        <span class="completion-metric"><strong>Files</strong> {{ completionSummary.files }}</span>
+        <span class="completion-metric"><strong>Verification</strong> {{ completionSummary.verification }}</span>
+        <span class="completion-metric"><strong>Git</strong> {{ completionSummary.git }}</span>
       </div>
 
       <div v-if="completionChanges.length" class="completion-results">
@@ -209,14 +216,17 @@
         </div>
       </div>
 
-      <div v-if="validationItems.length" class="completion-results">
-        <div class="completion-results-heading">Verification passed:</div>
+      <div class="completion-results completion-verification-results">
+        <div class="completion-results-heading">{{ validationItems.length ? 'Verification passed:' : 'Verification:' }}</div>
         <ul class="completion-result-list">
           <li v-for="result in validationItems" :key="result.id" class="completion-result-row">
             <div class="completion-result-copy">
               <span class="completion-result-label">{{ result.label }}</span>
               <span v-if="result.detail"> — {{ result.detail }}</span>
             </div>
+          </li>
+          <li v-if="!validationItems.length" class="completion-result-row completion-result-muted">
+            No verification task was reported by this workflow.
           </li>
         </ul>
       </div>
@@ -1560,6 +1570,7 @@ const getReviewLines = (task, workflow = null, targetPath = '') => {
 const editedFiles = computed(() => getEditedFileItems(props.workflow))
 const completionChanges = computed(() => getCompletionChanges(props.workflow))
 const validationItems = computed(() => getValidationItems(props.workflow))
+const completionSummary = computed(() => getCompletionSummary(props.workflow))
 const workflowErrorValue = computed(() => {
   const explicitError = props.workflow?.error
     || props.workflow?.error_message
@@ -1758,6 +1769,34 @@ const getValidationItems = (workflow) => getCompletedTasks(workflow)
 
 const getCompletionChanges = (workflow) => getWorkflowResultItems(workflow)
 
+const getCompletionChangeDetail = (result) => {
+  if (result?.commitHash) {
+    return [
+      result.commitLabel,
+      result.commitHash,
+      result.commitContext,
+    ].filter(Boolean).join(' · ')
+  }
+  return result?.detail || ''
+}
+
+const getCompletionSummary = (workflow) => {
+  const totalSteps = Array.isArray(workflow?.tasks) ? workflow.tasks.length : 0
+  const completedSteps = completedStepCount(workflow)
+  const files = getEditedFileItems(workflow)
+  const validation = getValidationItems(workflow)
+  const gitResult = getCompletionChanges(workflow).find((result) => result.commitHash)
+
+  return {
+    steps: `${completedSteps}/${totalSteps}`,
+    files: String(files.length),
+    verification: validation.length ? `${validation.length} passed` : 'Not reported',
+    git: gitResult
+      ? (gitResult.commitContext ? `Pushed to ${gitResult.commitContext}` : `Committed ${gitResult.commitHash}`)
+      : 'Not reported',
+  }
+}
+
 const getCompletionTimeLabel = (workflow) => {
   const timestamp = workflow?.completedAt || workflow?.updatedAt || workflow?.createdAt
   if (!timestamp) return ''
@@ -1800,11 +1839,16 @@ const getWorkflowResponseText = (workflow) => {
     `Done — workflow completed successfully in ${getCompletionDuration(workflow)}.`,
     `${completedStepCount(workflow)} of ${(workflow?.tasks || []).length} steps completed.`,
     changes.length ? 'Changes:' : '',
-    ...changes.map((result) => `- ${result.label}${result.detail ? ` — ${result.detail}` : ''}`),
+    ...changes.map((result) => {
+      const detail = getCompletionChangeDetail(result)
+      return `- ${result.label}${detail ? ` — ${detail}` : ''}`
+    }),
     files.length ? 'Updated files:' : '',
     ...files.map((file) => `- ${file.path} — ${file.status}`),
     validation.length ? 'Verification passed:' : '',
     ...validation.map((result) => `- ${result.label} — ${result.detail}`),
+    validation.length ? '' : 'Verification: No verification task was reported by this workflow.',
+    `Git: ${getCompletionSummary(workflow).git}`,
   ].filter(Boolean).join('\n')
 }
 
@@ -2529,6 +2573,32 @@ const highlightCode = (value) => {
   font-size: inherit;
 }
 
+.completion-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.completion-metric {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid #e4e4e7;
+  border-radius: 999px;
+  color: #52525b;
+  background: #fafafa;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.completion-metric strong {
+  margin-right: 4px;
+  color: #27272a;
+  font-weight: 600;
+}
+
 .completion-results {
   margin-top: 12px;
 }
@@ -2552,6 +2622,12 @@ const highlightCode = (value) => {
   display: list-item;
   margin-bottom: 5px;
   padding: 0;
+}
+
+.completion-result-muted {
+  color: #71717a;
+  font-size: 15px;
+  list-style: none;
 }
 
 .completion-result-copy {
